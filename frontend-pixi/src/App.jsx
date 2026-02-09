@@ -3,7 +3,7 @@ import {
   Database, X, Layers, Grid, Eye,
   ZoomIn, ZoomOut, Maximize2,
   Flame, PanelLeftClose, PanelLeft, PanelRight,
-  Palette, GalleryHorizontal, Info,
+  Palette, Info,
   ChevronLeft, ChevronRight, Filter, ChevronDown,
   Clock
 } from 'lucide-react';
@@ -31,7 +31,6 @@ const VIEW_MODES = {
   grid: { label: 'Grid', icon: 'grid', desc: 'Ordinal grid layout' },
   color: { label: 'Color', icon: 'palette', desc: 'Sorted by dominant color' },
   timeline: { label: 'Timeline', icon: 'clock', desc: 'Chronological timeline' },
-  carousel: { label: 'Carousel', icon: 'gallery', desc: 'Full-screen browsing' },
 };
 
 function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
@@ -305,7 +304,6 @@ export default function App() {
   const [showHotspots, setShowHotspots] = useState(true);
   const [activeHotspot, setActiveHotspot] = useState(null);
   const [colorsReady, setColorsReady] = useState(false);
-  const [carouselIdx, setCarouselIdx] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [tooltip, setTooltip] = useState(null);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
@@ -424,7 +422,7 @@ export default function App() {
 
     setTimeout(() => {
       const vp = viewportRef.current;
-      if (vp && mode !== 'carousel') {
+      if (vp) {
         // Compute actual content bounds from target positions
         const pts = pointsRef.current;
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -457,14 +455,19 @@ export default function App() {
   const switchView = useCallback((mode) => {
     setViewMode(mode);
     viewModeRef.current = mode;
+    // Pause/resume pixi-viewport wheel plugin for timeline mode
+    const vp = viewportRef.current;
+    if (vp && vp.plugins) {
+      if (mode === 'timeline') {
+        vp.plugins.pause('wheel');
+      } else {
+        vp.plugins.resume('wheel');
+      }
+    }
     // Reset time filter when leaving timeline
     if (mode !== 'timeline') {
       setTimeFilter([0, 1000]);
       timeFilterRef.current = [0, 1000];
-    }
-    // Auto-select first image for carousel if nothing selected
-    if (mode === 'carousel' && carouselIdx === null) {
-      setCarouselIdx(0);
     }
     // Recompute visible set with current filters (keep hotspot + csv filters active)
     setActiveHotspot(prev => {
@@ -472,7 +475,7 @@ export default function App() {
       relayout(mode, visSet);
       return prev;
     });
-  }, [csvFilters, hotspots, metadata, computeVisibleSet, relayout, carouselIdx]);
+  }, [csvFilters, hotspots, metadata, computeVisibleSet, relayout]);
 
   /* ── PixiJS boot ────────────────────────────── */
   useEffect(() => {
@@ -840,7 +843,6 @@ export default function App() {
         app.stage.on('pointerdown', () => {
           if (lastHovered) {
             setSelectedItem({ id: lastHovered.id, x: lastHovered.x, y: lastHovered.y });
-            setCarouselIdx(lastHovered.id);
           }
         });
 
@@ -855,13 +857,22 @@ export default function App() {
         if (canvas) {
           canvas.addEventListener('wheel', (e) => {
             if (viewModeRef.current === 'timeline') {
-              // Ctrl+wheel (trackpad pinch) → let pixi-viewport handle zoom
-              if (e.ctrlKey || e.metaKey) return;
               e.preventDefault();
-              e.stopImmediatePropagation();
-              const speed = 2;
-              viewport.x -= (e.deltaX + e.deltaY) * speed;
-              viewport.dirty = true;
+              if (e.ctrlKey || e.metaKey) {
+                // Pinch-to-zoom: zoom centered on cursor position
+                const factor = e.deltaY > 0 ? 0.95 : 1.05;
+                const worldPos = viewport.toWorld(e.offsetX, e.offsetY);
+                const newScale = viewport.scale.x * factor;
+                viewport.scale.set(newScale);
+                viewport.x = e.offsetX - worldPos.x * newScale;
+                viewport.y = e.offsetY - worldPos.y * newScale;
+                viewport.dirty = true;
+              } else {
+                // Scroll → horizontal pan along timeline
+                const speed = 2;
+                viewport.x -= (e.deltaX + e.deltaY) * speed;
+                viewport.dirty = true;
+              }
             }
           }, { passive: false });
         }
@@ -931,17 +942,10 @@ export default function App() {
       case 'grid': return <Grid size={14} />;
       case 'flame': return <Flame size={14} />;
       case 'palette': return <Palette size={14} />;
-      case 'gallery': return <GalleryHorizontal size={14} />;
       case 'clock': return <Clock size={14} />;
       default: return <Eye size={14} />;
     }
   };
-
-  /* ── Visible indices list for carousel navigation ── */
-  const carouselList = useMemo(() => {
-    if (!visibleSetRef.current) return pointsRef.current.map(p => p.id);
-    return [...visibleSetRef.current].sort((a, b) => a - b);
-  }, [viewMode, activeHotspot, csvFilters]);
 
   /* ── CSV filter helpers ── */
   const FILTER_SKIP_COLS = new Set(['id', 'filename', 'width', 'height']);
@@ -1002,7 +1006,7 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen bg-rp-base font-sans select-none overflow-hidden">
-      <canvas ref={canvasRef} className={`absolute inset-0 w-full h-full transition-opacity duration-300 ${viewMode === 'carousel' ? 'invisible pointer-events-none' : ''}`} />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full transition-opacity duration-300" />
 
       {/* ── Cluster Labels ───────────────────── */}
       {viewMode === 'clusters' && clusterLabels.length > 0 && clusterLabels.map(cl => (
@@ -1024,73 +1028,6 @@ export default function App() {
       ))}
 
 
-
-      {/* ── Carousel View ────────────────────── */}
-      {viewMode === 'carousel' && !loading && (
-        <div className="absolute inset-0 z-[40] bg-rp-base flex items-center justify-center">
-          {carouselIdx !== null && carouselIdx >= 0 && carouselIdx < pointsRef.current.length && (() => {
-            const p = pointsRef.current[carouselIdx];
-            const posInList = carouselList.indexOf(carouselIdx);
-            const prevIdx = posInList > 0 ? carouselList[posInList - 1] : carouselList[carouselList.length - 1];
-            const nextIdx = posInList < carouselList.length - 1 ? carouselList[posInList + 1] : carouselList[0];
-            return (
-              <div className="flex flex-col items-center gap-6 max-w-2xl w-full px-8">
-                {/* Large image */}
-                {(() => {
-                  const _displaySize = 320;
-                  const _scale = _displaySize / thumbSizeRef.current;
-                  const _as = atlasSizeRef.current;
-                  return (
-                    <div
-                      className="rounded-2xl overflow-hidden shadow-rp-lg border border-rp-hlMed"
-                      style={{
-                        width: _displaySize,
-                        height: _displaySize,
-                        backgroundImage: `url(/data/atlas_${p.ai}.${atlasFormatRef.current})`,
-                        backgroundPosition: `-${p.u * _scale}px -${p.v * _scale}px`,
-                        backgroundSize: `${_as * _scale}px ${_as * _scale}px`,
-                        imageRendering: 'auto',
-                      }}
-                    />
-                  );
-                })()}
-                {/* Info */}
-                <div className="text-center">
-                  <p className="text-2xl font-extrabold text-rp-text">Image #{p.id}</p>
-                  <p className="text-sm text-rp-muted mt-1">
-                    Position: {p.originalX.toFixed(1)}, {p.originalY.toFixed(1)}
-                    {p.avgHue !== undefined && ` · Color: hsl(${Math.round(p.avgHue * 360)}, ${Math.round(p.avgSat * 100)}%, ${Math.round(p.avgLum * 100)}%)`}
-                  </p>
-                </div>
-                {/* Navigation */}
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => setCarouselIdx(prevIdx)}
-                    className="p-3 rounded-xl bg-rp-surface border border-rp-hlMed hover:border-rp-pine transition-colors text-rp-text"
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                  <span className="text-sm font-semibold text-rp-muted tabular-nums min-w-[120px] text-center">
-                    {(posInList + 1).toLocaleString()} / {carouselList.length.toLocaleString()}
-                  </span>
-                  <button
-                    onClick={() => setCarouselIdx(nextIdx)}
-                    className="p-3 rounded-xl bg-rp-surface border border-rp-hlMed hover:border-rp-pine transition-colors text-rp-text"
-                  >
-                    <ChevronRight size={20} />
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-          {carouselIdx === null && (
-            <div className="text-center">
-              <GalleryHorizontal size={48} className="text-rp-muted mx-auto mb-4" />
-              <p className="text-lg font-bold text-rp-text">Loading carousel...</p>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── UI Overlay ────────────────────────── */}
       {/* Top section — pinned to top */}
@@ -1451,7 +1388,7 @@ export default function App() {
       )}
 
       {/* ── Tooltip ─────────────────────────── */}
-      {tooltip && viewMode !== 'clusters' && viewMode !== 'color' && viewMode !== 'carousel' && (
+      {tooltip && viewMode !== 'clusters' && viewMode !== 'color' && (
         <div
           className="absolute z-[80] pointer-events-none bg-rp-surface/95 backdrop-blur-md rounded-lg border border-rp-hlMed shadow-rp px-3 py-2"
           style={{ left: tooltip.x + 16, top: tooltip.y - 8, maxWidth: '180px' }}
