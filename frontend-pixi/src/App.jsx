@@ -323,6 +323,8 @@ export default function App() {
   const atlasFormatRef = useRef('jpg');               // atlas file extension
   const atlasSizeRef = useRef(ATLAS_SIZE);            // atlas pixel dimensions
   const neighborsRef = useRef(null);                  // k-NN data: { k, indices: Uint32Array[], distances: Float32Array[] }
+  const minimapRef = useRef(null);                    // minimap canvas element
+  const minimapDataRef = useRef(null);                // { minX, minY, rangeX, rangeY, dots: [{nx, ny, color}] }
 
   /* ── Compute visible set from hotspot + csvFilters ── */
   const computeVisibleSet = useCallback((hotspotId, filters, hotspotsData, meta) => {
@@ -652,6 +654,31 @@ export default function App() {
         });
         setColorsReady(true);
 
+        /* Build minimap data (uses t-SNE coords + average colors) */
+        {
+          const pts = pointsRef.current;
+          let mMinX = Infinity, mMinY = Infinity, mMaxX = -Infinity, mMaxY = -Infinity;
+          for (const p of pts) {
+            if (p.tsneX < mMinX) mMinX = p.tsneX;
+            if (p.tsneY < mMinY) mMinY = p.tsneY;
+            if (p.tsneX > mMaxX) mMaxX = p.tsneX;
+            if (p.tsneY > mMaxY) mMaxY = p.tsneY;
+          }
+          const rangeX = mMaxX - mMinX || 1;
+          const rangeY = mMaxY - mMinY || 1;
+          // Sample every Nth point to keep dot count manageable (max ~5000 dots)
+          const step = Math.max(1, Math.floor(pts.length / 5000));
+          const dots = [];
+          for (let i = 0; i < pts.length; i += step) {
+            const p = pts[i];
+            const nx = (p.tsneX - mMinX) / rangeX;
+            const ny = (p.tsneY - mMinY) / rangeY;
+            const c = p.avgColor || { r: 150, g: 150, b: 150 };
+            dots.push({ nx, ny, r: c.r, g: c.g, b: c.b });
+          }
+          minimapDataRef.current = { minX: mMinX, minY: mMinY, rangeX, rangeY, dots };
+        }
+
         /* Load metadata CSV (optional) */
         try {
           setStatusMsg('Loading metadata...');
@@ -804,6 +831,30 @@ export default function App() {
             app._lastUiUpdate = now;
             setZoomLevel(viewport.scale.x);
             setStats(s => ({ ...s, fps: Math.round(app.ticker.FPS) }));
+
+            // Draw minimap
+            const mc = minimapRef.current;
+            const md = minimapDataRef.current;
+            if (mc && md && viewModeRef.current === 'tsne') {
+              const ctx = mc.getContext('2d');
+              const W = mc.width, H = mc.height;
+              ctx.clearRect(0, 0, W, H);
+              // Draw dots
+              for (const d of md.dots) {
+                ctx.fillStyle = `rgb(${d.r},${d.g},${d.b})`;
+                ctx.fillRect(d.nx * (W - 4) + 2, d.ny * (H - 4) + 2, 2, 2);
+              }
+              // Draw viewport rectangle
+              const topLeft = viewport.toWorld(0, 0);
+              const botRight = viewport.toWorld(viewport.screenWidth, viewport.screenHeight);
+              const rx = ((topLeft.x - md.minX) / md.rangeX) * (W - 4) + 2;
+              const ry = ((topLeft.y - md.minY) / md.rangeY) * (H - 4) + 2;
+              const rw = ((botRight.x - topLeft.x) / md.rangeX) * (W - 4);
+              const rh = ((botRight.y - topLeft.y) / md.rangeY) * (H - 4);
+              ctx.strokeStyle = '#286983';
+              ctx.lineWidth = 1.5;
+              ctx.strokeRect(rx, ry, rw, rh);
+            }
           }
 
           // Update cluster label screen positions (throttled separately)
@@ -1081,6 +1132,28 @@ export default function App() {
   return (
     <div className="relative w-screen h-screen bg-rp-base font-sans select-none overflow-hidden">
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full transition-opacity duration-300" />
+
+      {/* ── Minimap ───────────────────────────── */}
+      {!loading && viewMode === 'tsne' && (
+        <canvas
+          ref={minimapRef}
+          width={160}
+          height={160}
+          className="absolute bottom-4 left-4 z-[40] rounded-lg border border-rp-hlMed shadow-rp-lg cursor-crosshair opacity-80 hover:opacity-100 transition-opacity"
+          style={{ background: 'rgba(250,244,237,0.9)', width: 160, height: 160 }}
+          onClick={(e) => {
+            const md = minimapDataRef.current;
+            const vp = viewportRef.current;
+            if (!md || !vp) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const nx = (e.clientX - rect.left) / rect.width;
+            const ny = (e.clientY - rect.top) / rect.height;
+            const worldX = md.minX + nx * md.rangeX;
+            const worldY = md.minY + ny * md.rangeY;
+            vp.animate({ position: { x: worldX, y: worldY }, time: 300 });
+          }}
+        />
+      )}
 
       {/* ── Cluster Labels ───────────────────── */}
       {viewMode === 'clusters' && clusterLabels.length > 0 && clusterLabels.map(cl => (
