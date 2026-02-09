@@ -447,7 +447,7 @@ export default function App() {
           const cy = (minY + maxY) / 2;
           const scaleX = vp.screenWidth / w;
           const scaleY = vp.screenHeight / h;
-          let scale = Math.min(scaleX, scaleY) * 1.8; // zoom in a bit more than fit-all
+          let scale = Math.min(scaleX, scaleY);
 
           // For timeline, ensure thumbnails are visible (min ~30px on screen)
           if (mode === 'timeline') {
@@ -460,6 +460,8 @@ export default function App() {
               vp.moveCenter(minX + vp.screenWidth / scale / 2, cy);
               return;
             }
+          } else {
+            scale *= 1.8; // zoom in a bit more than fit-all (non-timeline views)
           }
 
           vp.setZoom(scale, true);
@@ -1145,6 +1147,39 @@ export default function App() {
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => ({ name, count, pct: ((count / totalImages) * 100).toFixed(1) }));
 
+    // Outlier images: furthest from cluster centroid in t-SNE space
+    const centroids = {};
+    const clusterPts = {};
+    for (const p of pts) {
+      const c = p.cluster ?? 0;
+      if (!centroids[c]) { centroids[c] = { sx: 0, sy: 0, n: 0 }; clusterPts[c] = []; }
+      centroids[c].sx += (p.tsneX ?? 0);
+      centroids[c].sy += (p.tsneY ?? 0);
+      centroids[c].n++;
+      clusterPts[c].push(p);
+    }
+    for (const c of Object.keys(centroids)) {
+      centroids[c].cx = centroids[c].sx / centroids[c].n;
+      centroids[c].cy = centroids[c].sy / centroids[c].n;
+    }
+    // Score each point by distance to its cluster centroid
+    const scored = pts.map(p => {
+      const c = centroids[p.cluster ?? 0];
+      const dx = (p.tsneX ?? 0) - c.cx;
+      const dy = (p.tsneY ?? 0) - c.cy;
+      return { id: p.id, dist: Math.sqrt(dx * dx + dy * dy), cluster: p.cluster ?? 0 };
+    }).sort((a, b) => b.dist - a.dist);
+    const outliers = scored.slice(0, 20).map(o => {
+      const row = metadata.rows[o.id] || {};
+      return {
+        id: o.id,
+        dist: o.dist.toFixed(1),
+        cluster: clipLabelsRef.current?.[o.cluster]?.label || `Cluster ${o.cluster}`,
+        title: row.title || `Image #${o.id}`,
+        artist: row.artist || '',
+      };
+    });
+
     return {
       totalImages,
       uniqueArtists: Object.keys(artistCounts).length,
@@ -1154,6 +1189,7 @@ export default function App() {
       styles,
       topArtists,
       colors,
+      outliers,
     };
   }, [metadata, hotspots]);
 
@@ -1260,7 +1296,7 @@ export default function App() {
             </div>
 
             {/* Hotspots (larger cards) */}
-            {!loading && hotspots.length > 0 && showHotspots && (
+            {!loading && hotspots.length > 0 && showHotspots && viewMode !== 'data' && (
               <div className="pointer-events-auto flex flex-col gap-2 max-w-[240px] max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin">
                 {hotspots.map((h, i) => {
                   const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
@@ -1293,7 +1329,7 @@ export default function App() {
                 })}
               </div>
             )}
-            {!loading && hotspots.length > 0 && !showHotspots && (
+            {!loading && hotspots.length > 0 && !showHotspots && viewMode !== 'data' && (
               <button
                 onClick={() => setShowHotspots(true)}
                 className="pointer-events-auto rp-card flex items-center gap-2 px-3 py-2 hover:border-rp-pine/30 transition-all"
@@ -1515,6 +1551,29 @@ export default function App() {
                       <div className="w-4 h-4 rounded-full border border-rp-hlMed" style={{ backgroundColor: c.name }} />
                       <span className="text-xs text-rp-text capitalize">{c.name}</span>
                       <span className="text-[10px] text-rp-muted tabular-nums">{c.count.toLocaleString()} ({c.pct}%)</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Outlier / unusual images */}
+            {analyticsData.outliers?.length > 0 && (
+              <div className="rp-card p-5 mb-6">
+                <h2 className="text-sm font-bold text-rp-text mb-1">Most Unusual Images</h2>
+                <p className="text-[10px] text-rp-muted mb-3">Images furthest from their cluster centroid in embedding space — atypical works that don't fit neatly into any group.</p>
+                <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-10 gap-3">
+                  {analyticsData.outliers.map(o => (
+                    <div key={o.id} className="flex flex-col items-center gap-1">
+                      <NeighborThumb imageId={o.id} size={72} onClick={() => {
+                        setSelectedItem(pointsRef.current[o.id]);
+                        setShowDetailPanel(true);
+                        switchView('tsne');
+                        const vp = viewportRef.current;
+                        const p = pointsRef.current[o.id];
+                        if (vp && p) vp.animate({ position: { x: p.tsneX, y: p.tsneY }, scale: Math.max(vp.scale.x, 2), time: 400 });
+                      }} />
+                      <p className="text-[9px] text-rp-text text-center leading-tight truncate w-full" title={o.title}>{o.title}</p>
+                      <p className="text-[8px] text-rp-muted text-center truncate w-full">{o.artist}</p>
                     </div>
                   ))}
                 </div>
