@@ -656,15 +656,18 @@ export default function App() {
             const currentTs = Math.round(tm.minTs + t * (tm.maxTs - tm.minTs));
             setTimeRange(prev => prev ? { ...prev, current: currentTs } : prev);
 
-            // Apply time filter dimming
+            // Apply time filter dimming (only to visible/filtered sprites)
             const tf = timeFilterRef.current;
             if (tf[0] > 0 || tf[1] < 1000) {
               const loTs = tm.minTs + (tf[0] / 1000) * (tm.maxTs - tm.minTs);
               const hiTs = tm.minTs + (tf[1] / 1000) * (tm.maxTs - tm.minTs);
+              const vs = visibleSetRef.current;
               for (const p of pointsRef.current) {
+                // Skip sprites hidden by hotspot/CSV filters
+                if (vs && !vs.has(p.id)) continue;
                 const ts = p.timestamp ?? 0;
                 if (ts >= loTs && ts <= hiTs) {
-                  if (p.sprite.alpha < 0.5) p.sprite.alpha = 1;
+                  p.sprite.alpha = 1;
                   p.sprite.tint = 0xffffff;
                 } else {
                   p.sprite.alpha = 0.1;
