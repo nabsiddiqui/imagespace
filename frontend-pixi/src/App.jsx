@@ -53,12 +53,17 @@ function computeLayout(allPoints, mode, visibleSet) {
   }
 
   switch (mode) {
-    case 'umap':
-    case 'tsne': {
-      // Restore original UMAP/t-SNE coordinates (same 2D embedding)
+    case 'umap': {
       for (const p of points) {
         p.targetX = p.originalX;
         p.targetY = p.originalY;
+      }
+      break;
+    }
+    case 'tsne': {
+      for (const p of points) {
+        p.targetX = p.tsneX ?? p.originalX;
+        p.targetY = p.tsneY ?? p.originalY;
       }
       break;
     }
@@ -365,6 +370,9 @@ export default function App() {
         const xMax = sorted[sorted.length - 1]?.targetX ?? 0;
         timelineMapRef.current = { xMin, xMax, minTs, maxTs };
         setTimeRange({ min: minTs, max: maxTs, current: null });
+        // Reset time filter slider to full range when data set changes
+        setTimeFilter([0, 1000]);
+        timeFilterRef.current = [0, 1000];
       }
     } else {
       timelineMapRef.current = null;
@@ -492,6 +500,10 @@ export default function App() {
         const currentThumbSize = manifest.thumbSize || THUMB_SIZE;
         const batchSize = 5000;
 
+        // Detect binary format: v2 (24 bytes) has both UMAP + t-SNE coords; v1 (16 bytes) has one set
+        const bytesPerImage = manifest.bytesPerImage || 16;
+        const isV2 = bytesPerImage === 24;
+
         for (let i = 0; i < manifest.count; i++) {
           if (i > 0 && i % batchSize === 0) {
             setStatusMsg(`Placing images ${Math.round((i / manifest.count) * 100)}%...`);
@@ -500,12 +512,29 @@ export default function App() {
             if (isCancelled) return;
           }
 
-          const offset = i * 16;
-          const x  = dataView.getFloat32(offset, true);
-          const y  = dataView.getFloat32(offset + 4, true);
-          const ai = dataView.getUint16(offset + 8, true);
-          const u  = dataView.getUint16(offset + 10, true);
-          const v  = dataView.getUint16(offset + 12, true);
+          let x, y, tsneX, tsneY, ai, u, v, cluster;
+          if (isV2) {
+            // 24-byte format: float32 umapX, umapY, tsneX, tsneY, uint16 atlas, u, v, cluster
+            const offset = i * 24;
+            x      = dataView.getFloat32(offset, true);
+            y      = dataView.getFloat32(offset + 4, true);
+            tsneX  = dataView.getFloat32(offset + 8, true);
+            tsneY  = dataView.getFloat32(offset + 12, true);
+            ai     = dataView.getUint16(offset + 16, true);
+            u      = dataView.getUint16(offset + 18, true);
+            v      = dataView.getUint16(offset + 20, true);
+            cluster = dataView.getUint16(offset + 22, true);
+          } else {
+            // 16-byte format: float32 x, y, uint16 atlas, u, v, padding
+            const offset = i * 16;
+            x  = dataView.getFloat32(offset, true);
+            y  = dataView.getFloat32(offset + 4, true);
+            ai = dataView.getUint16(offset + 8, true);
+            u  = dataView.getUint16(offset + 10, true);
+            v  = dataView.getUint16(offset + 12, true);
+            tsneX = x; tsneY = y; // Same coords for both modes
+            cluster = undefined;
+          }
 
           const frame = new PIXI.Rectangle(u, v, currentThumbSize, currentThumbSize);
           const tex = new PIXI.Texture({ source: atlasTextures[ai].source, frame });
@@ -517,9 +546,11 @@ export default function App() {
 
           const pObj = {
             id: i, x, y,
-            originalX: x, originalY: y,
+            originalX: x, originalY: y,       // UMAP coordinates
+            tsneX, tsneY,                      // t-SNE coordinates
             targetX: x, targetY: y,
             ai, u, v, sprite,
+            ...(cluster !== undefined && { cluster }),
           };
           pointsRef.current.push(pObj);
 
