@@ -385,8 +385,8 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
 
     # Scale to viewer range — keep images close to natural t-SNE positions
     n = len(tsne_coords)
-    spacing = THUMB_SIZE  # no extra gap — let natural overlap convey density
-    target_side = int(np.ceil(np.sqrt(n * 1.2))) * spacing
+    spacing = THUMB_SIZE * 1.1  # slight gap to reduce overlap
+    target_side = int(np.ceil(np.sqrt(n * 1.4))) * spacing
     def scale_coords(coords, target_range):
         mins = coords.min(axis=0)
         maxs = coords.max(axis=0)
