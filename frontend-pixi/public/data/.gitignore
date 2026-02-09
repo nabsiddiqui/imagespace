@@ -1,0 +1,5 @@
+*.webp
+data.bin
+data.json
+manifest.json
+metadata.csv

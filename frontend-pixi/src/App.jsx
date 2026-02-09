@@ -11,10 +11,22 @@ import {
 const THUMB_SIZE = 64;
 const SPATIAL_CELL_SIZE = 120;
 
+/* ── ImageSpace Logo (Rose Pine Dawn) ─────────── */
+const ImageSpaceLogo = ({ size = 40 }) => (
+  <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="2" width="36" height="36" rx="4" fill="#f2e9e1" stroke="#286983" strokeWidth="2.5"/>
+    <rect x="7" y="7" width="26" height="18" rx="2" fill="#d7827e" stroke="#286983" strokeWidth="1.5"/>
+    <circle cx="13" cy="13" r="3" fill="#ea9d34"/>
+    <polygon points="11,23 19,14 27,23" fill="#286983"/>
+    <polygon points="21,23 27,17 33,23" fill="#56949f"/>
+    <rect x="7" y="28" width="10" height="4" rx="1" fill="#286983"/>
+    <rect x="19" y="28" width="14" height="4" rx="1" fill="#907aa9"/>
+  </svg>
+);
+
 /* ── View Mode Layouts ────────────────────────── */
 const VIEW_MODES = {
-  umap: { label: 'UMAP', icon: 'scatter', desc: 'Semantic embedding space' },
-  tsne: { label: 't-SNE', icon: 'scatter', desc: 'Alternative embedding projection' },
+  tsne: { label: 't-SNE', icon: 'scatter', desc: 'Visual similarity layout' },
   grid: { label: 'Grid', icon: 'grid', desc: 'Ordinal grid layout' },
   color: { label: 'Color', icon: 'palette', desc: 'Sorted by dominant color' },
   timeline: { label: 'Timeline', icon: 'clock', desc: 'Chronological timeline' },
@@ -24,7 +36,7 @@ const VIEW_MODES = {
 function computeLayout(allPoints, mode, visibleSet) {
   // If visibleSet provided, only layout those points; hide others (or dim in umap)
   const hasFilter = visibleSet && visibleSet.size < allPoints.length;
-  const isStableLayout = mode === 'umap' || mode === 'tsne';
+  const isStableLayout = mode === 'tsne';
   // In stable-layout modes show ALL points in their positions, just dim non-visible
   const points = (hasFilter && !isStableLayout) ? allPoints.filter(p => visibleSet.has(p.id)) : allPoints;
   const n = points.length;
@@ -53,13 +65,6 @@ function computeLayout(allPoints, mode, visibleSet) {
   }
 
   switch (mode) {
-    case 'umap': {
-      for (const p of points) {
-        p.targetX = p.originalX;
-        p.targetY = p.originalY;
-      }
-      break;
-    }
     case 'tsne': {
       for (const p of points) {
         p.targetX = p.tsneX ?? p.originalX;
@@ -150,19 +155,45 @@ const CLUSTER_COLORS = [
 function computeClusters(points, k = NUM_CLUSTERS, maxIter = 25) {
   const n = points.length;
   if (n === 0) return [];
+
+  // Use pre-computed cluster IDs from pipeline (v2 binary) if available
+  const hasPrecomputed = points.some(p => p.cluster !== undefined);
+  if (hasPrecomputed) {
+    const clusterMap = {};
+    for (let i = 0; i < n; i++) {
+      const cid = points[i].cluster ?? 0;
+      if (!clusterMap[cid]) clusterMap[cid] = { indices: [], sx: 0, sy: 0 };
+      clusterMap[cid].indices.push(i);
+      clusterMap[cid].sx += (points[i].tsneX ?? points[i].originalX);
+      clusterMap[cid].sy += (points[i].tsneY ?? points[i].originalY);
+    }
+    return Object.entries(clusterMap)
+      .map(([cid, data]) => ({
+        id: parseInt(cid),
+        centroid: { x: data.sx / data.indices.length, y: data.sy / data.indices.length },
+        count: data.indices.length,
+        indices: data.indices,
+        color: CLUSTER_COLORS[parseInt(cid) % CLUSTER_COLORS.length],
+      }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  // Fallback: client-side K-means on t-SNE coordinates
   const step = Math.floor(n / k);
   const centroids = [];
   for (let i = 0; i < k; i++) {
     const p = points[i * step];
-    centroids.push({ x: p.originalX, y: p.originalY });
+    centroids.push({ x: p.tsneX ?? p.originalX, y: p.tsneY ?? p.originalY });
   }
   const assignments = new Int32Array(n);
   for (let iter = 0; iter < maxIter; iter++) {
     for (let i = 0; i < n; i++) {
       let minDist = Infinity, minIdx = 0;
+      const px = points[i].tsneX ?? points[i].originalX;
+      const py = points[i].tsneY ?? points[i].originalY;
       for (let j = 0; j < k; j++) {
-        const dx = points[i].originalX - centroids[j].x;
-        const dy = points[i].originalY - centroids[j].y;
+        const dx = px - centroids[j].x;
+        const dy = py - centroids[j].y;
         const dist = dx * dx + dy * dy;
         if (dist < minDist) { minDist = dist; minIdx = j; }
       }
@@ -171,8 +202,8 @@ function computeClusters(points, k = NUM_CLUSTERS, maxIter = 25) {
     const sums = Array.from({ length: k }, () => ({ x: 0, y: 0, count: 0 }));
     for (let i = 0; i < n; i++) {
       const c = assignments[i];
-      sums[c].x += points[i].originalX;
-      sums[c].y += points[i].originalY;
+      sums[c].x += (points[i].tsneX ?? points[i].originalX);
+      sums[c].y += (points[i].tsneY ?? points[i].originalY);
       sums[c].count++;
     }
     for (let j = 0; j < k; j++) {
@@ -199,7 +230,7 @@ function extractClusterThumbs(clusters, points, atlasTextures, thumbSize) {
   for (const cluster of clusters) {
     const cx = cluster.centroid.x, cy = cluster.centroid.y;
     const reps = cluster.indices
-      .map(i => ({ i, d: Math.hypot(points[i].originalX - cx, points[i].originalY - cy) }))
+      .map(i => ({ i, d: Math.hypot((points[i].tsneX ?? points[i].originalX) - cx, (points[i].tsneY ?? points[i].originalY) - cy) }))
       .sort((a, b) => a.d - b.d)
       .slice(0, 4);
     cluster.thumbnails = [];
@@ -259,14 +290,14 @@ export default function App() {
   const viewportRef = useRef(null);
   const spatialHashRef = useRef({});
   const pointsRef = useRef([]);
-  const viewModeRef = useRef('umap');
+  const viewModeRef = useRef('tsne');
 
   const [loading, setLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [stats, setStats] = useState({ count: 0, fps: 0 });
   const [selectedItem, setSelectedItem] = useState(null);
   const [error, setError] = useState(null);
-  const [viewMode, setViewMode] = useState('umap');
+  const [viewMode, setViewMode] = useState('tsne');
   const [statusMsg, setStatusMsg] = useState('Preparing...');
   const [zoomLevel, setZoomLevel] = useState(1);
   const [hotspots, setHotspots] = useState([]);
@@ -287,6 +318,7 @@ export default function App() {
   const [csvFilters, setCsvFilters] = useState({});  // { columnName: selectedValue | null }
   const [openFilter, setOpenFilter] = useState(null); // which dropdown is open
   const visibleSetRef = useRef(null);                // current Set<id> or null (all visible)
+  const atlasFormatRef = useRef('jpg');               // atlas file extension
 
   /* ── Compute visible set from hotspot + csvFilters ── */
   const computeVisibleSet = useCallback((hotspotId, filters, hotspotsData, meta) => {
@@ -439,8 +471,9 @@ export default function App() {
     async function start() {
       try {
         setStatusMsg('Loading rendering engine...');
-        const PIXI = await import('pixi.js');
-        const { Viewport } = await import('pixi-viewport');
+        const [PIXI, { Viewport }] = await Promise.all([
+          import('pixi.js'), import('pixi-viewport')
+        ]);
 
         setStatusMsg('Initialising WebGL...');
         app = new PIXI.Application();
@@ -474,6 +507,7 @@ export default function App() {
         const mRes = await fetch('/data/manifest.json');
         if (!mRes.ok) throw new Error('Manifest load failed');
         const manifest = await mRes.json();
+        atlasFormatRef.current = manifest.atlasFormat || 'jpg';
 
         setStatusMsg('Streaming binary layout...');
         const dRes = await fetch('/data/data.bin');
@@ -481,16 +515,22 @@ export default function App() {
         const buffer = await dRes.arrayBuffer();
         const dataView = new DataView(buffer);
 
-        setStats(s => ({ ...s, count: manifest.count }));
+        setStats(s => ({ ...s, count: manifest.count, atlasCount: manifest.atlasCount }));
         setStatusMsg(`Loading ${manifest.atlasCount} atlas textures...`);
 
-        const atlasTextures = [];
+        const fmt = manifest.atlasFormat || 'jpg';
+        // Load all atlases in parallel for faster startup
+        const atlasPromises = [];
         for (let i = 0; i < manifest.atlasCount; i++) {
-          const tex = await PIXI.Assets.load(`/data/atlas_${i}.jpg`);
-          if (!tex) throw new Error(`Atlas ${i} load failed`);
-          atlasTextures.push(tex);
-          setLoadProgress(Math.round(((i + 1) / manifest.atlasCount) * 40));
+          atlasPromises.push(
+            PIXI.Assets.load(`/data/atlas_${i}.${fmt}`).then(tex => {
+              setLoadProgress(prev => Math.round(((atlasPromises.filter((_, j) => j <= i).length) / manifest.atlasCount) * 40));
+              return tex;
+            })
+          );
         }
+        const atlasTextures = await Promise.all(atlasPromises);
+        setLoadProgress(40);
 
         /* Create sprites */
         setStatusMsg('Building image field...');
@@ -540,22 +580,25 @@ export default function App() {
           const tex = new PIXI.Texture({ source: atlasTextures[ai].source, frame });
           const sprite = new PIXI.Sprite(tex);
           sprite.anchor.set(0.5);
-          sprite.position.set(x, y);
+          // Position at t-SNE coordinates (default view)
+          const initX = tsneX ?? x;
+          const initY = tsneY ?? y;
+          sprite.position.set(initX, initY);
           sprite.eventMode = 'none';
           container.addChild(sprite);
 
           const pObj = {
-            id: i, x, y,
-            originalX: x, originalY: y,       // UMAP coordinates
+            id: i, x: initX, y: initY,
+            originalX: x, originalY: y,       // Legacy/UMAP coordinates
             tsneX, tsneY,                      // t-SNE coordinates
-            targetX: x, targetY: y,
+            targetX: initX, targetY: initY,
             ai, u, v, sprite,
             ...(cluster !== undefined && { cluster }),
           };
           pointsRef.current.push(pObj);
 
-          const gx = Math.floor(x / SPATIAL_CELL_SIZE);
-          const gy = Math.floor(y / SPATIAL_CELL_SIZE);
+          const gx = Math.floor(initX / SPATIAL_CELL_SIZE);
+          const gy = Math.floor(initY / SPATIAL_CELL_SIZE);
           const key = `${gx},${gy}`;
           if (!spatialHashRef.current[key]) spatialHashRef.current[key] = [];
           spatialHashRef.current[key].push(pObj);
@@ -653,6 +696,9 @@ export default function App() {
             }
           }
           if (moving) {
+            app._spatialDirty = true;
+          } else if (app._spatialDirty) {
+            app._spatialDirty = false;
             spatialHashRef.current = {};
             for (const p of pointsRef.current) {
               const gx = Math.floor(p.x / SPATIAL_CELL_SIZE);
@@ -670,8 +716,8 @@ export default function App() {
             setStats(s => ({ ...s, fps: Math.round(app.ticker.FPS) }));
           }
 
-          // Update cluster label screen positions
-          if (clusterCentroidsRef.current.length > 0) {
+          // Update cluster label screen positions (throttled)
+          if (clusterCentroidsRef.current.length > 0 && (!app._lastUiUpdate || now - app._lastUiUpdate < 250)) {
             const labels = clusterCentroidsRef.current.map(c => {
               const screen = viewport.toScreen(c.worldX, c.worldY);
               return { ...c, x: screen.x, y: screen.y };
@@ -679,30 +725,34 @@ export default function App() {
             setClusterLabels(labels);
           }
 
-          // Update timeline current time based on viewport center
-          if (timelineMapRef.current) {
+          // Update timeline current time based on viewport center (throttled)
+          if (timelineMapRef.current && (!app._lastTimeUpdate || now - app._lastTimeUpdate > 200)) {
+            app._lastTimeUpdate = now;
             const tm = timelineMapRef.current;
             const centerWorld = viewport.toWorld(window.innerWidth / 2, window.innerHeight / 2);
             const t = (centerWorld.x - tm.xMin) / (tm.xMax - tm.xMin || 1);
             const currentTs = Math.round(tm.minTs + t * (tm.maxTs - tm.minTs));
             setTimeRange(prev => prev ? { ...prev, current: currentTs } : prev);
 
-            // Apply time filter dimming (only to visible/filtered sprites)
+            // Apply time filter dimming (only when slider values change, not every frame)
             const tf = timeFilterRef.current;
-            if (tf[0] > 0 || tf[1] < 1000) {
-              const loTs = tm.minTs + (tf[0] / 1000) * (tm.maxTs - tm.minTs);
-              const hiTs = tm.minTs + (tf[1] / 1000) * (tm.maxTs - tm.minTs);
-              const vs = visibleSetRef.current;
-              for (const p of pointsRef.current) {
-                // Skip sprites hidden by hotspot/CSV filters
-                if (vs && !vs.has(p.id)) continue;
-                const ts = p.timestamp ?? 0;
-                if (ts >= loTs && ts <= hiTs) {
-                  p.sprite.alpha = 1;
-                  p.sprite.tint = 0xffffff;
-                } else {
-                  p.sprite.alpha = 0.1;
-                  p.sprite.tint = 0xcccccc;
+            const tfKey = `${tf[0]},${tf[1]}`;
+            if (tfKey !== app._lastTimeFilter) {
+              app._lastTimeFilter = tfKey;
+              if (tf[0] > 0 || tf[1] < 1000) {
+                const loTs = tm.minTs + (tf[0] / 1000) * (tm.maxTs - tm.minTs);
+                const hiTs = tm.minTs + (tf[1] / 1000) * (tm.maxTs - tm.minTs);
+                const vs = visibleSetRef.current;
+                for (const p of pointsRef.current) {
+                  if (vs && !vs.has(p.id)) continue;
+                  const ts = p.timestamp ?? 0;
+                  if (ts >= loTs && ts <= hiTs) {
+                    p.sprite.alpha = 1;
+                    p.sprite.tint = 0xffffff;
+                  } else {
+                    p.sprite.alpha = 0.1;
+                    p.sprite.tint = 0xcccccc;
+                  }
                 }
               }
             }
@@ -939,7 +989,7 @@ export default function App() {
                   style={{
                     width: '320px',
                     height: '320px',
-                    backgroundImage: `url(/data/atlas_${p.ai}.jpg)`,
+                    backgroundImage: `url(/data/atlas_${p.ai}.${atlasFormatRef.current})`,
                     backgroundPosition: `-${p.u}px -${p.v}px`,
                     backgroundSize: 'auto',
                     imageRendering: 'auto',
@@ -991,9 +1041,7 @@ export default function App() {
           <div className="flex flex-col gap-2">
             {/* Logo */}
             <div className="pointer-events-auto rp-card flex items-center gap-3">
-              <div className="bg-rp-pine text-white p-2 rounded-lg">
-                <Layers size={18} />
-              </div>
+              <ImageSpaceLogo size={36} />
               <div>
                 <h1 className="text-lg font-extrabold tracking-tight text-rp-text leading-none">
                   ImageSpace
@@ -1005,7 +1053,7 @@ export default function App() {
             </div>
 
             {/* Hotspots (larger cards) */}
-            {!loading && hotspots.length > 0 && viewMode !== 'carousel' && showHotspots && (
+            {!loading && hotspots.length > 0 && showHotspots && (
               <div className="pointer-events-auto flex flex-col gap-2 max-w-[240px]">
                 {hotspots.slice(0, 8).map((h, i) => {
                   const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
@@ -1038,7 +1086,7 @@ export default function App() {
                 })}
               </div>
             )}
-            {!loading && hotspots.length > 0 && !showHotspots && viewMode !== 'carousel' && (
+            {!loading && hotspots.length > 0 && !showHotspots && (
               <button
                 onClick={() => setShowHotspots(true)}
                 className="pointer-events-auto rp-card flex items-center gap-2 px-3 py-2 hover:border-rp-pine/30 transition-all"
@@ -1161,18 +1209,19 @@ export default function App() {
             const range = timeRange.max - timeRange.min || 1;
             const loTs = timeRange.min + (timeFilter[0] / 1000) * range;
             const hiTs = timeRange.min + (timeFilter[1] / 1000) * range;
-            const isFiltered = timeFilter[0] > 0 || timeFilter[1] < 1000;
+            const isSliderMoved = timeFilter[0] > 0 || timeFilter[1] < 1000;
+            const fmtDate = (ts) => new Date(ts * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
             return (
             <div className="pointer-events-auto rp-card px-4 py-3" style={{ marginLeft: showHotspots && hotspots.length > 0 ? '260px' : 0 }}>
               <div className="flex items-center gap-3 mb-2">
                 <Clock size={14} className="text-rp-iris shrink-0" />
                 <span className="text-xs font-bold text-rp-text">
-                  {isFiltered
-                    ? `${new Date(loTs * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })} — ${new Date(hiTs * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}`
-                    : 'Drag handles to filter by date range'
+                  {isSliderMoved
+                    ? `${fmtDate(loTs)} — ${fmtDate(hiTs)}`
+                    : `${fmtDate(timeRange.min)} — ${fmtDate(timeRange.max)}`
                   }
                 </span>
-                {isFiltered && (
+                {isSliderMoved && (
                   <button
                     onClick={() => { setTimeFilter([0, 1000]); timeFilterRef.current = [0, 1000]; }}
                     className="text-[10px] font-semibold text-rp-love hover:underline ml-auto"
@@ -1303,7 +1352,7 @@ export default function App() {
                 <div
                   className="w-full aspect-square rounded-xl overflow-hidden border border-rp-hlMed"
                   style={{
-                    backgroundImage: `url(/data/atlas_${pointsRef.current[selectedItem.id].ai}.jpg)`,
+                    backgroundImage: `url(/data/atlas_${pointsRef.current[selectedItem.id].ai}.${atlasFormatRef.current})`,
                     backgroundPosition: `-${pointsRef.current[selectedItem.id].u}px -${pointsRef.current[selectedItem.id].v}px`,
                     backgroundSize: 'auto',
                   }}
@@ -1363,7 +1412,7 @@ export default function App() {
               {[
                 ['Total Images', stats.count.toLocaleString()],
                 ['Clusters', hotspots.length.toString()],
-                ['Atlas Textures', '13'],
+                ['Atlas Textures', String(stats.atlasCount || '?')],
                 ['Thumbnail Size', `${THUMB_SIZE}px`],
                 ['Current View', VIEW_MODES[viewMode]?.label || viewMode],
                 ['Render FPS', stats.fps.toString()],
@@ -1398,24 +1447,22 @@ export default function App() {
       {/* ── Loading ──────────────────────────── */}
       {loading && !error && (
         <div className="absolute inset-0 z-[1000] bg-rp-base flex flex-col items-center justify-center">
-          <div className="flex flex-col items-center gap-5 max-w-xs w-full px-8">
-            <div className="bg-rp-pine text-white p-4 rounded-2xl shadow-rp-lg">
-              <Layers size={36} className="animate-pulse" />
-            </div>
+          <div className="flex flex-col items-center gap-6 max-w-sm w-full px-8">
+            <ImageSpaceLogo size={72} />
             <div className="text-center">
               <h1 className="text-3xl font-extrabold tracking-tight text-rp-text">ImageSpace</h1>
               <p className="text-sm text-rp-muted mt-1">Loading collection...</p>
             </div>
-            <div className="w-full">
-              <div className="w-full h-1.5 bg-rp-hlMed rounded-full overflow-hidden">
+            <div className="w-full space-y-2">
+              <div className="w-full h-2.5 bg-rp-hlMed rounded-full overflow-hidden shadow-inner">
                 <div
-                  className="h-full bg-rp-pine rounded-full transition-all duration-300"
+                  className="h-full bg-gradient-to-r from-rp-pine to-rp-foam rounded-full transition-all duration-500 ease-out"
                   style={{ width: `${Math.max(loadProgress, 3)}%` }}
                 />
               </div>
-              <div className="flex justify-between mt-1.5">
-                <p className="text-[11px] text-rp-subtle">{statusMsg}</p>
-                <p className="text-[11px] font-semibold text-rp-pine">{loadProgress}%</p>
+              <div className="flex justify-between">
+                <p className="text-xs text-rp-subtle font-medium">{statusMsg}</p>
+                <p className="text-xs font-bold text-rp-pine tabular-nums">{loadProgress}%</p>
               </div>
             </div>
           </div>
