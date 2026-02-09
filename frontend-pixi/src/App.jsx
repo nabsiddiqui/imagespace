@@ -306,7 +306,7 @@ export default function App() {
   const [colorsReady, setColorsReady] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [tooltip, setTooltip] = useState(null);
-  const [showDetailPanel, setShowDetailPanel] = useState(false);
+  const [showDetailPanel, setShowDetailPanel] = useState(true);
   const [clusterLabels, setClusterLabels] = useState([]); // [{id, x, y, label, color, count}]
   const clusterCentroidsRef = useRef([]); // world positions of cluster group centers
   const clipLabelsRef = useRef(null); // CLIP-generated cluster labels from cluster_labels.json
@@ -443,7 +443,21 @@ export default function App() {
           const cy = (minY + maxY) / 2;
           const scaleX = vp.screenWidth / w;
           const scaleY = vp.screenHeight / h;
-          const scale = Math.min(scaleX, scaleY);
+          let scale = Math.min(scaleX, scaleY);
+
+          // For timeline, ensure thumbnails are visible (min ~30px on screen)
+          if (mode === 'timeline') {
+            const minThumbPx = 30; // minimum thumbnail size in screen pixels
+            const minScale = minThumbPx / THUMB_SIZE;
+            if (scale < minScale) {
+              scale = minScale;
+              // Center on the start of the timeline instead of the middle
+              vp.setZoom(scale, true);
+              vp.moveCenter(minX + vp.screenWidth / scale / 2, cy);
+              return;
+            }
+          }
+
           vp.setZoom(scale, true);
           vp.moveCenter(cx, cy);
         } else {
@@ -539,11 +553,13 @@ export default function App() {
 
         const fmt = manifest.atlasFormat || 'jpg';
         // Load all atlases in parallel for faster startup
+        let atlasLoaded = 0;
         const atlasPromises = [];
         for (let i = 0; i < manifest.atlasCount; i++) {
           atlasPromises.push(
             PIXI.Assets.load(`/data/atlas_${i}.${fmt}`).then(tex => {
-              setLoadProgress(prev => Math.round(((atlasPromises.filter((_, j) => j <= i).length) / manifest.atlasCount) * 40));
+              atlasLoaded++;
+              setLoadProgress(Math.round((atlasLoaded / manifest.atlasCount) * 40));
               return tex;
             })
           );
@@ -889,17 +905,21 @@ export default function App() {
           viewport.resize(window.innerWidth, window.innerHeight);
         });
 
-        /* Timeline wheel → horizontal pan; Ctrl/pinch → zoom to cursor */
+        /* Custom wheel handler for ALL modes — ensures consistent zoom behavior */
         const canvas = canvasRef.current;
         if (canvas) {
           canvas.addEventListener('wheel', (e) => {
-            if (viewModeRef.current === 'timeline') {
+            const isTimeline = viewModeRef.current === 'timeline';
+
+            if (isTimeline) {
               e.preventDefault();
               if (e.ctrlKey || e.metaKey) {
-                // Pinch-to-zoom: zoom centered on cursor position
-                const factor = e.deltaY > 0 ? 0.95 : 1.05;
+                // Pinch-to-zoom: scale proportional to deltaY
+                const zoomIntensity = 0.01;
+                const delta = -e.deltaY * zoomIntensity;
+                const factor = Math.exp(delta); // exponential for smooth zoom
                 const worldPos = viewport.toWorld(e.offsetX, e.offsetY);
-                const newScale = viewport.scale.x * factor;
+                const newScale = Math.max(0.01, Math.min(20, viewport.scale.x * factor));
                 viewport.scale.set(newScale);
                 viewport.x = e.offsetX - worldPos.x * newScale;
                 viewport.y = e.offsetY - worldPos.y * newScale;
@@ -1147,7 +1167,7 @@ export default function App() {
                           <div className="w-12 h-12 rounded-lg shrink-0" style={{ backgroundColor: h.color, opacity: 0.4 }} />
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-rp-text leading-tight">Hotspot {i + 1}</p>
+                          <p className="text-xs font-bold text-rp-text leading-tight">{clipLabelsRef.current?.[h.id]?.label || `Cluster ${i + 1}`}</p>
                           <p className="text-[10px] text-rp-muted mt-0.5">{h.count.toLocaleString()} images</p>
                           <div className="mt-1 h-1.5 bg-rp-hlMed rounded-full overflow-hidden">
                             <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: h.color }} />
