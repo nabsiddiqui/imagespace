@@ -926,9 +926,8 @@ export default function App() {
       )}
 
       {/* ── UI Overlay ────────────────────────── */}
-      <div className="absolute inset-0 pointer-events-none z-50 flex flex-col justify-between p-4">
-
-        {/* Top row */}
+      {/* Top section — pinned to top */}
+      <div className="absolute top-0 left-0 right-0 pointer-events-none z-50 p-4">
         <div className="flex justify-between items-start gap-3">
           {/* Logo + Hotspots column */}
           <div className="flex flex-col gap-2">
@@ -1094,8 +1093,10 @@ export default function App() {
             )}
           </div>
         </div>
+      </div>
 
-        {/* Bottom row */}
+      {/* Bottom section — pinned to bottom */}
+      <div className="absolute bottom-0 left-0 right-0 pointer-events-none z-50 p-4">
         <div className="flex flex-col gap-2 items-stretch">
           {/* Timeline indicator — offset from hotspots */}
           {viewMode === 'timeline' && timeRange && (
