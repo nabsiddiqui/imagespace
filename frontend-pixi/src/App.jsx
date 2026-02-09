@@ -850,16 +850,17 @@ export default function App() {
           viewport.resize(window.innerWidth, window.innerHeight);
         });
 
-        /* Timeline wheel → pan instead of zoom */
+        /* Timeline wheel → horizontal pan; Ctrl/pinch → zoom to cursor */
         const canvas = canvasRef.current;
         if (canvas) {
           canvas.addEventListener('wheel', (e) => {
             if (viewModeRef.current === 'timeline') {
+              // Ctrl+wheel (trackpad pinch) → let pixi-viewport handle zoom
+              if (e.ctrlKey || e.metaKey) return;
               e.preventDefault();
               e.stopImmediatePropagation();
               const speed = 2;
-              viewport.x -= e.deltaX * speed;
-              viewport.y -= e.deltaY * speed;
+              viewport.x -= (e.deltaX + e.deltaY) * speed;
               viewport.dirty = true;
             }
           }, { passive: false });
@@ -943,8 +944,8 @@ export default function App() {
   }, [viewMode, activeHotspot, csvFilters]);
 
   /* ── CSV filter helpers ── */
-  const FILTER_SKIP_COLS = new Set(['id', 'filename', 'cluster', 'timestamp', 'dominant_color', 'width', 'height']);
-  const MAX_FILTER_VALUES = 1500; // Skip columns with too many unique values (not useful as category)
+  const FILTER_SKIP_COLS = new Set(['id', 'filename', 'width', 'height']);
+  const MAX_FILTER_VALUES = 200; // Skip columns with >200 unique values (not useful as category filter)
 
   const filterOptions = useMemo(() => {
     if (!metadata) return {};
@@ -1037,7 +1038,7 @@ export default function App() {
                 {/* Large image */}
                 {(() => {
                   const _displaySize = 320;
-                  const _scale = _displaySize / THUMB_SIZE;
+                  const _scale = _displaySize / thumbSizeRef.current;
                   const _as = atlasSizeRef.current;
                   return (
                     <div
@@ -1409,7 +1410,7 @@ export default function App() {
               {pointsRef.current[selectedItem.id] && (() => {
                 const _p = pointsRef.current[selectedItem.id];
                 const _displaySize = 256;
-                const _scale = _displaySize / THUMB_SIZE;
+                const _scale = _displaySize / thumbSizeRef.current;
                 const _as = atlasSizeRef.current;
                 return (
                   <div
