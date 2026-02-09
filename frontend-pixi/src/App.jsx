@@ -24,7 +24,7 @@ const VIEW_MODES = {
 function computeLayout(allPoints, mode, visibleSet) {
   // If visibleSet provided, only layout those points; hide others (or dim in umap)
   const hasFilter = visibleSet && visibleSet.size < allPoints.length;
-  const isStableLayout = mode === 'umap' || mode === 'tsne' || mode === 'timeline';
+  const isStableLayout = mode === 'umap' || mode === 'tsne';
   // In stable-layout modes show ALL points in their positions, just dim non-visible
   const points = (hasFilter && !isStableLayout) ? allPoints.filter(p => visibleSet.has(p.id)) : allPoints;
   const n = points.length;
@@ -1170,7 +1170,7 @@ export default function App() {
                     setTimeFilter([v, timeFilter[1]]);
                     timeFilterRef.current = [v, timeFilter[1]];
                   }}
-                  className="absolute inset-0 w-full h-full appearance-none bg-transparent cursor-pointer z-[2] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-rp-iris [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-[2] [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-0"
+                  className="absolute inset-0 w-full h-full appearance-none bg-transparent pointer-events-none z-[2] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-rp-iris [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-[2] [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-0"
                 />
                 {/* High handle */}
                 <input
@@ -1183,7 +1183,7 @@ export default function App() {
                     setTimeFilter([timeFilter[0], v]);
                     timeFilterRef.current = [timeFilter[0], v];
                   }}
-                  className="absolute inset-0 w-full h-full appearance-none bg-transparent cursor-pointer z-[3] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-rp-iris [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-[3] [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-0"
+                  className="absolute inset-0 w-full h-full appearance-none bg-transparent pointer-events-none z-[3] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-rp-iris [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-[3] [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-0"
                 />
               </div>
               <div className="flex justify-between mt-1">
