@@ -151,10 +151,10 @@ def _get_onnx_model_path():
 
     try:
         from huggingface_hub import hf_hub_download
-        print("  Downloading CLIP ONNX model (first time only)...")
+        print("  Downloading CLIP ONNX vision model (first time only)...")
         downloaded = hf_hub_download(
             repo_id="Xenova/clip-vit-base-patch32",
-            filename="onnx/model.onnx",
+            filename="onnx/vision_model.onnx",
             cache_dir=str(cache_dir),
         )
         return downloaded
