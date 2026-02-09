@@ -291,19 +291,19 @@ export default function App() {
       if (h) ids = new Set(h.indices);
     }
 
-    // CSV filters — additive (union across columns)
-    const activeFilters = Object.entries(filters).filter(([, v]) => v !== null && v !== undefined);
-    if (activeFilters.length > 0 && meta) {
+    // CSV filters — additive (union across all selected values)
+    const activeEntries = Object.entries(filters).filter(([, v]) => v && v.size > 0);
+    if (activeEntries.length > 0 && meta) {
       const csvSet = new Set();
-      for (const [col, val] of activeFilters) {
+      for (const [col, vals] of activeEntries) {
         for (let i = 0; i < meta.rows.length; i++) {
-          if (meta.rows[i][col] === val) csvSet.add(i);
+          if (vals.has(meta.rows[i][col])) csvSet.add(i);
         }
       }
       if (ids === null) {
         ids = csvSet;
       } else {
-        // Intersect hotspot with CSV union (show hotspot items matching ANY filter)
+        // Intersect hotspot with CSV union
         const intersection = new Set();
         for (const id of ids) {
           if (csvSet.has(id)) intersection.add(id);
@@ -372,8 +372,31 @@ export default function App() {
     setTimeout(() => {
       const vp = viewportRef.current;
       if (vp && mode !== 'carousel') {
-        vp.fit();
-        vp.moveCenter(0, 0);
+        // Compute actual content bounds from target positions
+        const pts = pointsRef.current;
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const p of pts) {
+          if (p.sprite.alpha === 0) continue; // skip hidden
+          minX = Math.min(minX, p.targetX);
+          maxX = Math.max(maxX, p.targetX);
+          minY = Math.min(minY, p.targetY);
+          maxY = Math.max(maxY, p.targetY);
+        }
+        if (minX < Infinity) {
+          const pad = THUMB_SIZE * 2;
+          const w = maxX - minX + pad;
+          const h = maxY - minY + pad;
+          const cx = (minX + maxX) / 2;
+          const cy = (minY + maxY) / 2;
+          const scaleX = vp.screenWidth / w;
+          const scaleY = vp.screenHeight / h;
+          const scale = Math.min(scaleX, scaleY);
+          vp.setZoom(scale, true);
+          vp.moveCenter(cx, cy);
+        } else {
+          vp.fit();
+          vp.moveCenter(0, 0);
+        }
       }
     }, 100);
   }, []);
@@ -552,8 +575,29 @@ export default function App() {
           }
         } catch (_) { /* metadata.csv is optional */ }
 
-        viewport.fit();
-        viewport.moveCenter(0, 0);
+        // Fit to actual content bounds
+        {
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+          for (const p of pointsRef.current) {
+            minX = Math.min(minX, p.originalX);
+            maxX = Math.max(maxX, p.originalX);
+            minY = Math.min(minY, p.originalY);
+            maxY = Math.max(maxY, p.originalY);
+          }
+          if (minX < Infinity) {
+            const pad = THUMB_SIZE * 2;
+            const w = maxX - minX + pad;
+            const h = maxY - minY + pad;
+            const scaleX = viewport.screenWidth / w;
+            const scaleY = viewport.screenHeight / h;
+            const scale = Math.min(scaleX, scaleY);
+            viewport.setZoom(scale, true);
+            viewport.moveCenter((minX + maxX) / 2, (minY + maxY) / 2);
+          } else {
+            viewport.fit();
+            viewport.moveCenter(0, 0);
+          }
+        }
 
         /* Ticker — animation + FPS */
         app.ticker.add((delta) => {
@@ -706,8 +750,27 @@ export default function App() {
   const handleFitAll = () => {
     const vp = viewportRef.current;
     if (!vp) return;
-    vp.fit();
-    vp.moveCenter(0, 0);
+    const pts = pointsRef.current;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of pts) {
+      if (p.sprite.alpha === 0) continue;
+      minX = Math.min(minX, p.targetX);
+      maxX = Math.max(maxX, p.targetX);
+      minY = Math.min(minY, p.targetY);
+      maxY = Math.max(maxY, p.targetY);
+    }
+    if (minX < Infinity) {
+      const pad = THUMB_SIZE * 2;
+      const w = maxX - minX + pad;
+      const h = maxY - minY + pad;
+      const scaleX = vp.screenWidth / w;
+      const scaleY = vp.screenHeight / h;
+      const scale = Math.min(scaleX, scaleY);
+      vp.animate({ scale, position: { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }, time: 300 });
+    } else {
+      vp.fit();
+      vp.moveCenter(0, 0);
+    }
   };
 
   const modeIcon = (mode) => {
@@ -744,10 +807,17 @@ export default function App() {
 
   const handleFilterChange = useCallback((col, val) => {
     setCsvFilters(prev => {
-      const next = { ...prev, [col]: val === prev[col] ? null : val };
-      // Clean null entries
-      for (const k of Object.keys(next)) {
-        if (next[k] === null) delete next[k];
+      const next = { ...prev };
+      const existing = next[col] ? new Set(next[col]) : new Set();
+      if (existing.has(val)) {
+        existing.delete(val);
+      } else {
+        existing.add(val);
+      }
+      if (existing.size === 0) {
+        delete next[col];
+      } else {
+        next[col] = existing;
       }
       setActiveHotspot(hotId => {
         const visSet = computeVisibleSet(hotId, next, hotspots, metadata);
@@ -756,7 +826,6 @@ export default function App() {
       });
       return next;
     });
-    setOpenFilter(null);
   }, [hotspots, metadata, viewMode, computeVisibleSet, relayout]);
 
   const clearAllFilters = useCallback(() => {
@@ -766,7 +835,7 @@ export default function App() {
     relayout(viewMode, visSet);
   }, [viewMode, relayout]);
 
-  const activeFilterCount = Object.keys(csvFilters).filter(k => csvFilters[k]).length + (activeHotspot !== null ? 1 : 0);
+  const activeFilterCount = Object.values(csvFilters).reduce((sum, s) => sum + (s ? s.size : 0), 0) + (activeHotspot !== null ? 1 : 0);
 
   /* ── Render ─────────────────────────────────── */
 
@@ -951,48 +1020,66 @@ export default function App() {
               </button>
             </div>
 
-            {/* Compact filter bar */}
+            {/* Checkbox filter bar */}
             {metadata && metadata.columns.length > 0 && (
               <div className="pointer-events-auto rp-card flex items-center gap-2 px-3 py-1.5 flex-wrap">
                 <Filter size={11} className="text-rp-muted shrink-0" />
-                {metadata.columns.map(col => (
-                  <div key={col} className="relative">
-                    <button
-                      onClick={() => setOpenFilter(openFilter === col ? null : col)}
-                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all border ${
-                        csvFilters[col]
-                          ? 'bg-rp-pine/10 border-rp-pine/30 text-rp-pine font-semibold'
-                          : 'bg-rp-hlLow/50 border-transparent text-rp-subtle hover:border-rp-hlHigh'
-                      }`}
-                    >
-                      <span className="truncate max-w-[80px]">{csvFilters[col] || col}</span>
-                      <ChevronDown size={10} className={`shrink-0 transition-transform ${openFilter === col ? 'rotate-180' : ''}`} />
-                    </button>
-                    {openFilter === col && (
-                      <div className="absolute right-0 top-full mt-1 bg-rp-surface border border-rp-hlMed rounded-lg shadow-rp-lg max-h-48 overflow-y-auto z-[100] min-w-[140px]">
-                        {csvFilters[col] && (
-                          <button
-                            onClick={() => handleFilterChange(col, csvFilters[col])}
-                            className="w-full text-left px-3 py-1.5 text-xs text-rp-love hover:bg-rp-hlLow font-semibold"
-                          >
-                            Clear "{csvFilters[col]}"
-                          </button>
-                        )}
-                        {filterOptions[col]?.map(val => (
-                          <button
-                            key={val}
-                            onClick={() => handleFilterChange(col, val)}
-                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-rp-hlLow transition-colors ${
-                              csvFilters[col] === val ? 'bg-rp-pine/10 text-rp-pine font-semibold' : 'text-rp-text'
-                            }`}
-                          >
-                            {val}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {metadata.columns.map(col => {
+                  const selected = csvFilters[col] || new Set();
+                  const count = selected.size;
+                  return (
+                    <div key={col} className="relative">
+                      <button
+                        onClick={() => setOpenFilter(openFilter === col ? null : col)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all border ${
+                          count > 0
+                            ? 'bg-rp-pine/10 border-rp-pine/30 text-rp-pine font-semibold'
+                            : 'bg-rp-hlLow/50 border-transparent text-rp-subtle hover:border-rp-hlHigh'
+                        }`}
+                      >
+                        <span className="truncate max-w-[80px]">{count > 0 ? `${col} (${count})` : col}</span>
+                        <ChevronDown size={10} className={`shrink-0 transition-transform ${openFilter === col ? 'rotate-180' : ''}`} />
+                      </button>
+                      {openFilter === col && (
+                        <div className="absolute right-0 top-full mt-1 bg-rp-surface border border-rp-hlMed rounded-lg shadow-rp-lg max-h-48 overflow-y-auto z-[100] min-w-[160px]">
+                          {count > 0 && (
+                            <button
+                              onClick={() => {
+                                setCsvFilters(prev => {
+                                  const next = { ...prev };
+                                  delete next[col];
+                                  setActiveHotspot(hotId => {
+                                    const visSet = computeVisibleSet(hotId, next, hotspots, metadata);
+                                    relayout(viewMode, visSet);
+                                    return hotId;
+                                  });
+                                  return next;
+                                });
+                              }}
+                              className="w-full text-left px-3 py-1.5 text-xs text-rp-love hover:bg-rp-hlLow font-semibold border-b border-rp-hlMed"
+                            >
+                              Clear all
+                            </button>
+                          )}
+                          {filterOptions[col]?.map(val => (
+                            <label
+                              key={val}
+                              className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-rp-hlLow transition-colors cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected.has(val)}
+                                onChange={() => handleFilterChange(col, val)}
+                                className="rounded border-rp-hlHigh text-rp-pine focus:ring-rp-pine/30 w-3.5 h-3.5"
+                              />
+                              <span className={selected.has(val) ? 'text-rp-pine font-semibold' : 'text-rp-text'}>{val}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 {activeFilterCount > 0 && (
                   <>
                     <span className="text-[10px] text-rp-muted">

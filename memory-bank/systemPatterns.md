@@ -34,28 +34,37 @@ Grid-based spatial hash (`SPATIAL_CELL_SIZE=120`) for O(1) nearest-neighbor hove
 ### Unified Filter System
 `computeVisibleSet(hotspotId, csvFilters, hotspots, metadata)` → `Set<id>` or `null`
 - Hotspot filter: set of cluster member IDs
-- CSV filters: intersection of all active column→value matches
-- Both combine via intersection
-- `computeLayout(allPoints, mode, visibleSet)`: in UMAP mode dims non-visible (alpha 0.12), in other modes hides them (alpha 0)
+- CSV filters: `{ col: Set<values> }` — multi-select checkboxes per column
+- CSV values union across all selected values (additive)
+- Hotspot intersects with CSV union
+- `computeLayout(allPoints, mode, visibleSet)`: in embedding modes (UMAP/t-SNE) dims non-visible (alpha 0.12), in other modes hides them (alpha 0)
 
 ### UI Layout
-- **Top-left**: Logo + hotspot cards (hidden in timeline/carousel)
-- **Top-right**: View tabs + compact filter bar (horizontal dropdowns)
+- **Top-left**: Logo + hotspot cards (larger 240px, hidden in carousel only)
+- **Top-right**: View tabs + checkbox filter bar
 - **Bottom-left**: View description card
-- **Bottom-right**: Zoom controls + stats card
-- **Right edge**: Vertical tab toggle for detail panel (centered vertically)
-- **Detail panel**: Right-slide panel with thumbnail, metadata, download buttons
+- **Bottom-right**: Zoom controls only (stats card removed)
+- **Right edge**: Vertical tab toggle with "Panel" label for detail panel
+- **Detail panel**: Right-slide panel with thumbnail, metadata
+- **Timeline**: Bottom bar with interactive slider (offset from hotspot column)
 
-### Download Features
-- Single image PNG: extracts from atlas, downloads 64px thumbnail
-- Image Stack PNG: composites all visible images onto 256px canvas with auto-opacity
+### Viewport Fitting
+- Custom content-bounds fitting (replaces viewport.fit() which fits world bounds)
+- Computes minX/maxX/minY/maxY from visible sprite targets
+- Used in relayout, handleFitAll, and initial boot
+
+### Timeline Scrolling
+- Wheel events intercepted in timeline mode → horizontal pan instead of zoom
+- Interactive range slider for scrubbing through time
+- Time indicator shows current date from viewport center position
 
 ### Version Control
 - Git repo at `modern-pixplot/`, `.gitignore` excludes node_modules, dist, .DS_Store
+- 6+ commits on master branch
 
 ### View Mode Layout
 `computeLayout(points, mode, visibleSet)`:
-- UMAP: restore original x,y
+- UMAP/t-SNE: restore original x,y (same embedding, placeholder)
 - Grid: square grid, `sqrt(n)` columns
 - Color: sort by avgHue then grid
 - Timeline: sort by timestamp then wide grid
