@@ -3,7 +3,7 @@ import {
   Database, X, Layers, Grid, Eye,
   ZoomIn, ZoomOut, Maximize2,
   Flame, PanelLeftClose, PanelLeft, PanelRight,
-  Palette, Info,
+  Palette, Info, BarChart3,
   ChevronLeft, ChevronRight, Filter, ChevronDown,
   Clock
 } from 'lucide-react';
@@ -31,6 +31,7 @@ const VIEW_MODES = {
   grid: { label: 'Grid', icon: 'grid', desc: 'Ordinal grid layout' },
   color: { label: 'Color', icon: 'palette', desc: 'Sorted by dominant color' },
   timeline: { label: 'Timeline', icon: 'clock', desc: 'Chronological timeline' },
+  data: { label: 'Data', icon: 'barchart', desc: 'Collection analytics' },
 };
 
 function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
@@ -1028,6 +1029,7 @@ export default function App() {
       case 'flame': return <Flame size={14} />;
       case 'palette': return <Palette size={14} />;
       case 'clock': return <Clock size={14} />;
+      case 'barchart': return <BarChart3 size={14} />;
       default: return <Eye size={14} />;
     }
   };
@@ -1094,6 +1096,68 @@ export default function App() {
     return opts;
   }, [metadata]);
 
+  /* ── Analytics for Data view ── */
+  const analyticsData = useMemo(() => {
+    if (!metadata || !hotspots.length) return null;
+    const pts = pointsRef.current;
+    const totalImages = pts.length;
+
+    // Cluster stats with CLIP labels
+    const clusterStats = hotspots
+      .map((h, i) => ({
+        id: h.id,
+        label: clipLabelsRef.current?.[h.id]?.label || `Cluster ${i + 1}`,
+        count: h.count,
+        pct: ((h.count / totalImages) * 100).toFixed(1),
+        color: h.color,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // Style distribution
+    const styleCounts = {};
+    const artistCounts = {};
+    let minYear = Infinity, maxYear = -Infinity;
+    for (const row of metadata.rows) {
+      if (row.style) styleCounts[row.style] = (styleCounts[row.style] || 0) + 1;
+      if (row.artist) artistCounts[row.artist] = (artistCounts[row.artist] || 0) + 1;
+      if (row.timestamp) {
+        const y = new Date(Number(row.timestamp) * 1000).getFullYear();
+        if (y > 1000 && y < 2100) {
+          if (y < minYear) minYear = y;
+          if (y > maxYear) maxYear = y;
+        }
+      }
+    }
+    const styles = Object.entries(styleCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count, pct: ((count / totalImages) * 100).toFixed(1) }));
+    const topArtists = Object.entries(artistCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 15)
+      .map(([name, count]) => ({ name, count }));
+
+    // Color distribution (bucket the 12 dominant colors)
+    const colorCounts = {};
+    for (const row of metadata.rows) {
+      if (row.dominant_color) colorCounts[row.dominant_color] = (colorCounts[row.dominant_color] || 0) + 1;
+    }
+    const colors = Object.entries(colorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count, pct: ((count / totalImages) * 100).toFixed(1) }));
+
+    return {
+      totalImages,
+      uniqueArtists: Object.keys(artistCounts).length,
+      uniqueStyles: Object.keys(styleCounts).length,
+      clusters: clusterStats,
+      yearRange: minYear < Infinity ? `${minYear} – ${maxYear}` : 'N/A',
+      styles,
+      topArtists,
+      colors,
+    };
+  }, [metadata, hotspots]);
+
+
   const handleFilterChange = useCallback((col, val) => {
     setCsvFilters(prev => {
       const next = { ...prev };
@@ -1131,7 +1195,7 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen bg-rp-base font-sans select-none overflow-hidden">
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full transition-opacity duration-300" />
+      <canvas ref={canvasRef} className={`absolute inset-0 w-full h-full transition-opacity duration-300 ${viewMode === 'data' ? 'opacity-0 pointer-events-none' : ''}`} />
 
       {/* ── Minimap ───────────────────────────── */}
       {!loading && viewMode === 'tsne' && (
@@ -1139,7 +1203,7 @@ export default function App() {
           ref={minimapRef}
           width={160}
           height={160}
-          className="absolute bottom-4 left-4 z-[40] rounded-lg border border-rp-hlMed shadow-rp-lg cursor-crosshair opacity-80 hover:opacity-100 transition-opacity"
+          className="absolute bottom-[72px] right-4 z-[40] rounded-lg border border-rp-hlMed shadow-rp-lg cursor-crosshair opacity-80 hover:opacity-100 transition-opacity"
           style={{ background: 'rgba(250,244,237,0.9)', width: 160, height: 160 }}
           onClick={(e) => {
             const md = minimapDataRef.current;
@@ -1155,8 +1219,8 @@ export default function App() {
         />
       )}
 
-      {/* ── Cluster Labels ───────────────────── */}
-      {viewMode === 'clusters' && clusterLabels.length > 0 && clusterLabels.map(cl => (
+      {/* ── Cluster Labels (floating, shown in tsne + clusters views) ─ */}
+      {(viewMode === 'tsne' || viewMode === 'clusters') && clusterLabels.length > 0 && clusterLabels.map((cl, idx) => (
         <div
           key={cl.id}
           className="absolute z-[35] pointer-events-none flex items-center gap-2 transition-all"
@@ -1168,7 +1232,7 @@ export default function App() {
         >
           <div className="flex items-center gap-2 bg-rp-surface/95 backdrop-blur-md rounded-lg border border-rp-hlMed shadow-rp px-3 py-1.5">
             <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: cl.color }} />
-            <span className="text-xs font-bold text-rp-text whitespace-nowrap">{cl.label}</span>
+            <span className="text-xs font-bold text-rp-text whitespace-nowrap">Hotspot {idx + 1}: {cl.label}</span>
             <span className="text-[10px] text-rp-muted font-semibold">{cl.count.toLocaleString()}</span>
           </div>
         </div>
@@ -1217,7 +1281,7 @@ export default function App() {
                           <div className="w-12 h-12 rounded-lg shrink-0" style={{ backgroundColor: h.color, opacity: 0.4 }} />
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-rp-text leading-tight">{clipLabelsRef.current?.[h.id]?.label || `Cluster ${i + 1}`}</p>
+                          <p className="text-xs font-bold text-rp-text leading-tight">Hotspot {i + 1}: {clipLabelsRef.current?.[h.id]?.label || `Cluster ${i + 1}`}</p>
                           <p className="text-[10px] text-rp-muted mt-0.5">{h.count.toLocaleString()} images</p>
                           <div className="mt-1 h-1.5 bg-rp-hlMed rounded-full overflow-hidden">
                             <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: h.color }} />
@@ -1367,6 +1431,98 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* ── Data View Overlay ─────────────────── */}
+      {viewMode === 'data' && analyticsData && (
+        <div className="absolute inset-0 z-[45] bg-rp-base overflow-y-auto p-8">
+          <div className="max-w-5xl mx-auto">
+            <h1 className="text-2xl font-bold text-rp-text mb-6">Collection Analytics</h1>
+
+            {/* Summary cards row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              {[
+                { label: 'Total Images', value: analyticsData.totalImages.toLocaleString() },
+                { label: 'Unique Artists', value: analyticsData.uniqueArtists.toLocaleString() },
+                { label: 'Styles', value: analyticsData.uniqueStyles },
+                { label: 'Time Span', value: analyticsData.yearRange },
+              ].map(card => (
+                <div key={card.label} className="rp-card p-4">
+                  <p className="text-[10px] font-semibold text-rp-muted uppercase tracking-wider">{card.label}</p>
+                  <p className="text-xl font-bold text-rp-text mt-1">{card.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Clusters */}
+            <div className="rp-card p-5 mb-6">
+              <h2 className="text-sm font-bold text-rp-text mb-3">CLIP Clusters ({analyticsData.clusters.length})</h2>
+              <div className="space-y-2">
+                {analyticsData.clusters.map((c, i) => (
+                  <div key={c.id} className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
+                    <span className="text-xs font-semibold text-rp-text w-6">{i + 1}.</span>
+                    <span className="text-xs text-rp-text flex-1 truncate">{c.label}</span>
+                    <span className="text-xs text-rp-muted tabular-nums">{c.count.toLocaleString()}</span>
+                    <div className="w-24 h-2 bg-rp-hlMed rounded-full overflow-hidden shrink-0">
+                      <div className="h-full rounded-full" style={{ width: `${c.pct}%`, backgroundColor: c.color }} />
+                    </div>
+                    <span className="text-[10px] text-rp-muted tabular-nums w-10 text-right">{c.pct}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* Style distribution */}
+              <div className="rp-card p-5">
+                <h2 className="text-sm font-bold text-rp-text mb-3">Style Distribution</h2>
+                <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                  {analyticsData.styles.map(s => (
+                    <div key={s.name} className="flex items-center gap-2">
+                      <span className="text-xs text-rp-text flex-1 truncate">{s.name}</span>
+                      <span className="text-[10px] text-rp-muted tabular-nums">{s.count.toLocaleString()}</span>
+                      <div className="w-16 h-1.5 bg-rp-hlMed rounded-full overflow-hidden shrink-0">
+                        <div className="h-full rounded-full bg-rp-pine" style={{ width: `${s.pct}%` }} />
+                      </div>
+                      <span className="text-[10px] text-rp-muted tabular-nums w-10 text-right">{s.pct}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Top artists */}
+              <div className="rp-card p-5">
+                <h2 className="text-sm font-bold text-rp-text mb-3">Top 15 Artists</h2>
+                <div className="space-y-1.5">
+                  {analyticsData.topArtists.map((a, i) => (
+                    <div key={a.name} className="flex items-center gap-2">
+                      <span className="text-[10px] text-rp-muted font-semibold w-4">{i + 1}</span>
+                      <span className="text-xs text-rp-text flex-1 truncate">{a.name}</span>
+                      <span className="text-[10px] text-rp-muted tabular-nums">{a.count.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Color distribution */}
+            {analyticsData.colors.length > 0 && (
+              <div className="rp-card p-5 mb-6">
+                <h2 className="text-sm font-bold text-rp-text mb-3">Dominant Color Distribution</h2>
+                <div className="flex flex-wrap gap-3">
+                  {analyticsData.colors.map(c => (
+                    <div key={c.name} className="flex items-center gap-2 bg-rp-hlLow rounded-lg px-3 py-2">
+                      <div className="w-4 h-4 rounded-full border border-rp-hlMed" style={{ backgroundColor: c.name }} />
+                      <span className="text-xs text-rp-text capitalize">{c.name}</span>
+                      <span className="text-[10px] text-rp-muted tabular-nums">{c.count.toLocaleString()} ({c.pct}%)</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Bottom section — pinned to bottom */}
       <div className="absolute bottom-0 left-0 right-0 pointer-events-none z-50 p-4">
