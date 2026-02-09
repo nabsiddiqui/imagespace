@@ -318,6 +318,7 @@ export default function App() {
   const [metadata, setMetadata] = useState(null);   // { columns: string[], rows: {[col]: string}[] }
   const [csvFilters, setCsvFilters] = useState({});  // { columnName: selectedValue | null }
   const [openFilter, setOpenFilter] = useState(null); // which dropdown is open
+  const [filterSearch, setFilterSearch] = useState(''); // search text within open filter dropdown
   const visibleSetRef = useRef(null);                // current Set<id> or null (all visible)
   const atlasFormatRef = useRef('jpg');               // atlas file extension
   const atlasSizeRef = useRef(ATLAS_SIZE);            // atlas pixel dimensions
@@ -1021,8 +1022,8 @@ export default function App() {
   }, []);
 
   /* ── CSV filter helpers ── */
-  const FILTER_SKIP_COLS = new Set(['id', 'filename', 'width', 'height']);
-  const MAX_FILTER_VALUES = 200; // Skip columns with >200 unique values (not useful as category filter)
+  const FILTER_SKIP_COLS = new Set(['id', 'filename', 'width', 'height', 'timestamp']);
+  const MAX_FILTER_VALUES = 1500; // Include artist (~1092 values)
 
   const filterOptions = useMemo(() => {
     if (!metadata) return {};
@@ -1204,7 +1205,7 @@ export default function App() {
                   return (
                     <div key={col} className="relative">
                       <button
-                        onClick={() => setOpenFilter(openFilter === col ? null : col)}
+                        onClick={() => { setOpenFilter(openFilter === col ? null : col); setFilterSearch(''); }}
                         className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] transition-all border ${
                           count > 0
                             ? 'bg-rp-pine/10 border-rp-pine/30 text-rp-pine font-semibold'
@@ -1214,8 +1215,27 @@ export default function App() {
                         <span className="truncate max-w-[80px]">{count > 0 ? `${col} (${count})` : col}</span>
                         <ChevronDown size={10} className={`shrink-0 transition-transform ${openFilter === col ? 'rotate-180' : ''}`} />
                       </button>
-                      {openFilter === col && (
-                        <div className="absolute right-0 top-full mt-1 bg-rp-surface border border-rp-hlMed rounded-lg shadow-rp-lg max-h-48 overflow-y-auto z-[100] min-w-[160px]">
+                      {openFilter === col && (() => {
+                        const allVals = filterOptions[col] || [];
+                        const hasSearch = allVals.length > 20;
+                        const filtered = hasSearch && filterSearch
+                          ? allVals.filter(v => v.toLowerCase().includes(filterSearch.toLowerCase()))
+                          : allVals;
+                        return (
+                        <div className="absolute right-0 top-full mt-1 bg-rp-surface border border-rp-hlMed rounded-lg shadow-rp-lg max-h-72 overflow-hidden z-[100] min-w-[200px] flex flex-col">
+                          {hasSearch && (
+                            <div className="px-2 py-1.5 border-b border-rp-hlMed">
+                              <input
+                                type="text"
+                                value={filterSearch}
+                                onChange={(e) => setFilterSearch(e.target.value)}
+                                placeholder={`Search ${col}...`}
+                                className="w-full px-2 py-1 text-xs rounded border border-rp-hlMed bg-rp-base text-rp-text placeholder:text-rp-muted focus:outline-none focus:border-rp-pine"
+                                autoFocus
+                              />
+                            </div>
+                          )}
+                          <div className="overflow-y-auto flex-1">
                           {count > 0 && (
                             <button
                               onClick={() => {
@@ -1235,7 +1255,7 @@ export default function App() {
                               Clear all
                             </button>
                           )}
-                          {filterOptions[col]?.map(val => (
+                          {filtered.map(val => (
                             <label
                               key={val}
                               className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-rp-hlLow transition-colors cursor-pointer"
@@ -1249,8 +1269,13 @@ export default function App() {
                               <span className={selected.has(val) ? 'text-rp-pine font-semibold' : 'text-rp-text'}>{val}</span>
                             </label>
                           ))}
+                          {hasSearch && filtered.length === 0 && (
+                            <div className="px-3 py-2 text-xs text-rp-muted italic">No matches</div>
+                          )}
+                          </div>
                         </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   );
                 })}
