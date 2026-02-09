@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
-  Database, Zap, X, Layers, Grid, Eye,
+  Database, X, Layers, Grid, Eye,
   ZoomIn, ZoomOut, Maximize2,
   Flame, PanelLeftClose, PanelLeft, PanelRight,
   Palette, GalleryHorizontal, Info,
@@ -14,6 +14,7 @@ const SPATIAL_CELL_SIZE = 120;
 /* ── View Mode Layouts ────────────────────────── */
 const VIEW_MODES = {
   umap: { label: 'UMAP', icon: 'scatter', desc: 'Semantic embedding space' },
+  tsne: { label: 't-SNE', icon: 'scatter', desc: 'Alternative embedding projection' },
   grid: { label: 'Grid', icon: 'grid', desc: 'Ordinal grid layout' },
   color: { label: 'Color', icon: 'palette', desc: 'Sorted by dominant color' },
   timeline: { label: 'Timeline', icon: 'clock', desc: 'Chronological timeline' },
@@ -23,9 +24,9 @@ const VIEW_MODES = {
 function computeLayout(allPoints, mode, visibleSet) {
   // If visibleSet provided, only layout those points; hide others (or dim in umap)
   const hasFilter = visibleSet && visibleSet.size < allPoints.length;
-  const isUmap = mode === 'umap';
-  // In UMAP mode we show ALL points in their original positions, just dim non-visible
-  const points = (hasFilter && !isUmap) ? allPoints.filter(p => visibleSet.has(p.id)) : allPoints;
+  const isEmbedding = mode === 'umap' || mode === 'tsne';
+  // In embedding modes show ALL points in their original positions, just dim non-visible
+  const points = (hasFilter && !isEmbedding) ? allPoints.filter(p => visibleSet.has(p.id)) : allPoints;
   const n = points.length;
 
   // Visibility: in UMAP dim non-visible, in other modes hide them
@@ -34,8 +35,8 @@ function computeLayout(allPoints, mode, visibleSet) {
       if (visibleSet.has(p.id)) {
         p.sprite.alpha = 1;
         p.sprite.tint = 0xffffff;
-      } else if (isUmap) {
-        // Dim but don't hide in UMAP
+      } else if (isEmbedding) {
+        // Dim but don't hide in embedding views
         p.sprite.alpha = 0.12;
         p.sprite.tint = 0xcccccc;
       } else {
@@ -52,8 +53,9 @@ function computeLayout(allPoints, mode, visibleSet) {
   }
 
   switch (mode) {
-    case 'umap': {
-      // Restore original UMAP coordinates
+    case 'umap':
+    case 'tsne': {
+      // Restore original UMAP/t-SNE coordinates (same 2D embedding)
       for (const p of points) {
         p.targetX = p.originalX;
         p.targetY = p.originalY;
@@ -379,13 +381,17 @@ export default function App() {
   const switchView = useCallback((mode) => {
     setViewMode(mode);
     viewModeRef.current = mode;
+    // Auto-select first image for carousel if nothing selected
+    if (mode === 'carousel' && carouselIdx === null) {
+      setCarouselIdx(0);
+    }
     // Recompute visible set with current filters (keep hotspot + csv filters active)
     setActiveHotspot(prev => {
       const visSet = computeVisibleSet(prev, csvFilters, hotspots, metadata);
       relayout(mode, visSet);
       return prev;
     });
-  }, [csvFilters, hotspots, metadata, computeVisibleSet, relayout]);
+  }, [csvFilters, hotspots, metadata, computeVisibleSet, relayout, carouselIdx]);
 
   /* ── PixiJS boot ────────────────────────────── */
   useEffect(() => {
@@ -844,8 +850,7 @@ export default function App() {
           {carouselIdx === null && (
             <div className="text-center">
               <GalleryHorizontal size={48} className="text-rp-muted mx-auto mb-4" />
-              <p className="text-lg font-bold text-rp-text">Click an image in another view to browse</p>
-              <p className="text-sm text-rp-muted mt-1">Or switch to UMAP/Grid/Color and select an image</p>
+              <p className="text-lg font-bold text-rp-text">Loading carousel...</p>
             </div>
           )}
         </div>
@@ -873,9 +878,9 @@ export default function App() {
               </div>
             </div>
 
-            {/* Hotspots (compact cards, no scroll) */}
+            {/* Hotspots (larger cards) */}
             {!loading && hotspots.length > 0 && viewMode !== 'carousel' && showHotspots && (
-              <div className="pointer-events-auto flex flex-col gap-1.5 max-w-[200px]">
+              <div className="pointer-events-auto flex flex-col gap-2 max-w-[240px]">
                 {hotspots.slice(0, 8).map((h, i) => {
                   const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
                   return (
@@ -888,15 +893,16 @@ export default function App() {
                           : 'hover:shadow-rp-lg hover:border-rp-pine/40'
                       }`}
                     >
-                      <div className="flex items-center gap-2 p-2">
+                      <div className="flex items-center gap-3 p-3">
                         {h.thumbnails?.[0] ? (
-                          <img src={h.thumbnails[0]} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                          <img src={h.thumbnails[0]} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
                         ) : (
-                          <div className="w-8 h-8 rounded-lg shrink-0" style={{ backgroundColor: h.color, opacity: 0.4 }} />
+                          <div className="w-12 h-12 rounded-lg shrink-0" style={{ backgroundColor: h.color, opacity: 0.4 }} />
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-[10px] font-bold text-rp-text leading-tight">Hotspot {i + 1}</p>
-                          <div className="mt-0.5 h-1 bg-rp-hlMed rounded-full overflow-hidden">
+                          <p className="text-xs font-bold text-rp-text leading-tight">Hotspot {i + 1}</p>
+                          <p className="text-[10px] text-rp-muted mt-0.5">{h.count.toLocaleString()} images</p>
+                          <div className="mt-1 h-1.5 bg-rp-hlMed rounded-full overflow-hidden">
                             <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: h.color }} />
                           </div>
                         </div>
@@ -1004,9 +1010,9 @@ export default function App() {
 
         {/* Bottom row */}
         <div className="flex flex-col gap-2 items-stretch">
-          {/* Timeline indicator */}
+          {/* Timeline indicator — offset from hotspots */}
           {viewMode === 'timeline' && timeRange && (
-            <div className="pointer-events-auto rp-card px-4 py-3 w-full">
+            <div className="pointer-events-auto rp-card px-4 py-3" style={{ marginLeft: showHotspots && hotspots.length > 0 ? '260px' : 0 }}>
               <div className="flex items-center gap-3 mb-2">
                 <Clock size={14} className="text-rp-iris shrink-0" />
                 <span className="text-xs font-bold text-rp-text">
@@ -1029,6 +1035,25 @@ export default function App() {
                   }}
                 />
               </div>
+              {/* Interactive timeline slider */}
+              <input
+                type="range"
+                min={0}
+                max={1000}
+                value={timeRange.current ? Math.round(((timeRange.current - timeRange.min) / (timeRange.max - timeRange.min || 1)) * 1000) : 0}
+                onChange={(e) => {
+                  const t = parseInt(e.target.value) / 1000;
+                  const tm = timelineMapRef.current;
+                  if (!tm) return;
+                  const targetX = tm.xMin + t * (tm.xMax - tm.xMin);
+                  const vp = viewportRef.current;
+                  if (vp) {
+                    const center = vp.center;
+                    vp.moveCenter(targetX, center.y);
+                  }
+                }}
+                className="w-full h-2 mt-1 appearance-none bg-transparent cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-rp-iris [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:bg-rp-hlMed [&::-webkit-slider-runnable-track]:rounded-full"
+              />
               <div className="flex justify-between mt-1.5">
                 <span className="text-[9px] text-rp-muted font-semibold">
                   {new Date(timeRange.min * 1000).getFullYear()}
@@ -1065,22 +1090,7 @@ export default function App() {
             </button>
           </div>
 
-          {/* Stats */}
-          <div className="pointer-events-auto rp-card-dark text-sm min-w-[160px]">
-            <div className="flex items-center gap-1.5 mb-1.5 pb-1 border-b border-white/10 text-rp-gold">
-              <Database size={11} />
-              <span className="text-[9px] font-bold uppercase tracking-widest">Status</span>
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-              <span className="text-[9px] text-white/40 uppercase">View</span>
-              <span className="text-[11px] font-semibold text-rp-foam text-right">{VIEW_MODES[viewMode].label}</span>
-              <span className="text-[9px] text-white/40 uppercase">FPS</span>
-              <div className="flex items-center justify-end gap-1">
-                <Zap size={9} className="text-rp-gold" fill="currentColor" />
-                <span className="text-[11px] font-semibold text-white">{stats.fps}</span>
-              </div>
-            </div>
-          </div>
+
         </div>
         </div>
       </div>
@@ -1092,7 +1102,7 @@ export default function App() {
         onClick={() => setShowDetailPanel(p => !p)}
         className={`absolute z-[90] top-1/2 -translate-y-1/2 pointer-events-auto transition-all duration-300 ${
           showDetailPanel ? 'right-[340px]' : 'right-0'
-        } bg-rp-surface border border-r-0 border-rp-hlHigh rounded-l-lg shadow-rp px-1.5 py-4 hover:bg-rp-hlLow`}
+        } bg-rp-surface border border-r-0 border-rp-hlHigh rounded-l-lg shadow-rp px-1.5 py-6 hover:bg-rp-hlLow flex flex-col items-center gap-2`}
         title="Toggle detail panel"
       >
         {showDetailPanel ? (
@@ -1100,6 +1110,7 @@ export default function App() {
         ) : (
           <ChevronLeft size={16} className="text-rp-pine" />
         )}
+        <span className="text-[9px] font-bold text-rp-muted uppercase tracking-widest" style={{ writingMode: 'vertical-rl' }}>Panel</span>
       </button>
 
       {/* ── Detail Panel ─────────────────────── */}
