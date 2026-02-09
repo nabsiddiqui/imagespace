@@ -339,7 +339,7 @@ def _extract_color_histograms(images, dim=CLIP_DIM):
 
 
 # ── Stage 4: Dimensionality Reduction + Clustering ───────────
-def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXITY):
+def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXITY, thumb_size=THUMB_SIZE):
     """Run PCA → openTSNE → HDBSCAN. Returns (tsne_coords, cluster_ids)."""
     from sklearn.decomposition import PCA
 
@@ -383,10 +383,10 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
         tsne_coords = tsne.fit_transform(embeddings_pca)
     print(f"  t-SNE completed in {time.time() - start:.1f}s")
 
-    # Scale to viewer range — keep images close to natural t-SNE positions
+    # Scale to viewer range — ensure enough room for non-overlapping thumbnails
     n = len(tsne_coords)
-    spacing = THUMB_SIZE * 1.1  # slight gap to reduce overlap
-    target_side = int(np.ceil(np.sqrt(n * 1.4))) * spacing
+    cell_size = thumb_size * 1.15  # slight gap between thumbnails
+    target_side = int(np.ceil(np.sqrt(n * 1.8))) * cell_size  # 1.8x overallocation
     def scale_coords(coords, target_range):
         mins = coords.min(axis=0)
         maxs = coords.max(axis=0)
@@ -395,7 +395,44 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
         return (coords - mins) / ranges * target_range - target_range / 2
 
     tsne_coords = scale_coords(tsne_coords, target_side)
-    print(f"  Scaled to {target_side:.0f}×{target_side:.0f} viewer range")
+
+    # Remove overlaps by snapping to nearest unoccupied grid cell
+    print(f"  Removing overlaps (cell={cell_size:.0f}px, grid≈{int(target_side/cell_size)}²)...")
+    start = time.time()
+    occupied = set()
+    result = np.zeros_like(tsne_coords)
+    # Process from center outward to preserve cluster cores
+    centroid = tsne_coords.mean(axis=0)
+    dists = np.linalg.norm(tsne_coords - centroid, axis=1)
+    order = np.argsort(dists)
+    for idx in order:
+        gx = round(tsne_coords[idx, 0] / cell_size)
+        gy = round(tsne_coords[idx, 1] / cell_size)
+        if (gx, gy) not in occupied:
+            occupied.add((gx, gy))
+            result[idx] = [gx * cell_size, gy * cell_size]
+            continue
+        # Spiral search for nearest free cell
+        placed = False
+        for r in range(1, 2000):
+            for dx in range(-r, r + 1):
+                for dy in (-r, r):
+                    if (gx + dx, gy + dy) not in occupied:
+                        occupied.add((gx + dx, gy + dy))
+                        result[idx] = [(gx + dx) * cell_size, (gy + dy) * cell_size]
+                        placed = True; break
+                if placed: break
+            if placed: break
+            for dy in range(-r + 1, r):
+                for dx in (-r, r):
+                    if (gx + dx, gy + dy) not in occupied:
+                        occupied.add((gx + dx, gy + dy))
+                        result[idx] = [(gx + dx) * cell_size, (gy + dy) * cell_size]
+                        placed = True; break
+                if placed: break
+            if placed: break
+    tsne_coords = result
+    print(f"  Overlap removal: {time.time() - start:.1f}s")
 
     # Clustering: HDBSCAN on PCA embeddings (high-d has better density structure)
     # Note: clustering on 2D t-SNE coords destroys density → poor clusters.
@@ -663,12 +700,13 @@ def main():
 
     # Stage 4
     print(f"\n[4/6] PCA → openTSNE → HDBSCAN...")
-    tsne_coords, cluster_ids = reduce_dimensions(embeddings, args.min_cluster_size, args.tsne_perplexity)
+    tsne_coords, cluster_ids = reduce_dimensions(embeddings, args.min_cluster_size, args.tsne_perplexity, args.thumb_size)
 
     # Stage 5
     meta_csv_path = os.path.join(str(output_dir), 'metadata.csv')
-    if args.relayout and os.path.exists(meta_csv_path):
-        print(f"\n[5/6] Skipping metadata (relayout mode, existing metadata.csv kept)")
+    skip_metadata = args.relayout and os.path.exists(meta_csv_path) and not args.metadata
+    if skip_metadata:
+        print(f"\n[5/6] Skipping metadata (relayout mode, no external metadata)")
         timestamps = None
         colors = None
         external_metadata = None
@@ -683,6 +721,8 @@ def main():
             meta_src = Path(args.metadata).resolve()
             if meta_src.exists():
                 external_metadata = read_external_metadata(str(meta_src))
+            else:
+                print(f"  WARNING: External metadata not found: {meta_src}")
 
     # Stage 6
     print(f"\n[6/6] Writing output files...")

@@ -513,7 +513,7 @@ export default function App() {
         viewport.moveCenter(0, 0);
 
         /* Load data */
-        const cacheBust = `?v=${Date.now()}`;
+         const cacheBust = `?v=${Date.now()}`;
         setStatusMsg('Fetching manifest...');
         const mRes = await fetch(`/data/manifest.json${cacheBust}`);
         if (!mRes.ok) throw new Error('Manifest load failed');
@@ -942,7 +942,7 @@ export default function App() {
 
   /* ── CSV filter helpers ── */
   const FILTER_SKIP_COLS = new Set(['id', 'filename', 'cluster', 'timestamp', 'dominant_color', 'width', 'height']);
-  const MAX_FILTER_VALUES = 200; // Skip columns with too many unique values (not useful as category)
+  const MAX_FILTER_VALUES = 1500; // Skip columns with too many unique values (not useful as category)
 
   const filterOptions = useMemo(() => {
     if (!metadata) return {};
@@ -1182,10 +1182,10 @@ export default function App() {
             </div>
 
             {/* Checkbox filter bar */}
-            {metadata && metadata.columns.length > 0 && (
+            {Object.keys(filterOptions).length > 0 && (
               <div className="pointer-events-auto rp-card flex items-center gap-2 px-3 py-1.5 flex-wrap">
                 <Filter size={11} className="text-rp-muted shrink-0" />
-                {metadata.columns.map(col => {
+                {Object.keys(filterOptions).map(col => {
                   const selected = csvFilters[col] || new Set();
                   const count = selected.size;
                   return (
