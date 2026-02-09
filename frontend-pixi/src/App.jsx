@@ -513,15 +513,16 @@ export default function App() {
         viewport.moveCenter(0, 0);
 
         /* Load data */
+        const cacheBust = `?v=${Date.now()}`;
         setStatusMsg('Fetching manifest...');
-        const mRes = await fetch('/data/manifest.json');
+        const mRes = await fetch(`/data/manifest.json${cacheBust}`);
         if (!mRes.ok) throw new Error('Manifest load failed');
         const manifest = await mRes.json();
         atlasFormatRef.current = manifest.atlasFormat || 'jpg';
         atlasSizeRef.current = manifest.atlasSize || ATLAS_SIZE;
 
         setStatusMsg('Streaming binary layout...');
-        const dRes = await fetch('/data/data.bin');
+        const dRes = await fetch(`/data/data.bin${cacheBust}`);
         if (!dRes.ok) throw new Error('Binary load failed');
         const buffer = await dRes.arrayBuffer();
         const dataView = new DataView(buffer);
@@ -639,7 +640,7 @@ export default function App() {
         /* Load metadata CSV (optional) */
         try {
           setStatusMsg('Loading metadata...');
-          const csvRes = await fetch('/data/metadata.csv');
+          const csvRes = await fetch(`/data/metadata.csv${cacheBust}`);
           if (csvRes.ok) {
             const csvText = await csvRes.text();
             const lines = csvText.trim().split('\n');
@@ -1109,8 +1110,8 @@ export default function App() {
 
             {/* Hotspots (larger cards) */}
             {!loading && hotspots.length > 0 && showHotspots && (
-              <div className="pointer-events-auto flex flex-col gap-2 max-w-[240px]">
-                {hotspots.slice(0, 8).map((h, i) => {
+              <div className="pointer-events-auto flex flex-col gap-2 max-w-[240px] max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin">
+                {hotspots.map((h, i) => {
                   const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
                   return (
                     <button

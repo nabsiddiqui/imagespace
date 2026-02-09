@@ -383,11 +383,11 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
         tsne_coords = tsne.fit_transform(embeddings_pca)
     print(f"  t-SNE completed in {time.time() - start:.1f}s")
 
-    # Scale to viewer range — ensure enough room for non-overlapping thumbnails
+    # Scale to viewer range — spread coordinates so thumbnails are visible
     n = len(tsne_coords)
-    # Each image needs cell_size² area; scale so total area fits comfortably
-    cell_size = THUMB_SIZE * 1.15  # slight gap between thumbnails
-    target_side = int(np.ceil(np.sqrt(n * 1.8))) * cell_size  # 1.8x overallocation for structure
+    # Target: each image occupies roughly THUMB_SIZE² area, with generous spacing
+    spacing = THUMB_SIZE * 1.5  # gap between neighboring thumbnails
+    target_side = int(np.ceil(np.sqrt(n * 2.0))) * spacing
     def scale_coords(coords, target_range):
         mins = coords.min(axis=0)
         maxs = coords.max(axis=0)
@@ -396,56 +396,11 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
         return (coords - mins) / ranges * target_range - target_range / 2
 
     tsne_coords = scale_coords(tsne_coords, target_side)
-
-    # Remove overlaps by snapping to nearest unoccupied grid cell
-    print(f"  Removing overlaps (cell={cell_size:.0f}px, grid≈{int(target_side/cell_size)}²)...")
-    start = time.time()
-    occupied = set()
-    result = np.zeros_like(tsne_coords)
-    # Process from center outward to preserve cluster cores
-    centroid = tsne_coords.mean(axis=0)
-    dists = np.linalg.norm(tsne_coords - centroid, axis=1)
-    order = np.argsort(dists)
-    for idx in order:
-        gx = round(tsne_coords[idx, 0] / cell_size)
-        gy = round(tsne_coords[idx, 1] / cell_size)
-        if (gx, gy) not in occupied:
-            occupied.add((gx, gy))
-            result[idx] = [gx * cell_size, gy * cell_size]
-            continue
-        # Spiral search for nearest free cell
-        placed = False
-        for r in range(1, 2000):
-            for dx in range(-r, r + 1):
-                dy = -r
-                if (gx + dx, gy + dy) not in occupied:
-                    occupied.add((gx + dx, gy + dy))
-                    result[idx] = [(gx + dx) * cell_size, (gy + dy) * cell_size]
-                    placed = True; break
-                dy = r
-                if (gx + dx, gy + dy) not in occupied:
-                    occupied.add((gx + dx, gy + dy))
-                    result[idx] = [(gx + dx) * cell_size, (gy + dy) * cell_size]
-                    placed = True; break
-            if placed: break
-            for dy in range(-r + 1, r):
-                dx = -r
-                if (gx + dx, gy + dy) not in occupied:
-                    occupied.add((gx + dx, gy + dy))
-                    result[idx] = [(gx + dx) * cell_size, (gy + dy) * cell_size]
-                    placed = True; break
-                dx = r
-                if (gx + dx, gy + dy) not in occupied:
-                    occupied.add((gx + dx, gy + dy))
-                    result[idx] = [(gx + dx) * cell_size, (gy + dy) * cell_size]
-                    placed = True; break
-            if placed: break
-    tsne_coords = result
-    print(f"  Overlap removal: {time.time() - start:.1f}s")
+    print(f"  Scaled to {target_side:.0f}×{target_side:.0f} viewer range")
 
     # Clustering: HDBSCAN on PCA embeddings (high-d has better density structure)
-    # Note: clustering on t-SNE coords (especially after overlap removal) destroys
-    # density information. The 50-d PCA space preserves natural cluster structure.
+    # Note: clustering on 2D t-SNE coords destroys density → poor clusters.
+    # The 50-d PCA space preserves natural cluster structure for HDBSCAN.
     try:
         import hdbscan as hdb
         print(f"\n  Running HDBSCAN on PCA embeddings (min_cluster_size={min_cluster_size})...")
