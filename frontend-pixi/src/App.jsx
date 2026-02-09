@@ -1303,21 +1303,15 @@ export default function App() {
             </div>
 
             {/* Hotspots (larger cards) */}
-            {!loading && hotspots.length > 0 && showHotspots && viewMode !== 'data' && (
+            {!loading && hotspots.length > 0 && showHotspots && (
               <div className="pointer-events-auto flex flex-col gap-2 max-w-[240px] max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-[10px] font-semibold text-rp-muted uppercase tracking-wider">Hotspots</span>
-                  <button onClick={() => setShowHotspots(false)} className="p-1 rounded hover:bg-rp-hlLow transition-colors text-rp-muted hover:text-rp-text" title="Hide hotspots">
-                    <X size={12} />
-                  </button>
-                </div>
                 {hotspots.map((h, i) => {
                   const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
                   return (
                     <button
                       key={h.id}
-                      onClick={() => flyToHotspot(h)}
-                      className={`bg-rp-surface/90 backdrop-blur-md rounded-xl border border-rp-hlMed shadow-rp transition-all duration-200 cursor-pointer ${
+                      onClick={() => { if (viewMode !== 'data') flyToHotspot(h); }}
+                      className={`bg-rp-surface/90 backdrop-blur-md rounded-xl border border-rp-hlMed shadow-rp transition-all duration-200 ${viewMode !== 'data' ? 'cursor-pointer' : 'cursor-default'} ${
                         activeHotspot === h.id
                           ? 'ring-2 ring-rp-pine shadow-rp-lg'
                           : 'hover:shadow-rp-lg hover:border-rp-pine/40'
@@ -1341,15 +1335,6 @@ export default function App() {
                   );
                 })}
               </div>
-            )}
-            {!loading && hotspots.length > 0 && !showHotspots && viewMode !== 'data' && (
-              <button
-                onClick={() => setShowHotspots(true)}
-                className="pointer-events-auto rp-card flex items-center gap-2 px-3 py-2 hover:border-rp-pine/30 transition-all"
-              >
-                <PanelLeft size={14} className="text-rp-pine" />
-                <span className="text-[11px] font-semibold text-rp-text">Hotspots</span>
-              </button>
             )}
           </div>
 
@@ -1707,6 +1692,24 @@ export default function App() {
       </div>
 
 
+
+      {/* ── Left-edge Hotspot Toggle ─────────────── */}
+      {!loading && hotspots.length > 0 && (
+        <button
+          onClick={() => setShowHotspots(p => !p)}
+          className={`absolute z-[90] top-1/2 -translate-y-1/2 pointer-events-auto transition-all duration-300 ${
+            showHotspots ? 'left-[260px]' : 'left-0'
+          } bg-rp-surface border border-l-0 border-rp-hlHigh rounded-r-lg shadow-rp px-1.5 py-6 hover:bg-rp-hlLow flex flex-col items-center gap-2`}
+          title="Toggle hotspots"
+        >
+          {showHotspots ? (
+            <ChevronLeft size={16} className="text-rp-pine" />
+          ) : (
+            <ChevronRight size={16} className="text-rp-pine" />
+          )}
+          <span className="text-[9px] font-bold text-rp-muted uppercase tracking-widest" style={{ writingMode: 'vertical-rl' }}>Hotspots</span>
+        </button>
+      )}
 
       {/* ── Right-edge Tab Toggle ─────────────── */}
       <button
