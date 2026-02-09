@@ -505,6 +505,178 @@ def write_neighbors_bin(output_dir, knn_indices, knn_distances):
     print(f"  neighbors.bin: {n} × {k} ({os.path.getsize(path) / 1024 / 1024:.1f} MB)")
 
 
+# ── Stage 4c: CLIP Cluster Labels ────────────────────────────
+def generate_cluster_labels(embeddings, cluster_ids):
+    """Use CLIP text encoder to find descriptive labels for each cluster.
+    Computes cluster centroids in CLIP space, then matches against candidate texts."""
+    try:
+        from transformers import CLIPModel, AutoTokenizer
+        import torch
+    except ImportError:
+        print("  Skipping cluster labels (transformers/torch not available)")
+        return None
+
+    print("\n  Generating CLIP cluster labels...")
+    start = time.time()
+
+    # Candidate labels — broad art/visual concepts
+    candidates = [
+        # Subject matter
+        "portrait painting of a person", "landscape with mountains and sky",
+        "seascape with ocean and boats", "still life with flowers and fruit",
+        "religious painting with saints", "mythological scene with gods",
+        "battle scene with soldiers", "cityscape with buildings and streets",
+        "interior scene of a room", "animals in nature",
+        "nude figure painting", "group of people gathering",
+        "abstract geometric shapes", "abstract expressionist painting",
+        # Style/color
+        "dark moody painting with shadows", "bright colorful painting",
+        "golden warm-toned painting", "cool blue and green painting",
+        "monochrome black and white artwork", "pastel soft colored painting",
+        "red and orange warm painting", "rich earth-toned painting",
+        # Technique/period
+        "impressionist brushstrokes painting", "realistic detailed painting",
+        "medieval religious artwork", "renaissance classical painting",
+        "baroque dramatic painting", "modern minimalist artwork",
+        "romantic era landscape", "expressionist distorted painting",
+        "surrealist dreamlike scene", "art nouveau decorative design",
+        # Composition
+        "close-up face portrait", "wide panoramic view",
+        "small figures in vast landscape", "ornate decorative pattern",
+        "simple composition with few elements", "complex busy scene with many figures",
+        "architectural drawing of a building", "sketch or drawing on paper",
+    ]
+
+    # Load CLIP model + tokenizer (not processor, to avoid image processor issues)
+    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+    tokenizer = AutoTokenizer.from_pretrained("openai/clip-vit-base-patch32")
+    model.eval()
+
+    # Encode candidate texts
+    with torch.no_grad():
+        text_inputs = tokenizer(candidates, return_tensors="pt", padding=True, truncation=True)
+        text_features = model.get_text_features(**text_inputs)
+        # Handle both tensor and BaseModelOutput return types
+        if hasattr(text_features, 'pooler_output'):
+            text_features = text_features.pooler_output
+        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+        text_np = text_features.numpy()
+
+    # Compute cluster centroids in CLIP embedding space
+    unique_clusters = sorted(set(cluster_ids))
+    raw_labels = {}
+    for cid in unique_clusters:
+        if cid < 0:
+            continue
+        mask = cluster_ids == cid
+        centroid = embeddings[mask].mean(axis=0)
+        centroid = centroid / np.linalg.norm(centroid)
+        # Cosine similarity with all candidates
+        sims = text_np @ centroid
+        top_idx = np.argsort(-sims)[:5]
+        raw_labels[int(cid)] = {
+            'top': [{'text': candidates[i], 'score': float(sims[i]), 'idx': int(i)} for i in top_idx],
+        }
+
+    # Short display names for candidate labels
+    short_names = {
+        "portrait painting of a person": "Portraits",
+        "landscape with mountains and sky": "Mountain Landscapes",
+        "seascape with ocean and boats": "Seascapes",
+        "still life with flowers and fruit": "Still Life",
+        "religious painting with saints": "Religious",
+        "mythological scene with gods": "Mythological",
+        "battle scene with soldiers": "Battle Scenes",
+        "cityscape with buildings and streets": "Cityscapes",
+        "interior scene of a room": "Interiors",
+        "animals in nature": "Animals",
+        "nude figure painting": "Nudes",
+        "group of people gathering": "Group Figures",
+        "abstract geometric shapes": "Geometric Abstract",
+        "abstract expressionist painting": "Abstract Expressionist",
+        "dark moody painting with shadows": "Dark & Moody",
+        "bright colorful painting": "Bright & Colorful",
+        "golden warm-toned painting": "Warm-Toned",
+        "cool blue and green painting": "Cool-Toned",
+        "monochrome black and white artwork": "Monochrome",
+        "pastel soft colored painting": "Pastel",
+        "red and orange warm painting": "Warm Reds",
+        "rich earth-toned painting": "Earth-Toned",
+        "impressionist brushstrokes painting": "Impressionist",
+        "realistic detailed painting": "Realist",
+        "medieval religious artwork": "Medieval",
+        "renaissance classical painting": "Renaissance",
+        "baroque dramatic painting": "Baroque",
+        "modern minimalist artwork": "Minimalist",
+        "romantic era landscape": "Romantic Landscapes",
+        "expressionist distorted painting": "Expressionist",
+        "surrealist dreamlike scene": "Surrealist",
+        "art nouveau decorative design": "Art Nouveau",
+        "close-up face portrait": "Close-up Portraits",
+        "wide panoramic view": "Panoramic",
+        "small figures in vast landscape": "Vast Landscapes",
+        "ornate decorative pattern": "Decorative",
+        "simple composition with few elements": "Minimal Composition",
+        "complex busy scene with many figures": "Complex Scenes",
+        "architectural drawing of a building": "Architecture",
+        "sketch or drawing on paper": "Sketches",
+    }
+
+    # First pass: assign top label to each cluster
+    label_map = {}  # cid -> primary candidate text
+    for cid, data in raw_labels.items():
+        label_map[cid] = data['top'][0]['text']
+
+    # Find duplicates
+    from collections import Counter
+    label_counts = Counter(label_map.values())
+    duplicates = {label for label, count in label_counts.items() if count > 1}
+
+    # Second pass: disambiguate duplicates using the 2nd-ranked label as qualifier
+    labels = {}
+    used_labels = set()
+    for cid, data in raw_labels.items():
+        primary = data['top'][0]['text']
+        primary_short = short_names.get(primary, primary)
+
+        if primary in duplicates:
+            # Try successive qualifiers until we find a unique combined label
+            label = primary_short
+            for rank in range(1, len(data['top'])):
+                secondary = data['top'][rank]['text']
+                if secondary != primary:
+                    qualifier = short_names.get(secondary, secondary)
+                    candidate = f"{primary_short} — {qualifier}"
+                    if candidate not in used_labels:
+                        label = candidate
+                        break
+        else:
+            label = primary_short
+
+        # Ensure final uniqueness by appending cluster ID if still duplicate
+        if label in used_labels:
+            label = f"{label} #{cid}"
+        used_labels.add(label)
+
+        labels[int(cid)] = {
+            'label': label,
+            'top3': [{'text': t['text'], 'score': t['score']} for t in data['top'][:3]],
+        }
+        print(f"    Cluster {cid}: {label} ({data['top'][0]['score']:.3f})")
+
+    print(f"  Cluster labels: {len(labels)} clusters labeled ({time.time() - start:.1f}s)")
+    return labels
+
+
+def write_cluster_labels(output_dir, labels):
+    """Write cluster_labels.json."""
+    import json
+    path = os.path.join(output_dir, 'cluster_labels.json')
+    with open(path, 'w') as f:
+        json.dump(labels, f, indent=2)
+    print(f"  cluster_labels.json: {len(labels)} labels")
+
+
 # ── Stage 5: Dominant Color Extraction ────────────────────────
 def extract_dominant_colors(images, thumb_size=32):
     """Extract dominant color (hue, sat, lum) for each image."""
@@ -688,7 +860,7 @@ def main():
     print(f"{'='*60}")
 
     # Stage 1
-    print(f"\n[1/6] Discovering images...")
+    print(f"\n[1/8] Discovering images...")
     images = discover_images(input_dir)
     if not images:
         print("  No images found!"); sys.exit(1)
@@ -696,7 +868,7 @@ def main():
 
     # Stage 2
     if args.relayout:
-        print(f"\n[2/6] Skipping atlas generation (relayout mode)")
+        print(f"\n[2/8] Skipping atlas generation (relayout mode)")
         # Reconstruct atlas_data from existing data.bin
         bin_path = os.path.join(str(output_dir), 'data.bin')
         if os.path.exists(bin_path):
@@ -713,41 +885,47 @@ def main():
         else:
             print("  Error: data.bin not found for relayout mode!"); sys.exit(1)
     else:
-        print(f"\n[2/6] Generating WebP atlas textures (quality={args.quality})...")
+        print(f"\n[2/8] Generating WebP atlas textures (quality={args.quality})...")
         atlas_data, atlas_count = generate_atlases(images, str(output_dir), args.thumb_size, args.atlas_size, args.quality)
 
     # Stage 3 — with caching
     emb_cache = os.path.join(str(cache_dir), 'embeddings.npy')
     if os.path.exists(emb_cache) and (args.relayout or args.cache_dir):
-        print(f"\n[3/6] Loading cached embeddings from {emb_cache}...")
+        print(f"\n[3/8] Loading cached embeddings from {emb_cache}...")
         embeddings = np.load(emb_cache)
         print(f"  Loaded {embeddings.shape[0]} × {embeddings.shape[1]} embeddings")
     else:
-        print(f"\n[3/6] Extracting embeddings {'(GPU)' if args.gpu else '(CPU)'}...")
+        print(f"\n[3/8] Extracting embeddings {'(GPU)' if args.gpu else '(CPU)'}...")
         embeddings = extract_embeddings(images, use_gpu=args.gpu)
         # Save to cache
         np.save(emb_cache, embeddings)
         print(f"  Cached embeddings to {emb_cache}")
 
     # Stage 4
-    print(f"\n[4/7] PCA → openTSNE → HDBSCAN...")
+    print(f"\n[4/8] PCA → openTSNE → HDBSCAN...")
     tsne_coords, cluster_ids, embeddings_pca = reduce_dimensions(embeddings, args.min_cluster_size, args.tsne_perplexity, args.thumb_size)
 
     # Stage 4b: k-NN
-    print(f"\n[5/7] k-Nearest Neighbors...")
+    print(f"\n[5/8] k-Nearest Neighbors...")
     knn_indices, knn_distances = compute_knn(embeddings_pca, k=10)
     write_neighbors_bin(str(output_dir), knn_indices, knn_distances)
+
+    # Stage 4c: CLIP cluster labels
+    print(f"\n[6/8] CLIP cluster labels...")
+    cluster_labels = generate_cluster_labels(embeddings, cluster_ids)
+    if cluster_labels:
+        write_cluster_labels(str(output_dir), cluster_labels)
 
     # Stage 5
     meta_csv_path = os.path.join(str(output_dir), 'metadata.csv')
     skip_metadata = args.relayout and os.path.exists(meta_csv_path) and not args.metadata
     if skip_metadata:
-        print(f"\n[6/7] Skipping metadata (relayout mode, no external metadata)")
+        print(f"\n[7/8] Skipping metadata (relayout mode, no external metadata)")
         timestamps = None
         colors = None
         external_metadata = None
     else:
-        print(f"\n[6/7] Extracting metadata...")
+        print(f"\n[7/8] Extracting metadata...")
         timestamps = extract_timestamps(images)
         colors = extract_dominant_colors(images)
         print(f"  Timestamps: {sum(1 for t in timestamps if t > 0)}/{len(images)}")
@@ -761,7 +939,7 @@ def main():
                 print(f"  WARNING: External metadata not found: {meta_src}")
 
     # Stage 6
-    print(f"\n[7/7] Writing output files...")
+    print(f"\n[8/8] Writing output files...")
     write_binary_data(str(output_dir), tsne_coords, atlas_data, cluster_ids)
     write_manifest(str(output_dir), len(images), atlas_count, args.thumb_size, args.atlas_size)
     if timestamps is not None:

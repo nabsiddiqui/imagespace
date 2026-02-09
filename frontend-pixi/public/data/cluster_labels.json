@@ -1,0 +1,325 @@
+{
+  "0": {
+    "label": "Complex Scenes \u2014 Vast Landscapes",
+    "top3": [
+      {
+        "text": "complex busy scene with many figures",
+        "score": 0.29086917638778687
+      },
+      {
+        "text": "small figures in vast landscape",
+        "score": 0.28804856538772583
+      },
+      {
+        "text": "mythological scene with gods",
+        "score": 0.28584542870521545
+      }
+    ]
+  },
+  "1": {
+    "label": "Complex Scenes \u2014 Battle Scenes",
+    "top3": [
+      {
+        "text": "complex busy scene with many figures",
+        "score": 0.31911835074424744
+      },
+      {
+        "text": "battle scene with soldiers",
+        "score": 0.31637507677078247
+      },
+      {
+        "text": "mythological scene with gods",
+        "score": 0.30199599266052246
+      }
+    ]
+  },
+  "2": {
+    "label": "Art Nouveau",
+    "top3": [
+      {
+        "text": "art nouveau decorative design",
+        "score": 0.3047586977481842
+      },
+      {
+        "text": "complex busy scene with many figures",
+        "score": 0.2704145908355713
+      },
+      {
+        "text": "medieval religious artwork",
+        "score": 0.2702089250087738
+      }
+    ]
+  },
+  "3": {
+    "label": "Baroque",
+    "top3": [
+      {
+        "text": "baroque dramatic painting",
+        "score": 0.3175683319568634
+      },
+      {
+        "text": "renaissance classical painting",
+        "score": 0.31457188725471497
+      },
+      {
+        "text": "complex busy scene with many figures",
+        "score": 0.3102913498878479
+      }
+    ]
+  },
+  "4": {
+    "label": "Portraits \u2014 Sketches",
+    "top3": [
+      {
+        "text": "portrait painting of a person",
+        "score": 0.2931654453277588
+      },
+      {
+        "text": "sketch or drawing on paper",
+        "score": 0.29003238677978516
+      },
+      {
+        "text": "complex busy scene with many figures",
+        "score": 0.2796686291694641
+      }
+    ]
+  },
+  "5": {
+    "label": "Vast Landscapes \u2014 Romantic Landscapes",
+    "top3": [
+      {
+        "text": "small figures in vast landscape",
+        "score": 0.319963663816452
+      },
+      {
+        "text": "romantic era landscape",
+        "score": 0.3143506348133087
+      },
+      {
+        "text": "complex busy scene with many figures",
+        "score": 0.28723442554473877
+      }
+    ]
+  },
+  "6": {
+    "label": "Vast Landscapes \u2014 Mountain Landscapes",
+    "top3": [
+      {
+        "text": "small figures in vast landscape",
+        "score": 0.32348453998565674
+      },
+      {
+        "text": "landscape with mountains and sky",
+        "score": 0.31332194805145264
+      },
+      {
+        "text": "rich earth-toned painting",
+        "score": 0.3002098500728607
+      }
+    ]
+  },
+  "7": {
+    "label": "Portraits \u2014 Warm-Toned",
+    "top3": [
+      {
+        "text": "portrait painting of a person",
+        "score": 0.32973986864089966
+      },
+      {
+        "text": "golden warm-toned painting",
+        "score": 0.2894452214241028
+      },
+      {
+        "text": "renaissance classical painting",
+        "score": 0.2782871425151825
+      }
+    ]
+  },
+  "8": {
+    "label": "Portraits \u2014 Expressionist",
+    "top3": [
+      {
+        "text": "portrait painting of a person",
+        "score": 0.3255183696746826
+      },
+      {
+        "text": "expressionist distorted painting",
+        "score": 0.2913595736026764
+      },
+      {
+        "text": "nude figure painting",
+        "score": 0.2743346393108368
+      }
+    ]
+  },
+  "9": {
+    "label": "Portraits \u2014 Close-up Portraits",
+    "top3": [
+      {
+        "text": "portrait painting of a person",
+        "score": 0.357582688331604
+      },
+      {
+        "text": "close-up face portrait",
+        "score": 0.28769418597221375
+      },
+      {
+        "text": "baroque dramatic painting",
+        "score": 0.2781466245651245
+      }
+    ]
+  },
+  "10": {
+    "label": "Portraits \u2014 Baroque",
+    "top3": [
+      {
+        "text": "portrait painting of a person",
+        "score": 0.33913129568099976
+      },
+      {
+        "text": "baroque dramatic painting",
+        "score": 0.27843207120895386
+      },
+      {
+        "text": "romantic era landscape",
+        "score": 0.2746010720729828
+      }
+    ]
+  },
+  "11": {
+    "label": "Romantic Landscapes",
+    "top3": [
+      {
+        "text": "romantic era landscape",
+        "score": 0.32821086049079895
+      },
+      {
+        "text": "small figures in vast landscape",
+        "score": 0.30341508984565735
+      },
+      {
+        "text": "cityscape with buildings and streets",
+        "score": 0.30306437611579895
+      }
+    ]
+  },
+  "12": {
+    "label": "Still Life \u2014 Interiors",
+    "top3": [
+      {
+        "text": "still life with flowers and fruit",
+        "score": 0.31191226840019226
+      },
+      {
+        "text": "interior scene of a room",
+        "score": 0.291594535112381
+      },
+      {
+        "text": "golden warm-toned painting",
+        "score": 0.2900260388851166
+      }
+    ]
+  },
+  "13": {
+    "label": "Still Life \u2014 Impressionist",
+    "top3": [
+      {
+        "text": "still life with flowers and fruit",
+        "score": 0.3211388885974884
+      },
+      {
+        "text": "impressionist brushstrokes painting",
+        "score": 0.2994064390659332
+      },
+      {
+        "text": "romantic era landscape",
+        "score": 0.279737651348114
+      }
+    ]
+  },
+  "14": {
+    "label": "Impressionist",
+    "top3": [
+      {
+        "text": "impressionist brushstrokes painting",
+        "score": 0.3043728470802307
+      },
+      {
+        "text": "cityscape with buildings and streets",
+        "score": 0.2987930476665497
+      },
+      {
+        "text": "complex busy scene with many figures",
+        "score": 0.2884999215602875
+      }
+    ]
+  },
+  "15": {
+    "label": "Expressionist",
+    "top3": [
+      {
+        "text": "expressionist distorted painting",
+        "score": 0.2823328375816345
+      },
+      {
+        "text": "complex busy scene with many figures",
+        "score": 0.2822212874889374
+      },
+      {
+        "text": "abstract expressionist painting",
+        "score": 0.2746974229812622
+      }
+    ]
+  },
+  "16": {
+    "label": "Abstract Expressionist",
+    "top3": [
+      {
+        "text": "abstract expressionist painting",
+        "score": 0.2913133502006531
+      },
+      {
+        "text": "expressionist distorted painting",
+        "score": 0.2912195026874542
+      },
+      {
+        "text": "rich earth-toned painting",
+        "score": 0.2813217043876648
+      }
+    ]
+  },
+  "17": {
+    "label": "Seascapes",
+    "top3": [
+      {
+        "text": "seascape with ocean and boats",
+        "score": 0.3257170021533966
+      },
+      {
+        "text": "small figures in vast landscape",
+        "score": 0.30998942255973816
+      },
+      {
+        "text": "romantic era landscape",
+        "score": 0.30627503991127014
+      }
+    ]
+  },
+  "18": {
+    "label": "Vast Landscapes \u2014 Impressionist",
+    "top3": [
+      {
+        "text": "small figures in vast landscape",
+        "score": 0.32636821269989014
+      },
+      {
+        "text": "romantic era landscape",
+        "score": 0.32166463136672974
+      },
+      {
+        "text": "impressionist brushstrokes painting",
+        "score": 0.2962649166584015
+      }
+    ]
+  }
+}

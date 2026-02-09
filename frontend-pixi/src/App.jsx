@@ -309,6 +309,7 @@ export default function App() {
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [clusterLabels, setClusterLabels] = useState([]); // [{id, x, y, label, color, count}]
   const clusterCentroidsRef = useRef([]); // world positions of cluster group centers
+  const clipLabelsRef = useRef(null); // CLIP-generated cluster labels from cluster_labels.json
   const thumbSizeRef = useRef(THUMB_SIZE); // actual thumb size from manifest
   const [timeRange, setTimeRange] = useState(null); // { min, max, current }
   const [timeFilter, setTimeFilter] = useState([0, 1000]); // dual range: [lo, hi] out of 1000
@@ -321,8 +322,6 @@ export default function App() {
   const atlasFormatRef = useRef('jpg');               // atlas file extension
   const atlasSizeRef = useRef(ATLAS_SIZE);            // atlas pixel dimensions
   const neighborsRef = useRef(null);                  // k-NN data: { k, indices: Uint32Array[], distances: Float32Array[] }
-  const [pathEndpoints, setPathEndpoints] = useState({ start: null, end: null }); // for visual path navigator
-  const [visualPath, setVisualPath] = useState(null); // array of image ids forming the path
 
   /* ── Compute visible set from hotspot + csvFilters ── */
   const computeVisibleSet = useCallback((hotspotId, filters, hotspotsData, meta) => {
@@ -390,7 +389,7 @@ export default function App() {
           id: parseInt(cid),
           worldX: data.sx / data.count,
           worldY: data.minY - THUMB_SIZE * 2.5,
-          label: `Cluster ${idx + 1}`,
+          label: clipLabelsRef.current?.[cid]?.label || `Cluster ${idx + 1}`,
           color: CLUSTER_COLORS[parseInt(cid) % CLUSTER_COLORS.length],
           count: data.count,
         }));
@@ -707,6 +706,15 @@ export default function App() {
           }
         } catch (_) { /* neighbors.bin is optional */ }
 
+        /* Load CLIP cluster labels (optional) */
+        try {
+          const clRes = await fetch(`/data/cluster_labels.json${cacheBust}`);
+          if (clRes.ok) {
+            clipLabelsRef.current = await clRes.json();
+            console.log(`Loaded CLIP cluster labels: ${Object.keys(clipLabelsRef.current).length} clusters`);
+          }
+        } catch (_) { /* cluster_labels.json is optional */ }
+
         // Fit to actual content bounds
         {
           let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -987,43 +995,6 @@ export default function App() {
     return result;
   }, []);
 
-  const findVisualPath = useCallback((startId, endId) => {
-    if (!neighborsRef.current) return null;
-    const { indices } = neighborsRef.current;
-    const n = indices.length;
-    if (startId < 0 || startId >= n || endId < 0 || endId >= n) return null;
-    if (startId === endId) return [startId];
-
-    // BFS on k-NN graph
-    const visited = new Set([startId]);
-    const parent = new Map();
-    const queue = [startId];
-    let found = false;
-
-    while (queue.length > 0 && !found) {
-      const current = queue.shift();
-      for (let j = 0; j < indices[current].length; j++) {
-        const neighbor = indices[current][j];
-        if (!visited.has(neighbor)) {
-          visited.add(neighbor);
-          parent.set(neighbor, current);
-          if (neighbor === endId) { found = true; break; }
-          queue.push(neighbor);
-        }
-      }
-    }
-
-    if (!found) return null; // disconnected graph (unlikely with k=10)
-    // Reconstruct path
-    const path = [endId];
-    let cur = endId;
-    while (cur !== startId) {
-      cur = parent.get(cur);
-      path.unshift(cur);
-    }
-    return path;
-  }, []);
-
   const flyToImage = useCallback((imageId) => {
     const vp = viewportRef.current;
     const p = pointsRef.current[imageId];
@@ -1032,7 +1003,7 @@ export default function App() {
     vp.animate({ position: { x: p.x, y: p.y }, scale: Math.max(vp.scale.x, 2), time: 400 });
   }, []);
 
-  const NeighborThumb = useCallback(({ imageId, size = 64, onClick, highlight }) => {
+  const NeighborThumb = useCallback(({ imageId, size = 64, onClick }) => {
     const p = pointsRef.current[imageId];
     if (!p) return null;
     const _scale = size / thumbSizeRef.current;
@@ -1040,9 +1011,7 @@ export default function App() {
     return (
       <button
         onClick={onClick}
-        className={`rounded-lg overflow-hidden border-2 transition-all hover:scale-105 shrink-0 ${
-          highlight ? 'border-rp-love shadow-md' : 'border-rp-hlMed hover:border-rp-pine'
-        }`}
+        className="rounded-lg overflow-hidden border-2 border-rp-hlMed hover:border-rp-pine transition-all hover:scale-105 shrink-0"
         style={{
           width: size,
           height: size,
@@ -1475,7 +1444,14 @@ export default function App() {
                   ['Position', `${selectedItem.x.toFixed(1)}, ${selectedItem.y.toFixed(1)}`],
                   ['Grid Cell', `${Math.floor(selectedItem.x / SPATIAL_CELL_SIZE)}, ${Math.floor(selectedItem.y / SPATIAL_CELL_SIZE)}`],
                   ...(metadata?.rows?.[selectedItem.id]
-                    ? Object.entries(metadata.rows[selectedItem.id]).filter(([k]) => k !== 'id').map(([k, v]) => [k, v])
+                    ? Object.entries(metadata.rows[selectedItem.id])
+                        .filter(([k]) => k !== 'id')
+                        .map(([k, v]) => {
+                          if (k === 'cluster' && clipLabelsRef.current?.[v]) {
+                            return [k, clipLabelsRef.current[v].label];
+                          }
+                          return [k, v];
+                        })
                     : []),
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between items-baseline border-b border-rp-hlMed/50 pb-1.5">
@@ -1500,7 +1476,6 @@ export default function App() {
                           key={nId}
                           imageId={nId}
                           size={56}
-                          highlight={visualPath && visualPath.includes(nId)}
                           onClick={() => flyToImage(nId)}
                         />
                       ))}
@@ -1508,76 +1483,6 @@ export default function App() {
                   </div>
                 );
               })()}
-
-              {/* ── Visual Path Navigator ── */}
-              {neighborsRef.current && (
-                <div>
-                  <p className="text-[10px] font-semibold text-rp-muted uppercase tracking-widest mb-2">
-                    Visual Path
-                  </p>
-                  <div className="flex gap-2 mb-2">
-                    <button
-                      onClick={() => setPathEndpoints(prev => ({ ...prev, start: selectedItem.id }))}
-                      className={`flex-1 text-[10px] font-bold px-2 py-1.5 rounded-md border transition-all ${
-                        pathEndpoints.start === selectedItem.id
-                          ? 'bg-rp-foam/15 border-rp-foam text-rp-foam'
-                          : 'bg-rp-hlLow border-rp-hlMed text-rp-text hover:border-rp-foam'
-                      }`}
-                    >
-                      {pathEndpoints.start !== null ? `Start: #${pathEndpoints.start}` : 'Set Start'}
-                    </button>
-                    <button
-                      onClick={() => setPathEndpoints(prev => ({ ...prev, end: selectedItem.id }))}
-                      className={`flex-1 text-[10px] font-bold px-2 py-1.5 rounded-md border transition-all ${
-                        pathEndpoints.end === selectedItem.id
-                          ? 'bg-rp-iris/15 border-rp-iris text-rp-iris'
-                          : 'bg-rp-hlLow border-rp-hlMed text-rp-text hover:border-rp-iris'
-                      }`}
-                    >
-                      {pathEndpoints.end !== null ? `End: #${pathEndpoints.end}` : 'Set End'}
-                    </button>
-                  </div>
-                  {pathEndpoints.start !== null && pathEndpoints.end !== null && (
-                    <button
-                      onClick={() => {
-                        const path = findVisualPath(pathEndpoints.start, pathEndpoints.end);
-                        setVisualPath(path);
-                      }}
-                      className="w-full text-[10px] font-bold px-2 py-1.5 rounded-md bg-rp-pine text-white hover:bg-rp-pine/90 transition-all"
-                    >
-                      Find Path ({pathEndpoints.start} → {pathEndpoints.end})
-                    </button>
-                  )}
-                  {visualPath && (
-                    <div className="mt-2">
-                      <p className="text-[10px] text-rp-muted mb-1.5">
-                        Path: {visualPath.length} steps
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {visualPath.map((imgId, idx) => (
-                          <div key={`${imgId}-${idx}`} className="flex items-center gap-0.5">
-                            <NeighborThumb
-                              imageId={imgId}
-                              size={48}
-                              highlight={idx === 0 || idx === visualPath.length - 1}
-                              onClick={() => flyToImage(imgId)}
-                            />
-                            {idx < visualPath.length - 1 && (
-                              <ChevronRight size={10} className="text-rp-muted shrink-0" />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <button
-                        onClick={() => { setVisualPath(null); setPathEndpoints({ start: null, end: null }); }}
-                        className="text-[10px] font-semibold text-rp-love hover:underline mt-1.5"
-                      >
-                        Clear path
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
             </>
           ) : (
             <div className="flex flex-col items-center justify-center flex-1 text-center">
@@ -1593,9 +1498,23 @@ export default function App() {
       {tooltip && viewMode !== 'clusters' && viewMode !== 'color' && (
         <div
           className="absolute z-[80] pointer-events-none bg-rp-surface/95 backdrop-blur-md rounded-lg border border-rp-hlMed shadow-rp px-3 py-2"
-          style={{ left: tooltip.x + 16, top: tooltip.y - 8, maxWidth: '180px' }}
+          style={{ left: tooltip.x + 16, top: tooltip.y - 8, maxWidth: '260px' }}
         >
-          <p className="text-xs font-bold text-rp-text">Image #{tooltip.id}</p>
+          {(() => {
+            const meta = metadata?.rows?.[tooltip.id];
+            const title = meta?.title;
+            const artist = meta?.artist;
+            const cluster = meta?.cluster;
+            const clusterLabel = cluster && clipLabelsRef.current?.[cluster]?.label;
+            return (
+              <>
+                {title && <p className="text-xs font-bold text-rp-text leading-snug">{title}</p>}
+                {artist && <p className="text-[10px] text-rp-muted">{artist}</p>}
+                {clusterLabel && <p className="text-[10px] text-rp-pine font-medium mt-0.5">{clusterLabel}</p>}
+                {!title && !artist && <p className="text-xs font-bold text-rp-text">Image #{tooltip.id}</p>}
+              </>
+            );
+          })()}
         </div>
       )}
 
