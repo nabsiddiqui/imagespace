@@ -275,6 +275,8 @@ export default function App() {
   const [clusterLabels, setClusterLabels] = useState([]); // [{id, x, y, label, color, count}]
   const clusterCentroidsRef = useRef([]); // world positions of cluster group centers
   const [timeRange, setTimeRange] = useState(null); // { min, max, current }
+  const [timeFilter, setTimeFilter] = useState([0, 1000]); // dual range: [lo, hi] out of 1000
+  const timeFilterRef = useRef([0, 1000]);
   const timelineMapRef = useRef(null); // maps x-world-pos to timestamp
   const [metadata, setMetadata] = useState(null);   // { columns: string[], rows: {[col]: string}[] }
   const [csvFilters, setCsvFilters] = useState({});  // { columnName: selectedValue | null }
@@ -404,6 +406,11 @@ export default function App() {
   const switchView = useCallback((mode) => {
     setViewMode(mode);
     viewModeRef.current = mode;
+    // Reset time filter when leaving timeline
+    if (mode !== 'timeline') {
+      setTimeFilter([0, 1000]);
+      timeFilterRef.current = [0, 1000];
+    }
     // Auto-select first image for carousel if nothing selected
     if (mode === 'carousel' && carouselIdx === null) {
       setCarouselIdx(0);
@@ -648,6 +655,23 @@ export default function App() {
             const t = (centerWorld.x - tm.xMin) / (tm.xMax - tm.xMin || 1);
             const currentTs = Math.round(tm.minTs + t * (tm.maxTs - tm.minTs));
             setTimeRange(prev => prev ? { ...prev, current: currentTs } : prev);
+
+            // Apply time filter dimming
+            const tf = timeFilterRef.current;
+            if (tf[0] > 0 || tf[1] < 1000) {
+              const loTs = tm.minTs + (tf[0] / 1000) * (tm.maxTs - tm.minTs);
+              const hiTs = tm.minTs + (tf[1] / 1000) * (tm.maxTs - tm.minTs);
+              for (const p of pointsRef.current) {
+                const ts = p.timestamp ?? 0;
+                if (ts >= loTs && ts <= hiTs) {
+                  if (p.sprite.alpha < 0.5) p.sprite.alpha = 1;
+                  p.sprite.tint = 0xffffff;
+                } else {
+                  p.sprite.alpha = 0.1;
+                  p.sprite.tint = 0xcccccc;
+                }
+              }
+            }
           }
         });
 
@@ -1099,50 +1123,70 @@ export default function App() {
       <div className="absolute bottom-0 left-0 right-0 pointer-events-none z-50 p-4">
         <div className="flex flex-col gap-2 items-stretch">
           {/* Timeline indicator — offset from hotspots */}
-          {viewMode === 'timeline' && timeRange && (
+          {viewMode === 'timeline' && timeRange && (() => {
+            const range = timeRange.max - timeRange.min || 1;
+            const loTs = timeRange.min + (timeFilter[0] / 1000) * range;
+            const hiTs = timeRange.min + (timeFilter[1] / 1000) * range;
+            const isFiltered = timeFilter[0] > 0 || timeFilter[1] < 1000;
+            return (
             <div className="pointer-events-auto rp-card px-4 py-3" style={{ marginLeft: showHotspots && hotspots.length > 0 ? '260px' : 0 }}>
               <div className="flex items-center gap-3 mb-2">
                 <Clock size={14} className="text-rp-iris shrink-0" />
                 <span className="text-xs font-bold text-rp-text">
-                  {timeRange.current
-                    ? new Date(timeRange.current * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-                    : 'Scroll to explore time'
+                  {isFiltered
+                    ? `${new Date(loTs * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })} — ${new Date(hiTs * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}`
+                    : 'Drag handles to filter by date range'
                   }
                 </span>
-                {timeRange.current && (
-                  <span className="text-[10px] text-rp-muted ml-auto">
-                    {new Date(timeRange.current * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                {isFiltered && (
+                  <button
+                    onClick={() => { setTimeFilter([0, 1000]); timeFilterRef.current = [0, 1000]; }}
+                    className="text-[10px] font-semibold text-rp-love hover:underline ml-auto"
+                  >
+                    Reset
+                  </button>
                 )}
               </div>
-              <div className="relative h-2 bg-rp-hlMed rounded-full overflow-hidden">
+              {/* Dual range slider */}
+              <div className="relative h-6">
+                {/* Track background */}
+                <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1.5 bg-rp-hlMed rounded-full" />
+                {/* Selected range highlight */}
                 <div
-                  className="absolute h-full bg-rp-iris rounded-full transition-all duration-150"
+                  className="absolute top-1/2 -translate-y-1/2 h-1.5 bg-rp-iris rounded-full transition-all duration-75"
                   style={{
-                    width: `${timeRange.current ? Math.max(2, Math.min(100, ((timeRange.current - timeRange.min) / (timeRange.max - timeRange.min || 1)) * 100)) : 0}%`,
+                    left: `${timeFilter[0] / 10}%`,
+                    right: `${100 - timeFilter[1] / 10}%`,
                   }}
                 />
+                {/* Low handle */}
+                <input
+                  type="range"
+                  min={0}
+                  max={1000}
+                  value={timeFilter[0]}
+                  onChange={(e) => {
+                    const v = Math.min(parseInt(e.target.value), timeFilter[1] - 10);
+                    setTimeFilter([v, timeFilter[1]]);
+                    timeFilterRef.current = [v, timeFilter[1]];
+                  }}
+                  className="absolute inset-0 w-full h-full appearance-none bg-transparent cursor-pointer z-[2] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-rp-iris [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-[2] [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-0"
+                />
+                {/* High handle */}
+                <input
+                  type="range"
+                  min={0}
+                  max={1000}
+                  value={timeFilter[1]}
+                  onChange={(e) => {
+                    const v = Math.max(parseInt(e.target.value), timeFilter[0] + 10);
+                    setTimeFilter([timeFilter[0], v]);
+                    timeFilterRef.current = [timeFilter[0], v];
+                  }}
+                  className="absolute inset-0 w-full h-full appearance-none bg-transparent cursor-pointer z-[3] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-rp-iris [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:relative [&::-webkit-slider-thumb]:z-[3] [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-0"
+                />
               </div>
-              {/* Interactive timeline slider */}
-              <input
-                type="range"
-                min={0}
-                max={1000}
-                value={timeRange.current ? Math.round(((timeRange.current - timeRange.min) / (timeRange.max - timeRange.min || 1)) * 1000) : 0}
-                onChange={(e) => {
-                  const t = parseInt(e.target.value) / 1000;
-                  const tm = timelineMapRef.current;
-                  if (!tm) return;
-                  const targetX = tm.xMin + t * (tm.xMax - tm.xMin);
-                  const vp = viewportRef.current;
-                  if (vp) {
-                    const center = vp.center;
-                    vp.moveCenter(targetX, center.y);
-                  }
-                }}
-                className="w-full h-2 mt-1 appearance-none bg-transparent cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-rp-iris [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:bg-rp-hlMed [&::-webkit-slider-runnable-track]:rounded-full"
-              />
-              <div className="flex justify-between mt-1.5">
+              <div className="flex justify-between mt-1">
                 <span className="text-[9px] text-rp-muted font-semibold">
                   {new Date(timeRange.min * 1000).getFullYear()}
                 </span>
@@ -1151,7 +1195,8 @@ export default function App() {
                 </span>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           <div className="flex justify-between items-end gap-3">
           {/* View info */}
