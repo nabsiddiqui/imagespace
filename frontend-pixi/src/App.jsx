@@ -699,7 +699,7 @@ export default function App() {
           viewport.resize(window.innerWidth, window.innerHeight);
         });
 
-        /* Timeline wheel → horizontal pan instead of zoom */
+        /* Timeline wheel → pan instead of zoom */
         const canvas = canvasRef.current;
         if (canvas) {
           canvas.addEventListener('wheel', (e) => {
@@ -707,8 +707,8 @@ export default function App() {
               e.preventDefault();
               e.stopImmediatePropagation();
               const speed = 2;
-              viewport.x -= e.deltaY * speed;
               viewport.x -= e.deltaX * speed;
+              viewport.y -= e.deltaY * speed;
               viewport.dirty = true;
             }
           }, { passive: false });
