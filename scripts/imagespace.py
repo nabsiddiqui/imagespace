@@ -383,11 +383,10 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
         tsne_coords = tsne.fit_transform(embeddings_pca)
     print(f"  t-SNE completed in {time.time() - start:.1f}s")
 
-    # Scale to viewer range — spread coordinates so thumbnails are visible
+    # Scale to viewer range — keep images close to natural t-SNE positions
     n = len(tsne_coords)
-    # Target: each image occupies roughly THUMB_SIZE² area, with generous spacing
-    spacing = THUMB_SIZE * 1.5  # gap between neighboring thumbnails
-    target_side = int(np.ceil(np.sqrt(n * 2.0))) * spacing
+    spacing = THUMB_SIZE  # no extra gap — let natural overlap convey density
+    target_side = int(np.ceil(np.sqrt(n * 1.2))) * spacing
     def scale_coords(coords, target_range):
         mins = coords.min(axis=0)
         maxs = coords.max(axis=0)
