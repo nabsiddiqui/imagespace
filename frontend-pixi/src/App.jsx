@@ -24,19 +24,19 @@ const VIEW_MODES = {
 function computeLayout(allPoints, mode, visibleSet) {
   // If visibleSet provided, only layout those points; hide others (or dim in umap)
   const hasFilter = visibleSet && visibleSet.size < allPoints.length;
-  const isEmbedding = mode === 'umap' || mode === 'tsne';
-  // In embedding modes show ALL points in their original positions, just dim non-visible
-  const points = (hasFilter && !isEmbedding) ? allPoints.filter(p => visibleSet.has(p.id)) : allPoints;
+  const isStableLayout = mode === 'umap' || mode === 'tsne' || mode === 'timeline';
+  // In stable-layout modes show ALL points in their positions, just dim non-visible
+  const points = (hasFilter && !isStableLayout) ? allPoints.filter(p => visibleSet.has(p.id)) : allPoints;
   const n = points.length;
 
-  // Visibility: in UMAP dim non-visible, in other modes hide them
+  // Visibility: in stable modes dim non-visible, in other modes hide them
   if (hasFilter) {
     for (const p of allPoints) {
       if (visibleSet.has(p.id)) {
         p.sprite.alpha = 1;
         p.sprite.tint = 0xffffff;
-      } else if (isEmbedding) {
-        // Dim but don't hide in embedding views
+      } else if (isStableLayout) {
+        // Dim but don't hide in stable-layout views
         p.sprite.alpha = 0.12;
         p.sprite.tint = 0xcccccc;
       } else {
