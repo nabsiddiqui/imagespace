@@ -741,6 +741,65 @@ export default function App() {
 
   const activeFilterCount = Object.keys(csvFilters).filter(k => csvFilters[k]).length + (activeHotspot !== null ? 1 : 0);
 
+  /* ── Download helpers ── */
+  const downloadSingleImage = useCallback((pointId) => {
+    const p = pointsRef.current[pointId];
+    if (!p) return;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = THUMB_SIZE;
+      c.height = THUMB_SIZE;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, p.u, p.v, THUMB_SIZE, THUMB_SIZE, 0, 0, THUMB_SIZE, THUMB_SIZE);
+      const a = document.createElement('a');
+      a.href = c.toDataURL('image/png');
+      a.download = `image_${pointId}.png`;
+      a.click();
+    };
+    img.src = `/data/atlas_${p.ai}.jpg`;
+  }, []);
+
+  const downloadStackPNG = useCallback(() => {
+    const vis = visibleSetRef.current;
+    const pts = vis ? pointsRef.current.filter(p => vis.has(p.id)) : pointsRef.current;
+    if (pts.length === 0) return;
+    const size = THUMB_SIZE * 4; // 256px output
+    const c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#faf4ed';
+    ctx.fillRect(0, 0, size, size);
+    const opacity = 1 / Math.max(1, Math.sqrt(pts.length));
+    ctx.globalAlpha = Math.max(0.005, opacity);
+
+    // Load all unique atlases then draw
+    const atlasMap = {};
+    for (const p of pts) atlasMap[p.ai] = null;
+    const atlasIds = Object.keys(atlasMap).map(Number);
+    let loaded = 0;
+    for (const ai of atlasIds) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        atlasMap[ai] = img;
+        loaded++;
+        if (loaded === atlasIds.length) {
+          for (const p of pts) {
+            ctx.drawImage(atlasMap[p.ai], p.u, p.v, THUMB_SIZE, THUMB_SIZE, 0, 0, size, size);
+          }
+          const a = document.createElement('a');
+          a.href = c.toDataURL('image/png');
+          a.download = `imagestack_${pts.length}_images.png`;
+          a.click();
+        }
+      };
+      img.src = `/data/atlas_${ai}.jpg`;
+    }
+  }, []);
+
   /* ── Render ─────────────────────────────────── */
 
 
@@ -1124,6 +1183,14 @@ export default function App() {
                   </div>
                 ))}
               </div>
+              {/* Download single image */}
+              <button
+                onClick={() => downloadSingleImage(selectedItem.id)}
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-rp-pine text-white text-xs font-semibold hover:bg-rp-pine/90 transition-colors"
+              >
+                <Download size={14} />
+                Download PNG
+              </button>
             </>
           ) : (
             <div className="flex flex-col items-center justify-center flex-1 text-center">
@@ -1132,6 +1199,14 @@ export default function App() {
               <p className="text-xs text-rp-muted mt-1">Click an image to see details</p>
             </div>
           )}
+          {/* Download Stack button (always available in panel) */}
+          <button
+            onClick={downloadStackPNG}
+            className="mt-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-rp-hlHigh text-rp-text text-xs font-semibold hover:bg-rp-hlLow transition-colors"
+          >
+            <Download size={14} />
+            Download Image Stack ({visibleSetRef.current ? visibleSetRef.current.size.toLocaleString() : stats.count.toLocaleString()} images)
+          </button>
         </div>
       )}
 

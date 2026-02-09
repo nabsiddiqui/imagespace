@@ -36,7 +36,22 @@ Grid-based spatial hash (`SPATIAL_CELL_SIZE=120`) for O(1) nearest-neighbor hove
 - Hotspot filter: set of cluster member IDs
 - CSV filters: intersection of all active column→value matches
 - Both combine via intersection
-- `computeLayout(allPoints, mode, visibleSet)` hides non-visible sprites (alpha=0) and only positions visible ones
+- `computeLayout(allPoints, mode, visibleSet)`: in UMAP mode dims non-visible (alpha 0.12), in other modes hides them (alpha 0)
+
+### UI Layout
+- **Top-left**: Logo + hotspot cards (hidden in timeline/carousel)
+- **Top-right**: View tabs + compact filter bar (horizontal dropdowns)
+- **Bottom-left**: View description card
+- **Bottom-right**: Zoom controls + stats card
+- **Right edge**: Vertical tab toggle for detail panel (centered vertically)
+- **Detail panel**: Right-slide panel with thumbnail, metadata, download buttons
+
+### Download Features
+- Single image PNG: extracts from atlas, downloads 64px thumbnail
+- Image Stack PNG: composites all visible images onto 256px canvas with auto-opacity
+
+### Version Control
+- Git repo at `modern-pixplot/`, `.gitignore` excludes node_modules, dist, .DS_Store
 
 ### View Mode Layout
 `computeLayout(points, mode, visibleSet)`:
