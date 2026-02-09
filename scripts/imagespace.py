@@ -73,7 +73,7 @@ def discover_images(input_dir):
 
 
 # ── Stage 2: Thumbnail Generation + Atlas Packing ────────────
-def generate_atlases(images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS_SIZE):
+def generate_atlases(images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS_SIZE, quality=80):
     """Create WebP atlas textures from image thumbnails. Returns atlas metadata per image."""
     images_per_row = atlas_size // thumb_size
     images_per_atlas = images_per_row * images_per_row
@@ -111,7 +111,7 @@ def generate_atlases(images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS
         current_img_in_atlas += 1
         if current_img_in_atlas >= images_per_atlas or idx == len(images) - 1:
             atlas_path = os.path.join(output_dir, f'atlas_{current_atlas_idx}.webp')
-            atlas_img.save(atlas_path, 'WEBP', quality=80, method=2)
+            atlas_img.save(atlas_path, 'WEBP', quality=quality, method=2)
             print(f"\n  Saved atlas_{current_atlas_idx}.webp ({current_img_in_atlas} images)")
             current_atlas_idx += 1
             current_img_in_atlas = 0
@@ -361,8 +361,10 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
         tsne = TSNE(
             n_components=2,
             perplexity=min(perplexity, n // 3),
+            exaggeration=4,
             initialization='pca',
             metric='euclidean',
+            neighbors='approx',
             n_jobs=-1,
             random_state=42,
             verbose=True,
@@ -381,15 +383,65 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
         tsne_coords = tsne.fit_transform(embeddings_pca)
     print(f"  t-SNE completed in {time.time() - start:.1f}s")
 
-    # Scale to viewer range (±2000)
-    def scale_coords(coords, target_range=4000):
+    # Scale to viewer range — ensure enough room for non-overlapping thumbnails
+    n = len(tsne_coords)
+    # Each image needs cell_size² area; scale so total area fits comfortably
+    cell_size = THUMB_SIZE * 1.15  # slight gap between thumbnails
+    target_side = int(np.ceil(np.sqrt(n * 1.8))) * cell_size  # 1.8x overallocation for structure
+    def scale_coords(coords, target_range):
         mins = coords.min(axis=0)
         maxs = coords.max(axis=0)
         ranges = maxs - mins
         ranges[ranges == 0] = 1
         return (coords - mins) / ranges * target_range - target_range / 2
 
-    tsne_coords = scale_coords(tsne_coords)
+    tsne_coords = scale_coords(tsne_coords, target_side)
+
+    # Remove overlaps by snapping to nearest unoccupied grid cell
+    print(f"  Removing overlaps (cell={cell_size:.0f}px, grid≈{int(target_side/cell_size)}²)...")
+    start = time.time()
+    occupied = set()
+    result = np.zeros_like(tsne_coords)
+    # Process from center outward to preserve cluster cores
+    centroid = tsne_coords.mean(axis=0)
+    dists = np.linalg.norm(tsne_coords - centroid, axis=1)
+    order = np.argsort(dists)
+    for idx in order:
+        gx = round(tsne_coords[idx, 0] / cell_size)
+        gy = round(tsne_coords[idx, 1] / cell_size)
+        if (gx, gy) not in occupied:
+            occupied.add((gx, gy))
+            result[idx] = [gx * cell_size, gy * cell_size]
+            continue
+        # Spiral search for nearest free cell
+        placed = False
+        for r in range(1, 2000):
+            for dx in range(-r, r + 1):
+                dy = -r
+                if (gx + dx, gy + dy) not in occupied:
+                    occupied.add((gx + dx, gy + dy))
+                    result[idx] = [(gx + dx) * cell_size, (gy + dy) * cell_size]
+                    placed = True; break
+                dy = r
+                if (gx + dx, gy + dy) not in occupied:
+                    occupied.add((gx + dx, gy + dy))
+                    result[idx] = [(gx + dx) * cell_size, (gy + dy) * cell_size]
+                    placed = True; break
+            if placed: break
+            for dy in range(-r + 1, r):
+                dx = -r
+                if (gx + dx, gy + dy) not in occupied:
+                    occupied.add((gx + dx, gy + dy))
+                    result[idx] = [(gx + dx) * cell_size, (gy + dy) * cell_size]
+                    placed = True; break
+                dx = r
+                if (gx + dx, gy + dy) not in occupied:
+                    occupied.add((gx + dx, gy + dy))
+                    result[idx] = [(gx + dx) * cell_size, (gy + dy) * cell_size]
+                    placed = True; break
+            if placed: break
+    tsne_coords = result
+    print(f"  Overlap removal: {time.time() - start:.1f}s")
 
     # Clustering: HDBSCAN → MiniBatchKMeans fallback
     try:
@@ -501,12 +553,13 @@ def write_binary_data(output_dir, tsne_coords, atlas_data, cluster_ids):
     return output_path
 
 
-def write_manifest(output_dir, count, atlas_count, thumb_size=THUMB_SIZE):
+def write_manifest(output_dir, count, atlas_count, thumb_size=THUMB_SIZE, atlas_size=ATLAS_SIZE):
     """Write manifest.json for the viewer."""
     manifest = {
         'count': count,
         'atlasCount': atlas_count,
         'thumbSize': thumb_size,
+        'atlasSize': atlas_size,
         'bytesPerImage': 24,
         'version': 2,
         'atlasFormat': 'webp',
@@ -586,7 +639,9 @@ def main():
     parser.add_argument('--output', '-o', required=True, help='Output directory')
     parser.add_argument('--gpu', action='store_true', help='Enable GPU acceleration')
     parser.add_argument('--min-cluster-size', type=int, default=50, help='HDBSCAN min_cluster_size')
-    parser.add_argument('--thumb-size', type=int, default=THUMB_SIZE, help='Thumbnail size')
+    parser.add_argument('--thumb-size', type=int, default=THUMB_SIZE, help='Thumbnail size in pixels')
+    parser.add_argument('--atlas-size', type=int, default=ATLAS_SIZE, help='Atlas texture size (default 4096)')
+    parser.add_argument('--quality', type=int, default=80, help='WebP quality 1-100 (default 80)')
     parser.add_argument('--metadata', help='External metadata CSV to merge')
     parser.add_argument('--tsne-perplexity', type=int, default=TSNE_PERPLEXITY, help='t-SNE perplexity')
 
@@ -612,8 +667,8 @@ def main():
     print(f"  Found {len(images)} images")
 
     # Stage 2
-    print(f"\n[2/6] Generating WebP atlas textures...")
-    atlas_data, atlas_count = generate_atlases(images, str(output_dir), args.thumb_size)
+    print(f"\n[2/6] Generating WebP atlas textures (quality={args.quality})...")
+    atlas_data, atlas_count = generate_atlases(images, str(output_dir), args.thumb_size, args.atlas_size, args.quality)
 
     # Stage 3
     print(f"\n[3/6] Extracting embeddings {'(GPU)' if args.gpu else '(CPU)'}...")
@@ -638,7 +693,7 @@ def main():
     # Stage 6
     print(f"\n[6/6] Writing output files...")
     write_binary_data(str(output_dir), tsne_coords, atlas_data, cluster_ids)
-    write_manifest(str(output_dir), len(images), atlas_count, args.thumb_size)
+    write_manifest(str(output_dir), len(images), atlas_count, args.thumb_size, args.atlas_size)
     write_metadata_csv(str(output_dir), images, cluster_ids, timestamps, colors, external_metadata)
 
     elapsed = time.time() - total_start

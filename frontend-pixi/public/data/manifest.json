@@ -1,7 +1,8 @@
 {
-  "count": 50000,
+  "count": 49585,
   "atlasCount": 13,
   "thumbSize": 64,
   "bytesPerImage": 24,
-  "version": 2
+  "version": 2,
+  "atlasFormat": "webp"
 }

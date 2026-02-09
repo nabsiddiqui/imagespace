@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 
 const THUMB_SIZE = 64;
+const ATLAS_SIZE = 4096;
 const SPATIAL_CELL_SIZE = 120;
 
 /* ── ImageSpace Logo (Rose Pine Dawn) ─────────── */
@@ -319,6 +320,7 @@ export default function App() {
   const [openFilter, setOpenFilter] = useState(null); // which dropdown is open
   const visibleSetRef = useRef(null);                // current Set<id> or null (all visible)
   const atlasFormatRef = useRef('jpg');               // atlas file extension
+  const atlasSizeRef = useRef(ATLAS_SIZE);            // atlas pixel dimensions
 
   /* ── Compute visible set from hotspot + csvFilters ── */
   const computeVisibleSet = useCallback((hotspotId, filters, hotspotsData, meta) => {
@@ -358,6 +360,14 @@ export default function App() {
   const relayout = useCallback((mode, visSet) => {
     visibleSetRef.current = visSet;
     computeLayout(pointsRef.current, mode, visSet);
+
+    // Mark all points as moving so the animation ticker picks them up
+    const app = appRef.current;
+    if (app?._movingSet) {
+      for (const p of pointsRef.current) {
+        app._movingSet.add(p.id);
+      }
+    }
 
     // Compute cluster label positions for cluster view
     if (mode === 'clusters') {
@@ -508,6 +518,7 @@ export default function App() {
         if (!mRes.ok) throw new Error('Manifest load failed');
         const manifest = await mRes.json();
         atlasFormatRef.current = manifest.atlasFormat || 'jpg';
+        atlasSizeRef.current = manifest.atlasSize || ATLAS_SIZE;
 
         setStatusMsg('Streaming binary layout...');
         const dRes = await fetch('/data/data.bin');
@@ -535,6 +546,11 @@ export default function App() {
         /* Create sprites */
         setStatusMsg('Building image field...');
         const container = new PIXI.Container();
+        container.interactiveChildren = false;
+        container.eventMode = 'none';
+        container.isRenderGroup = true;
+        container.cullable = true;
+        container.cullableChildren = true;
         viewport.addChild(container);
 
         const currentThumbSize = manifest.thumbSize || THUMB_SIZE;
@@ -667,6 +683,11 @@ export default function App() {
           }
           if (minX < Infinity) {
             const pad = THUMB_SIZE * 2;
+            // Set container bounds to avoid O(n) bounds recalculation
+            container.boundsArea = new PIXI.Rectangle(
+              minX - pad, minY - pad,
+              maxX - minX + pad * 2, maxY - minY + pad * 2
+            );
             const w = maxX - minX + pad;
             const h = maxY - minY + pad;
             const scaleX = viewport.screenWidth / w;
@@ -681,23 +702,40 @@ export default function App() {
         }
 
         /* Ticker — animation + FPS */
+        const movingSet = new Set(); // Track only sprites currently animating
+        app._movingSet = movingSet;
+
         app.ticker.add((delta) => {
           if (isCancelled) return;
-          let moving = false;
-          for (const p of pointsRef.current) {
-            const dx = p.targetX - p.sprite.x;
-            const dy = p.targetY - p.sprite.y;
-            if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-              p.sprite.x += dx * 0.08 * delta.deltaTime;
-              p.sprite.y += dy * 0.08 * delta.deltaTime;
-              p.x = p.sprite.x;
-              p.y = p.sprite.y;
-              moving = true;
+
+          // Only iterate moving sprites, not all 50K
+          if (movingSet.size > 0) {
+            const dt = delta.deltaTime;
+            const factor = 1 - Math.pow(0.92, dt); // frame-rate-independent exponential decay
+            for (const id of movingSet) {
+              const p = pointsRef.current[id];
+              if (!p) { movingSet.delete(id); continue; }
+              const dx = p.targetX - p.sprite.x;
+              const dy = p.targetY - p.sprite.y;
+              if (dx * dx + dy * dy > 0.25) { // squared distance threshold (= 0.5px Manhattan)
+                p.sprite.x += dx * factor;
+                p.sprite.y += dy * factor;
+                p.x = p.sprite.x;
+                p.y = p.sprite.y;
+              } else {
+                p.sprite.x = p.targetX;
+                p.sprite.y = p.targetY;
+                p.x = p.targetX;
+                p.y = p.targetY;
+                movingSet.delete(id); // safe to delete during Set iteration per ES6 spec
+              }
             }
-          }
-          if (moving) {
             app._spatialDirty = true;
-          } else if (app._spatialDirty) {
+          }
+
+          if (!app._spatialDirty) {
+            // No animation — only do periodic UI updates
+          } else if (movingSet.size === 0) {
             app._spatialDirty = false;
             spatialHashRef.current = {};
             for (const p of pointsRef.current) {
@@ -708,6 +746,7 @@ export default function App() {
               spatialHashRef.current[key].push(p);
             }
           }
+
           // Throttle UI state updates to avoid React re-render overhead
           const now = Date.now();
           if (!app._lastUiUpdate || now - app._lastUiUpdate > 200) {
@@ -716,8 +755,9 @@ export default function App() {
             setStats(s => ({ ...s, fps: Math.round(app.ticker.FPS) }));
           }
 
-          // Update cluster label screen positions (throttled)
-          if (clusterCentroidsRef.current.length > 0 && (!app._lastUiUpdate || now - app._lastUiUpdate < 250)) {
+          // Update cluster label screen positions (throttled separately)
+          if (clusterCentroidsRef.current.length > 0 && (!app._lastLabelUpdate || now - app._lastLabelUpdate > 100)) {
+            app._lastLabelUpdate = now;
             const labels = clusterCentroidsRef.current.map(c => {
               const screen = viewport.toScreen(c.worldX, c.worldY);
               return { ...c, x: screen.x, y: screen.y };
@@ -900,14 +940,22 @@ export default function App() {
   }, [viewMode, activeHotspot, csvFilters]);
 
   /* ── CSV filter helpers ── */
+  const FILTER_SKIP_COLS = new Set(['id', 'filename', 'cluster', 'timestamp', 'dominant_color', 'width', 'height']);
+  const MAX_FILTER_VALUES = 200; // Skip columns with too many unique values (not useful as category)
+
   const filterOptions = useMemo(() => {
     if (!metadata) return {};
     const opts = {};
     for (const col of metadata.columns) {
+      if (FILTER_SKIP_COLS.has(col)) continue;
       const vals = new Set();
       for (const row of metadata.rows) {
         if (row[col]) vals.add(row[col]);
       }
+      // Skip numeric-only columns or high-cardinality columns
+      if (vals.size > MAX_FILTER_VALUES) continue;
+      const sample = [...vals].slice(0, 20);
+      if (sample.length > 0 && sample.every(v => !isNaN(Number(v)))) continue;
       opts[col] = [...vals].sort();
     }
     return opts;
@@ -984,17 +1032,24 @@ export default function App() {
             return (
               <div className="flex flex-col items-center gap-6 max-w-2xl w-full px-8">
                 {/* Large image */}
-                <div
-                  className="rounded-2xl overflow-hidden shadow-rp-lg border border-rp-hlMed"
-                  style={{
-                    width: '320px',
-                    height: '320px',
-                    backgroundImage: `url(/data/atlas_${p.ai}.${atlasFormatRef.current})`,
-                    backgroundPosition: `-${p.u}px -${p.v}px`,
-                    backgroundSize: 'auto',
-                    imageRendering: 'auto',
-                  }}
-                />
+                {(() => {
+                  const _displaySize = 320;
+                  const _scale = _displaySize / THUMB_SIZE;
+                  const _as = atlasSizeRef.current;
+                  return (
+                    <div
+                      className="rounded-2xl overflow-hidden shadow-rp-lg border border-rp-hlMed"
+                      style={{
+                        width: _displaySize,
+                        height: _displaySize,
+                        backgroundImage: `url(/data/atlas_${p.ai}.${atlasFormatRef.current})`,
+                        backgroundPosition: `-${p.u * _scale}px -${p.v * _scale}px`,
+                        backgroundSize: `${_as * _scale}px ${_as * _scale}px`,
+                        imageRendering: 'auto',
+                      }}
+                    />
+                  );
+                })()}
                 {/* Info */}
                 <div className="text-center">
                   <p className="text-2xl font-extrabold text-rp-text">Image #{p.id}</p>
@@ -1348,16 +1403,24 @@ export default function App() {
                 <div className="h-0.5 w-10 bg-rp-love rounded-full mt-2" />
               </div>
               {/* Thumbnail */}
-              {pointsRef.current[selectedItem.id] && (
-                <div
-                  className="w-full aspect-square rounded-xl overflow-hidden border border-rp-hlMed"
-                  style={{
-                    backgroundImage: `url(/data/atlas_${pointsRef.current[selectedItem.id].ai}.${atlasFormatRef.current})`,
-                    backgroundPosition: `-${pointsRef.current[selectedItem.id].u}px -${pointsRef.current[selectedItem.id].v}px`,
-                    backgroundSize: 'auto',
-                  }}
-                />
-              )}
+              {pointsRef.current[selectedItem.id] && (() => {
+                const _p = pointsRef.current[selectedItem.id];
+                const _displaySize = 256;
+                const _scale = _displaySize / THUMB_SIZE;
+                const _as = atlasSizeRef.current;
+                return (
+                  <div
+                    className="rounded-xl overflow-hidden border border-rp-hlMed mx-auto"
+                    style={{
+                      width: _displaySize,
+                      height: _displaySize,
+                      backgroundImage: `url(/data/atlas_${_p.ai}.${atlasFormatRef.current})`,
+                      backgroundPosition: `-${_p.u * _scale}px -${_p.v * _scale}px`,
+                      backgroundSize: `${_as * _scale}px ${_as * _scale}px`,
+                    }}
+                  />
+                );
+              })()}
               <div className="space-y-2">
                 {[
                   ['Position', `${selectedItem.x.toFixed(1)}, ${selectedItem.y.toFixed(1)}`],
