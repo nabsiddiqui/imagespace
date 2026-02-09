@@ -114,11 +114,11 @@ function computeLayout(allPoints, mode, visibleSet) {
       break;
     }
     case 'timeline': {
-      // Sort by timestamp, arrange in rows left-to-right
+      // Sort by timestamp, arrange in columns top-to-bottom (vertical layout)
       const sorted = [...points].sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
       const rowHeight = THUMB_SIZE * 1.4;
       const colWidth = THUMB_SIZE * 1.4;
-      const cols = Math.ceil(Math.sqrt(n) * 1.5); // wider than tall
+      const cols = Math.max(1, Math.ceil(Math.sqrt(n) / 2)); // fewer columns → taller layout
       const ox = -(cols * colWidth) / 2;
       const rows = Math.ceil(n / cols);
       const oy = -(rows * rowHeight) / 2;
