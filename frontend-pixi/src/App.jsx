@@ -306,7 +306,7 @@ export default function App() {
   const [colorsReady, setColorsReady] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [tooltip, setTooltip] = useState(null);
-  const [showDetailPanel, setShowDetailPanel] = useState(true);
+  const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [clusterLabels, setClusterLabels] = useState([]); // [{id, x, y, label, color, count}]
   const clusterCentroidsRef = useRef([]); // world positions of cluster group centers
   const clipLabelsRef = useRef(null); // CLIP-generated cluster labels from cluster_labels.json
@@ -444,7 +444,7 @@ export default function App() {
           const cy = (minY + maxY) / 2;
           const scaleX = vp.screenWidth / w;
           const scaleY = vp.screenHeight / h;
-          let scale = Math.min(scaleX, scaleY);
+          let scale = Math.min(scaleX, scaleY) * 1.8; // zoom in a bit more than fit-all
 
           // For timeline, ensure thumbnails are visible (min ~30px on screen)
           if (mode === 'timeline') {
@@ -1023,7 +1023,7 @@ export default function App() {
 
   /* ── CSV filter helpers ── */
   const FILTER_SKIP_COLS = new Set(['id', 'filename', 'width', 'height', 'timestamp']);
-  const MAX_FILTER_VALUES = 1500; // Include artist (~1092 values)
+  const MAX_FILTER_VALUES = 200;
 
   const filterOptions = useMemo(() => {
     if (!metadata) return {};
