@@ -471,15 +471,6 @@ export default function App() {
   const switchView = useCallback((mode) => {
     setViewMode(mode);
     viewModeRef.current = mode;
-    // Pause/resume pixi-viewport wheel plugin for timeline mode
-    const vp = viewportRef.current;
-    if (vp && vp.plugins) {
-      if (mode === 'timeline') {
-        vp.plugins.pause('wheel');
-      } else {
-        vp.plugins.resume('wheel');
-      }
-    }
     // Reset time filter when leaving timeline
     if (mode !== 'timeline') {
       setTimeFilter([0, 1000]);
@@ -905,31 +896,16 @@ export default function App() {
           viewport.resize(window.innerWidth, window.innerHeight);
         });
 
-        /* Custom wheel handler for ALL modes — ensures consistent zoom behavior */
+        /* Timeline: horizontal trackpad swipe → horizontal pan */
         const canvas = canvasRef.current;
         if (canvas) {
           canvas.addEventListener('wheel', (e) => {
-            const isTimeline = viewModeRef.current === 'timeline';
-
-            if (isTimeline) {
+            if (viewModeRef.current === 'timeline' && Math.abs(e.deltaX) > 5 && !e.ctrlKey && !e.metaKey) {
+              // Only intercept horizontal swipes (trackpad horizontal two-finger swipe)
+              // Vertical scroll passes through to viewport's built-in zoom-to-cursor
               e.preventDefault();
-              if (e.ctrlKey || e.metaKey) {
-                // Pinch-to-zoom: scale proportional to deltaY
-                const zoomIntensity = 0.01;
-                const delta = -e.deltaY * zoomIntensity;
-                const factor = Math.exp(delta); // exponential for smooth zoom
-                const worldPos = viewport.toWorld(e.offsetX, e.offsetY);
-                const newScale = Math.max(0.01, Math.min(20, viewport.scale.x * factor));
-                viewport.scale.set(newScale);
-                viewport.x = e.offsetX - worldPos.x * newScale;
-                viewport.y = e.offsetY - worldPos.y * newScale;
-                viewport.dirty = true;
-              } else {
-                // Scroll → horizontal pan along timeline
-                const speed = 2;
-                viewport.x -= (e.deltaX + e.deltaY) * speed;
-                viewport.dirty = true;
-              }
+              viewport.x -= e.deltaX * 2;
+              viewport.dirty = true;
             }
           }, { passive: false });
         }
