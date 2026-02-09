@@ -443,28 +443,30 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
     tsne_coords = result
     print(f"  Overlap removal: {time.time() - start:.1f}s")
 
-    # Clustering: HDBSCAN → MiniBatchKMeans fallback
+    # Clustering: HDBSCAN on PCA embeddings (high-d has better density structure)
+    # Note: clustering on t-SNE coords (especially after overlap removal) destroys
+    # density information. The 50-d PCA space preserves natural cluster structure.
     try:
         import hdbscan as hdb
-        print(f"\n  Running HDBSCAN (min_cluster_size={min_cluster_size})...")
+        print(f"\n  Running HDBSCAN on PCA embeddings (min_cluster_size={min_cluster_size})...")
         start = time.time()
         clusterer = hdb.HDBSCAN(
             min_cluster_size=min_cluster_size,
-            min_samples=10,
+            min_samples=5,
             metric='euclidean',
-            cluster_selection_method='eom',
+            cluster_selection_method='leaf',
             core_dist_n_jobs=-1,
         )
-        cluster_ids = clusterer.fit_predict(tsne_coords)
+        cluster_ids = clusterer.fit_predict(embeddings_pca)
         n_clusters = len(set(cluster_ids)) - (1 if -1 in cluster_ids else 0)
         n_noise = (cluster_ids == -1).sum()
 
         if n_noise > 0 and n_clusters > 0:
             from scipy.spatial import cKDTree
             valid_mask = cluster_ids >= 0
-            tree = cKDTree(tsne_coords[valid_mask])
+            tree = cKDTree(embeddings_pca[valid_mask])
             valid_labels = cluster_ids[valid_mask]
-            _, nearest = tree.query(tsne_coords[cluster_ids == -1])
+            _, nearest = tree.query(embeddings_pca[cluster_ids == -1])
             cluster_ids[cluster_ids == -1] = valid_labels[nearest]
         print(f"  HDBSCAN: {n_clusters} clusters, {n_noise} noise reassigned ({time.time() - start:.1f}s)")
     except ImportError:
@@ -475,7 +477,7 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
         cluster_ids = MiniBatchKMeans(
             n_clusters=n_clusters, batch_size=max(1024, n // 10),
             random_state=42, n_init=3
-        ).fit_predict(tsne_coords)
+        ).fit_predict(embeddings_pca)
         print(f"  MiniBatchKMeans: {time.time() - start:.1f}s")
 
     return tsne_coords.astype(np.float32), cluster_ids.astype(np.int32)
@@ -644,6 +646,8 @@ def main():
     parser.add_argument('--quality', type=int, default=80, help='WebP quality 1-100 (default 80)')
     parser.add_argument('--metadata', help='External metadata CSV to merge')
     parser.add_argument('--tsne-perplexity', type=int, default=TSNE_PERPLEXITY, help='t-SNE perplexity')
+    parser.add_argument('--cache-dir', help='Directory to cache embeddings (skip re-extraction if cached)')
+    parser.add_argument('--relayout', action='store_true', help='Skip atlas generation + embedding extraction, only re-run t-SNE/HDBSCAN')
 
     args = parser.parse_args()
     input_dir = Path(args.input).resolve()
@@ -653,10 +657,12 @@ def main():
         print(f"Error: {input_dir} is not a directory"); sys.exit(1)
 
     os.makedirs(output_dir, exist_ok=True)
+    cache_dir = Path(args.cache_dir).resolve() if args.cache_dir else output_dir
+    os.makedirs(cache_dir, exist_ok=True)
     total_start = time.time()
 
     print(f"\n{'='*60}")
-    print(f"  ImageSpace Pipeline (Fast Mode)")
+    print(f"  ImageSpace Pipeline {'(Relayout Mode)' if args.relayout else '(Fast Mode)'}")
     print(f"{'='*60}")
 
     # Stage 1
@@ -667,34 +673,69 @@ def main():
     print(f"  Found {len(images)} images")
 
     # Stage 2
-    print(f"\n[2/6] Generating WebP atlas textures (quality={args.quality})...")
-    atlas_data, atlas_count = generate_atlases(images, str(output_dir), args.thumb_size, args.atlas_size, args.quality)
+    if args.relayout:
+        print(f"\n[2/6] Skipping atlas generation (relayout mode)")
+        # Reconstruct atlas_data from existing data.bin
+        bin_path = os.path.join(str(output_dir), 'data.bin')
+        if os.path.exists(bin_path):
+            raw = open(bin_path, 'rb').read()
+            atlas_data = []
+            for i in range(len(images)):
+                off = i * 24
+                ai = struct.unpack_from('<H', raw, off + 16)[0]
+                u = struct.unpack_from('<H', raw, off + 18)[0]
+                v = struct.unpack_from('<H', raw, off + 20)[0]
+                atlas_data.append((ai, u, v))
+            atlas_count = max(a[0] for a in atlas_data) + 1
+            print(f"  Loaded atlas data for {len(atlas_data)} images from existing data.bin")
+        else:
+            print("  Error: data.bin not found for relayout mode!"); sys.exit(1)
+    else:
+        print(f"\n[2/6] Generating WebP atlas textures (quality={args.quality})...")
+        atlas_data, atlas_count = generate_atlases(images, str(output_dir), args.thumb_size, args.atlas_size, args.quality)
 
-    # Stage 3
-    print(f"\n[3/6] Extracting embeddings {'(GPU)' if args.gpu else '(CPU)'}...")
-    embeddings = extract_embeddings(images, use_gpu=args.gpu)
+    # Stage 3 — with caching
+    emb_cache = os.path.join(str(cache_dir), 'embeddings.npy')
+    if os.path.exists(emb_cache) and (args.relayout or args.cache_dir):
+        print(f"\n[3/6] Loading cached embeddings from {emb_cache}...")
+        embeddings = np.load(emb_cache)
+        print(f"  Loaded {embeddings.shape[0]} × {embeddings.shape[1]} embeddings")
+    else:
+        print(f"\n[3/6] Extracting embeddings {'(GPU)' if args.gpu else '(CPU)'}...")
+        embeddings = extract_embeddings(images, use_gpu=args.gpu)
+        # Save to cache
+        np.save(emb_cache, embeddings)
+        print(f"  Cached embeddings to {emb_cache}")
 
     # Stage 4
     print(f"\n[4/6] PCA → openTSNE → HDBSCAN...")
     tsne_coords, cluster_ids = reduce_dimensions(embeddings, args.min_cluster_size, args.tsne_perplexity)
 
     # Stage 5
-    print(f"\n[5/6] Extracting metadata...")
-    timestamps = extract_timestamps(images)
-    colors = extract_dominant_colors(images)
-    print(f"  Timestamps: {sum(1 for t in timestamps if t > 0)}/{len(images)}")
+    meta_csv_path = os.path.join(str(output_dir), 'metadata.csv')
+    if args.relayout and os.path.exists(meta_csv_path):
+        print(f"\n[5/6] Skipping metadata (relayout mode, existing metadata.csv kept)")
+        timestamps = None
+        colors = None
+        external_metadata = None
+    else:
+        print(f"\n[5/6] Extracting metadata...")
+        timestamps = extract_timestamps(images)
+        colors = extract_dominant_colors(images)
+        print(f"  Timestamps: {sum(1 for t in timestamps if t > 0)}/{len(images)}")
 
-    external_metadata = None
-    if args.metadata:
-        meta_src = Path(args.metadata).resolve()
-        if meta_src.exists():
-            external_metadata = read_external_metadata(str(meta_src))
+        external_metadata = None
+        if args.metadata:
+            meta_src = Path(args.metadata).resolve()
+            if meta_src.exists():
+                external_metadata = read_external_metadata(str(meta_src))
 
     # Stage 6
     print(f"\n[6/6] Writing output files...")
     write_binary_data(str(output_dir), tsne_coords, atlas_data, cluster_ids)
     write_manifest(str(output_dir), len(images), atlas_count, args.thumb_size, args.atlas_size)
-    write_metadata_csv(str(output_dir), images, cluster_ids, timestamps, colors, external_metadata)
+    if timestamps is not None:
+        write_metadata_csv(str(output_dir), images, cluster_ids, timestamps, colors, external_metadata)
 
     elapsed = time.time() - total_start
     print(f"\n{'='*60}")
