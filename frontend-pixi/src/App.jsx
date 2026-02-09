@@ -34,7 +34,7 @@ const VIEW_MODES = {
   carousel: { label: 'Carousel', icon: 'gallery', desc: 'Full-screen browsing' },
 };
 
-function computeLayout(allPoints, mode, visibleSet) {
+function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
   // If visibleSet provided, only layout those points; hide others (or dim in umap)
   const hasFilter = visibleSet && visibleSet.size < allPoints.length;
   const isStableLayout = mode === 'tsne';
@@ -75,7 +75,7 @@ function computeLayout(allPoints, mode, visibleSet) {
     }
     case 'grid': {
       const cols = Math.ceil(Math.sqrt(n));
-      const spacing = THUMB_SIZE * 1.4;
+      const spacing = thumbSize * 1.4;
       const ox = -(cols * spacing) / 2;
       const oy = -(Math.ceil(n / cols) * spacing) / 2;
       for (let i = 0; i < n; i++) {
@@ -90,7 +90,7 @@ function computeLayout(allPoints, mode, visibleSet) {
         .map((p, i) => ({ idx: i, hue: p.avgHue ?? 0, sat: p.avgSat ?? 0, lum: p.avgLum ?? 0.5 }))
         .sort((a, b) => a.hue - b.hue || a.lum - b.lum);
       const cols = Math.ceil(Math.sqrt(n));
-      const spacing = THUMB_SIZE * 1.4;
+      const spacing = thumbSize * 1.4;
       const ox = -(cols * spacing) / 2;
       const oy = -(Math.ceil(n / cols) * spacing) / 2;
       for (let i = 0; i < sorted.length; i++) {
@@ -109,8 +109,8 @@ function computeLayout(allPoints, mode, visibleSet) {
       }
       const cids = Object.keys(clusterMap).sort((a, b) => clusterMap[b].length - clusterMap[a].length);
       let yOff = 0;
-      const sp = THUMB_SIZE * 1.4;
-      const gap = THUMB_SIZE * 4;
+      const sp = thumbSize * 1.4;
+      const gap = thumbSize * 4;
       for (const cid of cids) {
         const pts = clusterMap[cid];
         const cols = Math.ceil(Math.sqrt(pts.length));
@@ -127,8 +127,8 @@ function computeLayout(allPoints, mode, visibleSet) {
     case 'timeline': {
       // Sort by timestamp, arrange in columns top-to-bottom (vertical layout)
       const sorted = [...points].sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
-      const rowHeight = THUMB_SIZE * 1.4;
-      const colWidth = THUMB_SIZE * 1.4;
+      const rowHeight = thumbSize * 1.4;
+      const colWidth = thumbSize * 1.4;
       const cols = Math.max(1, Math.ceil(Math.sqrt(n) / 2)); // fewer columns → taller layout
       const ox = -(cols * colWidth) / 2;
       const rows = Math.ceil(n / cols);
@@ -311,6 +311,7 @@ export default function App() {
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [clusterLabels, setClusterLabels] = useState([]); // [{id, x, y, label, color, count}]
   const clusterCentroidsRef = useRef([]); // world positions of cluster group centers
+  const thumbSizeRef = useRef(THUMB_SIZE); // actual thumb size from manifest
   const [timeRange, setTimeRange] = useState(null); // { min, max, current }
   const [timeFilter, setTimeFilter] = useState([0, 1000]); // dual range: [lo, hi] out of 1000
   const timeFilterRef = useRef([0, 1000]);
@@ -359,7 +360,7 @@ export default function App() {
   /* ── Recompute layout with current filters ── */
   const relayout = useCallback((mode, visSet) => {
     visibleSetRef.current = visSet;
-    computeLayout(pointsRef.current, mode, visSet);
+    computeLayout(pointsRef.current, mode, visSet, thumbSizeRef.current);
 
     // Mark all points as moving so the animation ticker picks them up
     const app = appRef.current;
@@ -520,6 +521,7 @@ export default function App() {
         const manifest = await mRes.json();
         atlasFormatRef.current = manifest.atlasFormat || 'jpg';
         atlasSizeRef.current = manifest.atlasSize || ATLAS_SIZE;
+        thumbSizeRef.current = manifest.thumbSize || THUMB_SIZE;
 
         setStatusMsg('Streaming binary layout...');
         const dRes = await fetch(`/data/data.bin${cacheBust}`);
