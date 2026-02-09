@@ -289,23 +289,24 @@ export default function App() {
       if (h) ids = new Set(h.indices);
     }
 
-    // CSV filters
+    // CSV filters — additive (union across columns)
     const activeFilters = Object.entries(filters).filter(([, v]) => v !== null && v !== undefined);
     if (activeFilters.length > 0 && meta) {
+      const csvSet = new Set();
       for (const [col, val] of activeFilters) {
-        const colFiltered = new Set();
         for (let i = 0; i < meta.rows.length; i++) {
-          if (meta.rows[i][col] === val) colFiltered.add(i);
+          if (meta.rows[i][col] === val) csvSet.add(i);
         }
-        if (ids === null) {
-          ids = colFiltered;
-        } else {
-          const intersection = new Set();
-          for (const id of ids) {
-            if (colFiltered.has(id)) intersection.add(id);
-          }
-          ids = intersection;
+      }
+      if (ids === null) {
+        ids = csvSet;
+      } else {
+        // Intersect hotspot with CSV union (show hotspot items matching ANY filter)
+        const intersection = new Set();
+        for (const id of ids) {
+          if (csvSet.has(id)) intersection.add(id);
         }
+        ids = intersection;
       }
     }
 
@@ -647,6 +648,21 @@ export default function App() {
           app.renderer.resize(window.innerWidth, window.innerHeight);
           viewport.resize(window.innerWidth, window.innerHeight);
         });
+
+        /* Timeline wheel → horizontal pan instead of zoom */
+        const canvas = canvasRef.current;
+        if (canvas) {
+          canvas.addEventListener('wheel', (e) => {
+            if (viewModeRef.current === 'timeline') {
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              const speed = 2;
+              viewport.x -= e.deltaY * speed;
+              viewport.x -= e.deltaX * speed;
+              viewport.dirty = true;
+            }
+          }, { passive: false });
+        }
 
         setLoadProgress(100);
         setLoading(false);
