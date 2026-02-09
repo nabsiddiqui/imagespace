@@ -320,6 +320,9 @@ export default function App() {
   const visibleSetRef = useRef(null);                // current Set<id> or null (all visible)
   const atlasFormatRef = useRef('jpg');               // atlas file extension
   const atlasSizeRef = useRef(ATLAS_SIZE);            // atlas pixel dimensions
+  const neighborsRef = useRef(null);                  // k-NN data: { k, indices: Uint32Array[], distances: Float32Array[] }
+  const [pathEndpoints, setPathEndpoints] = useState({ start: null, end: null }); // for visual path navigator
+  const [visualPath, setVisualPath] = useState(null); // array of image ids forming the path
 
   /* ── Compute visible set from hotspot + csvFilters ── */
   const computeVisibleSet = useCallback((hotspotId, filters, hotspotsData, meta) => {
@@ -678,6 +681,32 @@ export default function App() {
           }
         } catch (_) { /* metadata.csv is optional */ }
 
+        /* Load k-NN neighbors data (optional) */
+        try {
+          setStatusMsg('Loading neighbor data...');
+          const nnRes = await fetch(`/data/neighbors.bin${cacheBust}`);
+          if (nnRes.ok) {
+            const nnBuf = await nnRes.arrayBuffer();
+            const nnView = new DataView(nnBuf);
+            const nnCount = nnView.getUint32(0, true);
+            const nnK = nnView.getUint32(4, true);
+            const indices = new Array(nnCount);
+            const distances = new Array(nnCount);
+            let offset = 8;
+            for (let i = 0; i < nnCount; i++) {
+              indices[i] = new Uint32Array(nnK);
+              distances[i] = new Float32Array(nnK);
+              for (let j = 0; j < nnK; j++) {
+                indices[i][j] = nnView.getUint32(offset, true);
+                distances[i][j] = nnView.getFloat32(offset + 4, true);
+                offset += 8;
+              }
+            }
+            neighborsRef.current = { k: nnK, indices, distances };
+            console.log(`Loaded k-NN: ${nnCount} × ${nnK}`);
+          }
+        } catch (_) { /* neighbors.bin is optional */ }
+
         // Fit to actual content bounds
         {
           let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -946,6 +975,85 @@ export default function App() {
       default: return <Eye size={14} />;
     }
   };
+
+  /* ── k-NN helpers ── */
+  const getNeighbors = useCallback((imageId) => {
+    if (!neighborsRef.current || imageId < 0 || imageId >= neighborsRef.current.indices.length) return [];
+    const { indices, distances } = neighborsRef.current;
+    const result = [];
+    for (let j = 0; j < indices[imageId].length; j++) {
+      result.push({ id: indices[imageId][j], distance: distances[imageId][j] });
+    }
+    return result;
+  }, []);
+
+  const findVisualPath = useCallback((startId, endId) => {
+    if (!neighborsRef.current) return null;
+    const { indices } = neighborsRef.current;
+    const n = indices.length;
+    if (startId < 0 || startId >= n || endId < 0 || endId >= n) return null;
+    if (startId === endId) return [startId];
+
+    // BFS on k-NN graph
+    const visited = new Set([startId]);
+    const parent = new Map();
+    const queue = [startId];
+    let found = false;
+
+    while (queue.length > 0 && !found) {
+      const current = queue.shift();
+      for (let j = 0; j < indices[current].length; j++) {
+        const neighbor = indices[current][j];
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          parent.set(neighbor, current);
+          if (neighbor === endId) { found = true; break; }
+          queue.push(neighbor);
+        }
+      }
+    }
+
+    if (!found) return null; // disconnected graph (unlikely with k=10)
+    // Reconstruct path
+    const path = [endId];
+    let cur = endId;
+    while (cur !== startId) {
+      cur = parent.get(cur);
+      path.unshift(cur);
+    }
+    return path;
+  }, []);
+
+  const flyToImage = useCallback((imageId) => {
+    const vp = viewportRef.current;
+    const p = pointsRef.current[imageId];
+    if (!vp || !p) return;
+    setSelectedItem({ id: p.id, x: p.x, y: p.y });
+    vp.animate({ position: { x: p.x, y: p.y }, scale: Math.max(vp.scale.x, 2), time: 400 });
+  }, []);
+
+  const NeighborThumb = useCallback(({ imageId, size = 64, onClick, highlight }) => {
+    const p = pointsRef.current[imageId];
+    if (!p) return null;
+    const _scale = size / thumbSizeRef.current;
+    const _as = atlasSizeRef.current;
+    return (
+      <button
+        onClick={onClick}
+        className={`rounded-lg overflow-hidden border-2 transition-all hover:scale-105 shrink-0 ${
+          highlight ? 'border-rp-love shadow-md' : 'border-rp-hlMed hover:border-rp-pine'
+        }`}
+        style={{
+          width: size,
+          height: size,
+          backgroundImage: `url(/data/atlas_${p.ai}.${atlasFormatRef.current})`,
+          backgroundPosition: `-${p.u * _scale}px -${p.v * _scale}px`,
+          backgroundSize: `${_as * _scale}px ${_as * _scale}px`,
+        }}
+        title={`Image #${imageId}`}
+      />
+    );
+  }, []);
 
   /* ── CSV filter helpers ── */
   const FILTER_SKIP_COLS = new Set(['id', 'filename', 'width', 'height']);
@@ -1376,6 +1484,100 @@ export default function App() {
                   </div>
                 ))}
               </div>
+
+              {/* ── Similar Images ── */}
+              {neighborsRef.current && (() => {
+                const neighbors = getNeighbors(selectedItem.id);
+                if (neighbors.length === 0) return null;
+                return (
+                  <div>
+                    <p className="text-[10px] font-semibold text-rp-muted uppercase tracking-widest mb-2">
+                      Similar Images ({neighbors.length})
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {neighbors.map(({ id: nId, distance }) => (
+                        <NeighborThumb
+                          key={nId}
+                          imageId={nId}
+                          size={56}
+                          highlight={visualPath && visualPath.includes(nId)}
+                          onClick={() => flyToImage(nId)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── Visual Path Navigator ── */}
+              {neighborsRef.current && (
+                <div>
+                  <p className="text-[10px] font-semibold text-rp-muted uppercase tracking-widest mb-2">
+                    Visual Path
+                  </p>
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      onClick={() => setPathEndpoints(prev => ({ ...prev, start: selectedItem.id }))}
+                      className={`flex-1 text-[10px] font-bold px-2 py-1.5 rounded-md border transition-all ${
+                        pathEndpoints.start === selectedItem.id
+                          ? 'bg-rp-foam/15 border-rp-foam text-rp-foam'
+                          : 'bg-rp-hlLow border-rp-hlMed text-rp-text hover:border-rp-foam'
+                      }`}
+                    >
+                      {pathEndpoints.start !== null ? `Start: #${pathEndpoints.start}` : 'Set Start'}
+                    </button>
+                    <button
+                      onClick={() => setPathEndpoints(prev => ({ ...prev, end: selectedItem.id }))}
+                      className={`flex-1 text-[10px] font-bold px-2 py-1.5 rounded-md border transition-all ${
+                        pathEndpoints.end === selectedItem.id
+                          ? 'bg-rp-iris/15 border-rp-iris text-rp-iris'
+                          : 'bg-rp-hlLow border-rp-hlMed text-rp-text hover:border-rp-iris'
+                      }`}
+                    >
+                      {pathEndpoints.end !== null ? `End: #${pathEndpoints.end}` : 'Set End'}
+                    </button>
+                  </div>
+                  {pathEndpoints.start !== null && pathEndpoints.end !== null && (
+                    <button
+                      onClick={() => {
+                        const path = findVisualPath(pathEndpoints.start, pathEndpoints.end);
+                        setVisualPath(path);
+                      }}
+                      className="w-full text-[10px] font-bold px-2 py-1.5 rounded-md bg-rp-pine text-white hover:bg-rp-pine/90 transition-all"
+                    >
+                      Find Path ({pathEndpoints.start} → {pathEndpoints.end})
+                    </button>
+                  )}
+                  {visualPath && (
+                    <div className="mt-2">
+                      <p className="text-[10px] text-rp-muted mb-1.5">
+                        Path: {visualPath.length} steps
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {visualPath.map((imgId, idx) => (
+                          <div key={`${imgId}-${idx}`} className="flex items-center gap-0.5">
+                            <NeighborThumb
+                              imageId={imgId}
+                              size={48}
+                              highlight={idx === 0 || idx === visualPath.length - 1}
+                              onClick={() => flyToImage(imgId)}
+                            />
+                            {idx < visualPath.length - 1 && (
+                              <ChevronRight size={10} className="text-rp-muted shrink-0" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => { setVisualPath(null); setPathEndpoints({ start: null, end: null }); }}
+                        className="text-[10px] font-semibold text-rp-love hover:underline mt-1.5"
+                      >
+                        Clear path
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <div className="flex flex-col items-center justify-center flex-1 text-center">

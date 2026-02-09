@@ -471,7 +471,38 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
         ).fit_predict(embeddings_pca)
         print(f"  MiniBatchKMeans: {time.time() - start:.1f}s")
 
-    return tsne_coords.astype(np.float32), cluster_ids.astype(np.int32)
+    return tsne_coords.astype(np.float32), cluster_ids.astype(np.int32), embeddings_pca
+
+
+# ── Stage 4b: k-Nearest Neighbors ────────────────────────────
+def compute_knn(embeddings_pca, k=10):
+    """Compute k-nearest neighbors for each image in PCA space.
+    Returns (indices, distances) each of shape (n, k)."""
+    from sklearn.neighbors import NearestNeighbors
+    print(f"\n  Computing {k}-nearest neighbors on {embeddings_pca.shape[0]} points ({embeddings_pca.shape[1]}-d)...")
+    start = time.time()
+    nn = NearestNeighbors(n_neighbors=k + 1, algorithm='ball_tree', metric='euclidean', n_jobs=-1)
+    nn.fit(embeddings_pca)
+    distances, indices = nn.kneighbors(embeddings_pca)
+    # Remove self (index 0 is always self)
+    indices = indices[:, 1:]  # shape (n, k)
+    distances = distances[:, 1:]
+    print(f"  k-NN: {time.time() - start:.1f}s")
+    return indices.astype(np.uint32), distances.astype(np.float32)
+
+
+def write_neighbors_bin(output_dir, knn_indices, knn_distances):
+    """Write neighbors.bin: for each image, k neighbor indices (uint32) + k distances (float32).
+    Header: uint32 count, uint32 k. Then count * k * (uint32 + float32) = count * k * 8 bytes."""
+    n, k = knn_indices.shape
+    path = os.path.join(output_dir, 'neighbors.bin')
+    with open(path, 'wb') as f:
+        f.write(struct.pack('<II', n, k))
+        for i in range(n):
+            for j in range(k):
+                f.write(struct.pack('<I', int(knn_indices[i, j])))
+                f.write(struct.pack('<f', float(knn_distances[i, j])))
+    print(f"  neighbors.bin: {n} × {k} ({os.path.getsize(path) / 1024 / 1024:.1f} MB)")
 
 
 # ── Stage 5: Dominant Color Extraction ────────────────────────
@@ -699,19 +730,24 @@ def main():
         print(f"  Cached embeddings to {emb_cache}")
 
     # Stage 4
-    print(f"\n[4/6] PCA → openTSNE → HDBSCAN...")
-    tsne_coords, cluster_ids = reduce_dimensions(embeddings, args.min_cluster_size, args.tsne_perplexity, args.thumb_size)
+    print(f"\n[4/7] PCA → openTSNE → HDBSCAN...")
+    tsne_coords, cluster_ids, embeddings_pca = reduce_dimensions(embeddings, args.min_cluster_size, args.tsne_perplexity, args.thumb_size)
+
+    # Stage 4b: k-NN
+    print(f"\n[5/7] k-Nearest Neighbors...")
+    knn_indices, knn_distances = compute_knn(embeddings_pca, k=10)
+    write_neighbors_bin(str(output_dir), knn_indices, knn_distances)
 
     # Stage 5
     meta_csv_path = os.path.join(str(output_dir), 'metadata.csv')
     skip_metadata = args.relayout and os.path.exists(meta_csv_path) and not args.metadata
     if skip_metadata:
-        print(f"\n[5/6] Skipping metadata (relayout mode, no external metadata)")
+        print(f"\n[6/7] Skipping metadata (relayout mode, no external metadata)")
         timestamps = None
         colors = None
         external_metadata = None
     else:
-        print(f"\n[5/6] Extracting metadata...")
+        print(f"\n[6/7] Extracting metadata...")
         timestamps = extract_timestamps(images)
         colors = extract_dominant_colors(images)
         print(f"  Timestamps: {sum(1 for t in timestamps if t > 0)}/{len(images)}")
@@ -725,7 +761,7 @@ def main():
                 print(f"  WARNING: External metadata not found: {meta_src}")
 
     # Stage 6
-    print(f"\n[6/6] Writing output files...")
+    print(f"\n[7/7] Writing output files...")
     write_binary_data(str(output_dir), tsne_coords, atlas_data, cluster_ids)
     write_manifest(str(output_dir), len(images), atlas_count, args.thumb_size, args.atlas_size)
     if timestamps is not None:
