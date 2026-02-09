@@ -911,6 +911,12 @@ export default function App() {
 
         app.stage.on('pointermove', (e) => {
           if (isCancelled) return;
+          // Skip hover interaction in data view
+          if (viewModeRef.current === 'data') {
+            if (lastHovered) { lastHovered.sprite.scale.set(1); lastHovered.sprite.tint = 0xffffff; lastHovered = null; }
+            setTooltip(null);
+            return;
+          }
           const worldPos = viewport.toWorld(e.global.x, e.global.y);
           const gx = Math.floor(worldPos.x / SPATIAL_CELL_SIZE);
           const gy = Math.floor(worldPos.y / SPATIAL_CELL_SIZE);
@@ -940,6 +946,7 @@ export default function App() {
         });
 
         app.stage.on('pointerdown', () => {
+          if (viewModeRef.current === 'data') return;
           if (lastHovered) {
             setSelectedItem({ id: lastHovered.id, x: lastHovered.x, y: lastHovered.y });
           }
@@ -1256,7 +1263,7 @@ export default function App() {
       )}
 
       {/* ── Cluster Labels (floating, shown in tsne + clusters views) ─ */}
-      {(viewMode === 'tsne' || viewMode === 'clusters') && clusterLabels.length > 0 && clusterLabels.map((cl, idx) => (
+      {showHotspots && (viewMode === 'tsne' || viewMode === 'clusters') && clusterLabels.length > 0 && clusterLabels.map((cl, idx) => (
         <div
           key={cl.id}
           className="absolute z-[35] pointer-events-none flex items-center gap-2 transition-all"
@@ -1298,6 +1305,12 @@ export default function App() {
             {/* Hotspots (larger cards) */}
             {!loading && hotspots.length > 0 && showHotspots && viewMode !== 'data' && (
               <div className="pointer-events-auto flex flex-col gap-2 max-w-[240px] max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[10px] font-semibold text-rp-muted uppercase tracking-wider">Hotspots</span>
+                  <button onClick={() => setShowHotspots(false)} className="p-1 rounded hover:bg-rp-hlLow transition-colors text-rp-muted hover:text-rp-text" title="Hide hotspots">
+                    <X size={12} />
+                  </button>
+                </div>
                 {hotspots.map((h, i) => {
                   const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
                   return (
