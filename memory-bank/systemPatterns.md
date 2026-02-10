@@ -57,7 +57,7 @@ uint32 k                    # Neighbors per image
 ## Key Patterns
 
 ### Component Architecture
-- **App.jsx** — Monolith React component (~1921 lines); all state, effects, and rendering in one file
+- **App.jsx** — Monolith React component (~1915 lines); all state, effects, and rendering in one file
 - **ImageSpaceLogo** — Standalone SVG component (Rose Pine Dawn themed)
 - **DetailThumb** — `React.memo` component with `useRef` + `useEffect` for canvas-based atlas crop rendering. Accepts `point`, `thumbSize`, `atlasFormat` props. Replaces previous `React.createRef()` + `setTimeout()` IIFE anti-pattern.
 - **NeighborThumb** — `useCallback`-wrapped inline component for k-NN thumbnails in detail panel
@@ -114,8 +114,7 @@ Minimap dots are rendered to an offscreen canvas once (cached by identity on `md
 - **Left column** (when > sm): Hotspot cards (scrollable, 240px wide)
 - **Top-right**: View mode tabs + categorical filter bar (dropdowns with search, multi-select checkboxes)
 - **Right column**: Properties toggle button → collapsible range slider bubble cards (brightness, complexity, edge density, uniqueness, cluster fit) stacked with gap-2
-- **Bottom-left**: View mode description card
-- **Bottom-right**: Zoom controls (no stats card)
+- **Bottom-right**: Zoom controls (with justify-end, no left-side element)
 - **Right edge**: Detail panel (slide-in, toggled via vertical tab)
 - **Bottom**: Timeline bar (in timeline mode only)
 - **Bottom-left corner**: Minimap canvas (in t-SNE mode only)
@@ -148,4 +147,4 @@ Floating React `<div>` labels track world→screen coordinates via `viewport.toS
 ## Git
 - Repo: https://github.com/nabsiddiqui/imagespace.git
 - Branch: master
-- Latest commit: 299fc94 (performance optimizations + README)
+- Latest commit: ef8155c (measured benchmarks) → plus session 3 final changes

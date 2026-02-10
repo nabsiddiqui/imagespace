@@ -55,12 +55,13 @@
 - [x] Comprehensive README with architecture, optimizations, scripts
 - [x] Memory bank documentation (6 files)
 
-## What's Left 🔧
+## What's Left 🔧 (Intentionally Deferred — Project Complete)
+These are future enhancement ideas, not blockers:
 - [ ] Export filtered set (CSV download of visible images)
 - [ ] Bookmark/favorites with localStorage
 - [ ] Keyboard shortcuts (arrows, Esc, 1-5 for views)
 - [ ] Permalink/share state via URL hash
-- [ ] Architecture: split App.jsx monolith (~1921 lines)
+- [ ] Architecture: split App.jsx monolith (~1915 lines)
 - [ ] GitHub Pages deployment guide
 - [ ] Carousel view mode (code exists but not in UI tabs)
 

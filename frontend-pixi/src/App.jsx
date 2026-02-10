@@ -1483,14 +1483,14 @@ export default function App() {
             {Object.keys(continuousFilterOptions).length > 0 && (
               <button
                 onClick={() => setShowRangePanel(p => !p)}
-                className={`pointer-events-auto rp-card flex items-center gap-1.5 px-3 py-1.5 transition-all cursor-pointer hover:shadow-rp-lg ${
+                className={`pointer-events-auto cursor-pointer rp-card flex items-center gap-1.5 px-3 py-1.5 transition-all hover:shadow-rp-lg ${
                   showRangePanel || activeRangeCount > 0
                     ? 'ring-1 ring-rp-pine/30'
                     : ''
                 }`}
               >
-                <SlidersHorizontal size={12} className={activeRangeCount > 0 ? 'text-rp-pine' : 'text-rp-muted'} />
-                <span className={`text-[11px] font-semibold ${activeRangeCount > 0 ? 'text-rp-pine' : 'text-rp-subtle'}`}>
+                <SlidersHorizontal size={12} className={`pointer-events-none ${activeRangeCount > 0 ? 'text-rp-pine' : 'text-rp-muted'}`} />
+                <span className={`pointer-events-none text-[11px] font-semibold ${activeRangeCount > 0 ? 'text-rp-pine' : 'text-rp-subtle'}`}>
                   Properties{activeRangeCount > 0 ? ` (${activeRangeCount})` : ''}
                 </span>
               </button>
@@ -1511,14 +1511,14 @@ export default function App() {
                           return hotId;
                         });
                       }}
-                      className="text-[9px] font-semibold text-rp-love hover:underline"
+                      className="cursor-pointer text-[9px] font-semibold text-rp-love hover:underline"
                     >
                       Reset all
                     </button>
                   )}
                   <button
                     onClick={() => setShowRangePanel(false)}
-                    className="pointer-events-auto p-0.5 rounded hover:bg-rp-hlLow transition-colors text-rp-muted"
+                    className="cursor-pointer pointer-events-auto p-0.5 rounded hover:bg-rp-hlLow transition-colors text-rp-muted"
                   >
                     <X size={12} />
                   </button>
@@ -1658,13 +1658,7 @@ export default function App() {
             );
           })()}
 
-          <div className="flex justify-between items-end gap-3">
-          {/* View info */}
-          <div className="pointer-events-auto rp-card px-3 py-2">
-            <p className="text-[10px] font-semibold text-rp-muted uppercase tracking-wider">
-              {VIEW_MODES[viewMode].desc}
-            </p>
-          </div>
+          <div className="flex justify-end items-end gap-3">
 
           {/* Zoom controls */}
           <div className="pointer-events-auto flex items-center gap-1 rp-card px-2 py-1.5">
