@@ -1,7 +1,7 @@
 # ImageSpace — Active Context
 
-## Current State (Task 7 / Session 2)
-Range slider filters redesigned as collapsible bottom panel. Canvas-based detail panel thumbnail.
+## Current State (Task 11 / Session 2)
+Property slider bubble cards inline in right column. Uniform zoom across all views. Canvas thumbnail. Pushed to GitHub.
 
 ### Recent Changes (This Session)
 - **Pipeline: image features** — Added `compute_image_features()` computing brightness (BT.601 luminance), complexity (Shannon entropy), edge density (Sobel magnitude), all normalized 0-100
@@ -18,7 +18,9 @@ Range slider filters redesigned as collapsible bottom panel. Canvas-based detail
 - **Auto-open detail panel** on image click
 - **Pointer cursor** on image hover
 - **Thumbnail fix** — switched from CSS `backgroundImage` to canvas `drawImage()` for atlas crop rendering in detail panel (CSS approach fails with large 4096×4096 atlases)
-- **Range slider redesign** — moved from bottom panel to right-side vertical bubble cards (200px wide, stacked individually, each with own border/shadow). Shifts left when detail panel is open. Toggle via "Properties" button in top-right filter area. Header row has "Reset all" + close button.
+- **Range slider redesign** — inline bubble cards in right flex column (200px wide), stacked below Properties toggle button. Each card individually styled with rounded-xl border. Has "Reset all" + close controls. `cursor-default` on cards.
+- **Uniform zoom** — removed `scale *= 1.8/1.2` multiplier, removed timeline left-edge centering. All views now fit content bounds equally and center on content center.
+- **Simplified logo** — removed dynamic "50K images" subtitle, just logo + "ImageSpace" text
 - **`showRangePanel` state** — controls visibility of bottom range panel
 
 ### Metadata CSV Columns (WikiArt)
@@ -40,9 +42,9 @@ id, filename, cluster, timestamp, dominant_color (12 unique), artist (1,092), st
 - **Clear buttons**: Per-bar reset for range sliders, per-column and global clear for all filters.
 
 ## Next Steps
-- Test in browser (range sliders bottom panel, canvas thumbnail detail panel)
+- Test in browser (inline property cards, canvas thumbnail, centered views)
 - Consider: export filtered set, bookmarks, keyboard shortcuts, permalink state
-- Architecture: split App.jsx monolith (~1905 lines now)
+- Architecture: split App.jsx monolith (~1885 lines now)
 - Never use Simple Browser
 
 ## Key Rules

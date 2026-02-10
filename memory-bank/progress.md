@@ -37,7 +37,7 @@
 - [x] WikiArt dataset processing (49,585 images) with all features
 
 ## What's Left 🔧
-- [ ] Test range sliders in browser
+- [ ] Test property bubble cards in browser
 - [ ] Verify canvas thumbnail shows in detail panel (switched from CSS bg to drawImage)
 - [ ] Export filtered set (CSV download of visible images)
 - [ ] Bookmark/favorites with localStorage

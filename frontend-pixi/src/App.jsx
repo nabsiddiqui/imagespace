@@ -25,6 +25,33 @@ const ImageSpaceLogo = ({ size = 40 }) => (
   </svg>
 );
 
+/* ── Detail Panel Thumbnail (proper hooks instead of createRef+setTimeout) ── */
+const DetailThumb = React.memo(({ point, thumbSize, atlasFormat, displaySize = 256 }) => {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    if (!point) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      ctx.clearRect(0, 0, displaySize, displaySize);
+      ctx.drawImage(img, point.u, point.v, thumbSize, thumbSize, 0, 0, displaySize, displaySize);
+    };
+    img.src = `/data/atlas_${point.ai}.${atlasFormat}`;
+  }, [point?.ai, point?.u, point?.v, thumbSize, atlasFormat, displaySize]);
+  return (
+    <canvas
+      ref={canvasRef}
+      width={displaySize}
+      height={displaySize}
+      className="rounded-xl border border-rp-hlMed mx-auto bg-rp-hlLow"
+      style={{ width: displaySize, height: displaySize, imageRendering: 'auto' }}
+    />
+  );
+});
+
 /* ── View Mode Layouts ────────────────────────── */
 const VIEW_MODES = {
   tsne: { label: 't-SNE', icon: 'scatter', desc: 'Visual similarity layout' },
@@ -254,7 +281,7 @@ async function computeAvgColors(points, atlasTextures, thumbSize, onProgress) {
   canvas.width = 1;
   canvas.height = 1;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  const batch = 3000;
+  const batch = 8000;
   for (let i = 0; i < points.length; i++) {
     if (i > 0 && i % batch === 0) {
       if (onProgress) onProgress(i);
@@ -358,14 +385,16 @@ export default function App() {
       }
     }
 
-    // Range filters — intersect with current set
+    // Range filters — use pre-parsed Float32Arrays for fast comparison
     const activeRanges = Object.entries(ranges).filter(([, v]) => v !== null);
     if (activeRanges.length > 0 && meta) {
       const rangeSet = new Set();
+      const numCols = meta.numericCols || {};
       for (let i = 0; i < meta.rows.length; i++) {
         let pass = true;
         for (const [col, [min, max]] of activeRanges) {
-          const val = parseFloat(meta.rows[i][col]);
+          const arr = numCols[col];
+          const val = arr ? arr[i] : parseFloat(meta.rows[i][col]);
           if (isNaN(val) || val < min || val > max) { pass = false; break; }
         }
         if (pass) rangeSet.add(i);
@@ -658,14 +687,15 @@ export default function App() {
         extractClusterThumbs(clusters, pointsRef.current, atlasTextures, currentThumbSize);
         setHotspots(clusters);
 
-        /* Compute average colors */
-        setStatusMsg('Computing image colors...');
-        await computeAvgColors(pointsRef.current, atlasTextures, currentThumbSize, (i) => {
-          setLoadProgress(98 + Math.round((i / manifest.count) * 1));
-        });
-        setColorsReady(true);
+        /* Defer average color computation — don't block initial render */
+        setStatusMsg('Ready — computing colors in background...');
+        // Fire-and-forget: colors compute asynchronously after UI is interactive
+        (async () => {
+          await new Promise(r => setTimeout(r, 100)); // let UI paint first
+          await computeAvgColors(pointsRef.current, atlasTextures, currentThumbSize, () => {});
+          setColorsReady(true);
 
-        /* Build minimap data (uses t-SNE coords + average colors) */
+          /* Build minimap data (uses t-SNE coords + average colors) */
         {
           const pts = pointsRef.current;
           let mMinX = Infinity, mMinY = Infinity, mMaxX = -Infinity, mMaxY = -Infinity;
@@ -689,6 +719,7 @@ export default function App() {
           }
           minimapDataRef.current = { minX: mMinX, minY: mMinY, rangeX, rangeY, dots };
         }
+        })(); // end deferred color + minimap computation
 
         /* Load metadata CSV (optional) */
         try {
@@ -721,7 +752,21 @@ export default function App() {
               }
               // Exclude 'id' and 'timestamp' from filter columns
               const filterCols = catCols.filter(c => c !== 'timestamp');
-              setMetadata({ columns: filterCols, rows, allColumns: catCols });
+
+              // Pre-parse numeric columns into Float32Arrays for fast range filtering
+              const NUMERIC_COLS = ['brightness', 'complexity', 'edge_density', 'outlier_score', 'cluster_confidence', 'width', 'height'];
+              const numericCols = {};
+              for (const col of NUMERIC_COLS) {
+                if (columns.includes(col)) {
+                  const arr = new Float32Array(rows.length);
+                  for (let i = 0; i < rows.length; i++) {
+                    arr[i] = parseFloat(rows[i][col]) || 0;
+                  }
+                  numericCols[col] = arr;
+                }
+              }
+
+              setMetadata({ columns: filterCols, rows, allColumns: catCols, numericCols });
             }
           }
         } catch (_) { /* metadata.csv is optional */ }
@@ -843,18 +888,27 @@ export default function App() {
             setZoomLevel(viewport.scale.x);
             setStats(s => ({ ...s, fps: Math.round(app.ticker.FPS) }));
 
-            // Draw minimap
+            // Draw minimap — use cached offscreen canvas for static dots
             const mc = minimapRef.current;
             const md = minimapDataRef.current;
             if (mc && md && viewModeRef.current === 'tsne') {
               const ctx = mc.getContext('2d');
               const W = mc.width, H = mc.height;
-              ctx.clearRect(0, 0, W, H);
-              // Draw dots
-              for (const d of md.dots) {
-                ctx.fillStyle = `rgb(${d.r},${d.g},${d.b})`;
-                ctx.fillRect(d.nx * (W - 4) + 2, d.ny * (H - 4) + 2, 2, 2);
+              // Cache dot layer to offscreen canvas (only rebuild when md reference changes)
+              if (md._cachedDots !== md.dots) {
+                const oc = md._offscreen || (md._offscreen = document.createElement('canvas'));
+                oc.width = W; oc.height = H;
+                const octx = oc.getContext('2d');
+                octx.clearRect(0, 0, W, H);
+                for (const d of md.dots) {
+                  octx.fillStyle = `rgb(${d.r},${d.g},${d.b})`;
+                  octx.fillRect(d.nx * (W - 4) + 2, d.ny * (H - 4) + 2, 2, 2);
+                }
+                md._cachedDots = md.dots;
               }
+              // Blit cached dots + draw viewport rectangle
+              ctx.clearRect(0, 0, W, H);
+              ctx.drawImage(md._offscreen, 0, 0);
               // Draw viewport rectangle
               const topLeft = viewport.toWorld(0, 0);
               const botRight = viewport.toWorld(viewport.screenWidth, viewport.screenHeight);
@@ -923,14 +977,15 @@ export default function App() {
           const gx = Math.floor(worldPos.x / SPATIAL_CELL_SIZE);
           const gy = Math.floor(worldPos.y / SPATIAL_CELL_SIZE);
           let closest = null;
-          let minDist = 50 / viewport.scale.x;
+          let minDistSq = (50 / viewport.scale.x) ** 2;
           for (let ix = -1; ix <= 1; ix++) {
             for (let iy = -1; iy <= 1; iy++) {
               const cell = spatialHashRef.current[`${gx + ix},${gy + iy}`];
               if (cell) {
                 for (const p of cell) {
-                  const dist = Math.hypot(p.x - worldPos.x, p.y - worldPos.y);
-                  if (dist < minDist) { minDist = dist; closest = p; }
+                  const ddx = p.x - worldPos.x, ddy = p.y - worldPos.y;
+                  const dsq = ddx * ddx + ddy * ddy;
+                  if (dsq < minDistSq) { minDistSq = dsq; closest = p; }
                 }
               }
             }
@@ -1138,6 +1193,7 @@ export default function App() {
     return opts;
   }, [metadata]);
 
+  const rangePendingRef = useRef(null);
   const handleRangeChange = useCallback((col, values) => {
     setRangeFilters(prev => {
       const next = { ...prev };
@@ -1148,10 +1204,16 @@ export default function App() {
       } else {
         next[col] = values;
       }
-      setActiveHotspot(hotId => {
-        const visSet = computeVisibleSet(hotId, csvFilters, hotspots, metadata, next);
-        relayout(viewMode, visSet);
-        return hotId;
+      // Debounce the expensive relayout to at most once per animation frame
+      if (rangePendingRef.current) cancelAnimationFrame(rangePendingRef.current);
+      const captured = { ...next };
+      rangePendingRef.current = requestAnimationFrame(() => {
+        rangePendingRef.current = null;
+        setActiveHotspot(hotId => {
+          const visSet = computeVisibleSet(hotId, csvFilters, hotspots, metadata, captured);
+          relayout(viewMode, visSet);
+          return hotId;
+        });
       });
       return next;
     });
@@ -1421,7 +1483,7 @@ export default function App() {
             {Object.keys(continuousFilterOptions).length > 0 && (
               <button
                 onClick={() => setShowRangePanel(p => !p)}
-                className={`pointer-events-auto rp-card flex items-center gap-1.5 px-3 py-1.5 transition-all ${
+                className={`pointer-events-auto rp-card flex items-center gap-1.5 px-3 py-1.5 transition-all cursor-pointer hover:shadow-rp-lg ${
                   showRangePanel || activeRangeCount > 0
                     ? 'ring-1 ring-rp-pine/30'
                     : ''
@@ -1469,7 +1531,7 @@ export default function App() {
                   return (
                     <div
                       key={col}
-                      className={`pointer-events-auto rounded-xl border px-3 py-2 backdrop-blur-sm shadow-sm transition-all cursor-default ${
+                      className={`pointer-events-auto rounded-xl border px-3 py-2 backdrop-blur-sm shadow-sm transition-all ${
                         isActive
                           ? 'bg-rp-surface/95 border-rp-pine/30 shadow-md'
                           : 'bg-rp-surface/90 border-rp-hlHigh hover:border-rp-hlMed'
@@ -1681,33 +1743,33 @@ export default function App() {
                 <div className="h-0.5 w-10 bg-rp-love rounded-full mt-2" />
               </div>
               {/* Thumbnail — canvas-based extraction from atlas */}
-              {pointsRef.current[selectedItem.id] && (() => {
-                const _p = pointsRef.current[selectedItem.id];
-                const _displaySize = 256;
-                const _ts = thumbSizeRef.current;
-                const canvasRefDetail = React.createRef();
-                const drawThumb = () => {
-                  const canvas = canvasRefDetail.current;
-                  if (!canvas) return;
-                  const ctx = canvas.getContext('2d');
-                  const img = new window.Image();
-                  img.crossOrigin = 'anonymous';
-                  img.onload = () => {
-                    ctx.clearRect(0, 0, _displaySize, _displaySize);
-                    ctx.drawImage(img, _p.u, _p.v, _ts, _ts, 0, 0, _displaySize, _displaySize);
-                  };
-                  img.src = `/data/atlas_${_p.ai}.${atlasFormatRef.current}`;
-                };
-                // Use setTimeout to ensure canvas ref is mounted
-                setTimeout(drawThumb, 0);
+              {pointsRef.current[selectedItem.id] && (
+                <DetailThumb
+                  point={pointsRef.current[selectedItem.id]}
+                  thumbSize={thumbSizeRef.current}
+                  atlasFormat={atlasFormatRef.current}
+                />
+              )}
+              {/* ── Similar Images ── */}
+              {neighborsRef.current && (() => {
+                const neighbors = getNeighbors(selectedItem.id);
+                if (neighbors.length === 0) return null;
                 return (
-                  <canvas
-                    ref={canvasRefDetail}
-                    width={_displaySize}
-                    height={_displaySize}
-                    className="rounded-xl border border-rp-hlMed mx-auto bg-rp-hlLow"
-                    style={{ width: _displaySize, height: _displaySize, imageRendering: 'auto' }}
-                  />
+                  <div>
+                    <p className="text-[10px] font-semibold text-rp-muted uppercase tracking-widest mb-2">
+                      Similar Images ({neighbors.length})
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {neighbors.map(({ id: nId, distance }) => (
+                        <NeighborThumb
+                          key={nId}
+                          imageId={nId}
+                          size={56}
+                          onClick={() => flyToImage(nId)}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 );
               })()}
               <div className="space-y-2">
@@ -1731,29 +1793,6 @@ export default function App() {
                   </div>
                 ))}
               </div>
-
-              {/* ── Similar Images ── */}
-              {neighborsRef.current && (() => {
-                const neighbors = getNeighbors(selectedItem.id);
-                if (neighbors.length === 0) return null;
-                return (
-                  <div>
-                    <p className="text-[10px] font-semibold text-rp-muted uppercase tracking-widest mb-2">
-                      Similar Images ({neighbors.length})
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {neighbors.map(({ id: nId, distance }) => (
-                        <NeighborThumb
-                          key={nId}
-                          imageId={nId}
-                          size={56}
-                          onClick={() => flyToImage(nId)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
             </>
           ) : (
             <div className="flex flex-col items-center justify-center flex-1 text-center">
