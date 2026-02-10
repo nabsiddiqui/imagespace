@@ -1,81 +1,108 @@
 # ImageSpace — Progress
 
 ## What Works ✅
-- [x] PixiJS WebGL rendering of 50K sprites with atlas textures
-- [x] 5 view modes: t-SNE, Grid, Color, Timeline, Carousel
-- [x] Animated transitions between view modes (lerp 0.08)
-- [x] Spatial hash hover detection + tooltip (deferred rebuild for perf)
-- [x] HDBSCAN density-based clustering with noise reassignment
-- [x] Hotspot cards (left column, visible in ALL modes including carousel)
-- [x] CSV metadata filters (multi-select checkboxes, additive/union, ≤200 unique values)
-- [x] **Range slider filters (brightness, complexity, edge density, uniqueness, cluster fit)**
-- [x] Combined filtering (hotspot ∩ CSV ∩ range sliders)
-- [x] Detail panel with canvas-based atlas crop (drawImage from loaded atlas)
+### Viewer
+- [x] PixiJS WebGL rendering of 50K sprites with WebP atlas textures (49 atlases, 128px thumbs)
+- [x] 4 view modes: t-SNE, Grid, Color, Timeline (animated transitions, lerp 0.08)
+- [x] Spatial hash hover detection + tooltip (deferred rebuild, squared distance)
+- [x] Hotspot cards (left column, HDBSCAN clusters with thumbnails)
+- [x] CSV metadata filters (multi-select dropdown checkboxes, additive/union, ≤200 unique values)
+- [x] Range slider filters (brightness, complexity, edge density, uniqueness, cluster fit)
+- [x] Combined filtering (hotspot ∩ CSV ∩ range sliders) via `computeVisibleSet` with 5 params
+- [x] Detail panel: canvas-based thumbnail (DetailThumb component), similar images (k-NN), metadata
 - [x] Detail panel auto-opens on image click
-- [x] Pointer cursor on image hover
+- [x] Pointer cursor on image hover (scale 1.5x, gold tint)
 - [x] Stats modal with dynamic atlas count
-- [x] Rose Pine Dawn theme with Inter font + custom logo
-- [x] Timeline view with interactive dual-handle slider
-- [x] Color view sorted by average hue
-- [x] Carousel with filtered navigation + hotspots
-- [x] Content-bounds viewport fitting
+- [x] Rose Pine Dawn theme with Inter font + custom SVG logo
+- [x] Timeline view with dual-handle slider + date indicator
+- [x] Color view sorted by average hue (deferred computation)
+- [x] Content-bounds viewport fitting (uniform, no zoom multiplier)
 - [x] Pan/zoom/pinch via pixi-viewport
-- [x] Minimap with crosshair cursor
-- [x] Similar images (k-NN neighbors in detail panel)
+- [x] Minimap with cached offscreen canvas + viewport rectangle (t-SNE mode)
+- [x] Similar images (k-NN neighbors in detail panel, clickable fly-to)
 - [x] Cluster size indicators in hotspot cards
+- [x] CLIP cluster labels (floating, 100ms throttle)
+- [x] Properties button → collapsible range slider bubble cards (right column)
+
+### Pipeline
+- [x] ONNX CLIP → PCA → openTSNE → HDBSCAN → k-NN → features → WebP atlases
+- [x] Brightness (BT.601 luminance, 0-100)
+- [x] Complexity (Shannon entropy, 0-100)
+- [x] Edge density (Sobel magnitude, 0-100)
+- [x] Outlier scores (mean k-NN distance, 0-100)
+- [x] Cluster confidence (HDBSCAN probabilities, 0-100)
 - [x] CLIP cluster labels
-- [x] **Pipeline: brightness, complexity, edge density features**
-- [x] **Pipeline: outlier scores (mean k-NN distance)**
-- [x] **Pipeline: cluster confidence (HDBSCAN probabilities)**
-- [x] **Standalone feature extraction script (`add_features.py`)**
-- [x] Python pipeline (ONNX CLIP → PCA → openTSNE → HDBSCAN → WebP atlases)
+- [x] k-NN neighbors (cosine similarity on PCA embeddings)
+- [x] Standalone feature extraction script (`add_features.py`)
+- [x] Google Colab notebook for remote processing
+- [x] WikiArt dataset processed (49,585 images)
+
+### Performance Optimizations
+- [x] Float32Array pre-parsing for numeric metadata columns
+- [x] Deferred computeAvgColors (fire-and-forget async, 8K batch, non-blocking)
+- [x] requestAnimationFrame throttle on range slider handleRangeChange
+- [x] DetailThumb: React.memo + useRef + useEffect (no createRef in render)
+- [x] Offscreen canvas cache for minimap dots
+- [x] Squared distance comparison in hover (no Math.hypot)
 - [x] Parallel atlas loading (Promise.all)
 - [x] Parallel PIXI dynamic imports
-- [x] Throttled React state updates in ticker
-- [x] Google Colab notebook for remote processing
-- [x] Git version control (pushed to GitHub)
-- [x] WikiArt dataset processing (49,585 images) with all features
+- [x] Throttled React state updates in ticker (200ms)
+- [x] movingSet for animation (only active sprites iterated)
+- [x] container.boundsArea set to avoid O(n) bounds recalculation
+
+### Infrastructure
+- [x] Git version control (GitHub: nabsiddiqui/imagespace)
+- [x] Comprehensive README with architecture, optimizations, scripts
+- [x] Memory bank documentation (6 files)
 
 ## What's Left 🔧
-- [ ] Test property bubble cards in browser
-- [ ] Verify canvas thumbnail shows in detail panel (switched from CSS bg to drawImage)
 - [ ] Export filtered set (CSV download of visible images)
 - [ ] Bookmark/favorites with localStorage
 - [ ] Keyboard shortcuts (arrows, Esc, 1-5 for views)
 - [ ] Permalink/share state via URL hash
-- [ ] Architecture: split App.jsx monolith (~1860 lines)
+- [ ] Architecture: split App.jsx monolith (~1921 lines)
 - [ ] GitHub Pages deployment guide
-- [ ] Defer computeAvgColors to post-initial-render
+- [ ] Carousel view mode (code exists but not in UI tabs)
 
 ## Not Wanted
 - Search/filter by filename or text (user explicitly declined)
 
 ## Known Issues
-- Color computation blocks main thread ~3-5s at load (should defer)
 - Binary format writes t-SNE coords to both UMAP and t-SNE slots (redundant)
-- 870MB+ GPU memory for 49 atlases (edge of integrated GPU budget → ~30fps)
-- Vite chunk size warning (pixi.js ~838KB)
-- CSV parser doesn't handle RFC 4180 quoting
+- ~870MB GPU memory for 49 atlases (edge of integrated GPU budget → ~30fps)
+- Vite chunk size warning (pixi.js ~838KB) — expected, acceptable
+- CSV parser doesn't handle RFC 4180 quoting (simple comma split)
 - Python HTTP server needs absolute path for `-d` flag from background terminals
+- Color view unavailable until background `computeAvgColors` completes
 
 ## Design Decisions History
-1-14. (See previous entries)
-15. Detail panel auto-opens on image click
-16. Pointer cursor on image hover
-17. Thumbnail rendering hardened (Math.round, bg fallback, no-repeat)
-18. **Continuous features computed from atlas thumbnails (brightness, complexity, edge density)**
-19. **Outlier scores from k-NN mean distance (0-100 scale)**
-20. **Cluster confidence from HDBSCAN probabilities (0-100 scale)**
-21. **Range sliders for continuous columns in viewer filter bar**
-22. **`add_features.py` standalone script for updating existing datasets**
+1. PixiJS over Three.js (2D sprites, simpler)
+2. Binary format over JSON (24 bytes vs ~200 bytes per image)
+3. Atlas textures over individual images (49 fetches vs 50K)
+4. HDBSCAN over K-means (density-based, better cluster quality)
+5. openTSNE over sklearn (FFT-accelerated, 10-20x faster)
+6. Rose Pine Dawn palette (clean, academic aesthetic)
+7. Single monolith App.jsx (rapid iteration, may split later)
+8. WebP over JPEG (30% smaller, modern browser support)
+9. Deferred spatial hash rebuild (not per-frame)
+10. Multi-select union for CSV filters, intersection across filter types
+11. DetailThumb as separate React.memo component (proper lifecycle)
+12. Float32Array pre-parsing for numeric metadata (eliminates parseFloat)
+13. Offscreen canvas for minimap (cache dot layer, only redraw viewport rect)
+14. requestAnimationFrame throttle for range sliders (not per-pixel)
+15. Fire-and-forget async for computeAvgColors (non-blocking initial render)
 
-## CPU Pipeline Timing Estimates (50K images)
+## CPU Pipeline Timing Estimates (50K images, Apple M3 Air)
 | Stage | Time |
 |---|---|
-| Atlas generation (WebP) | ~15-25 min |
-| CLIP embedding (ONNX CPU) | ~3-5 hours |
-| PCA + openTSNE + HDBSCAN | ~20-50 min |
-| k-NN + cluster labels | ~3-5 min |
-| **Image features (brightness, complexity, edge)** | **~2 min** |
-| **Total (ONNX CPU)** | **~4-6 hours** |
-| **Total (GPU/Colab)** | **~45-90 min** |
+| Atlas generation (128px WebP) | ~7.5 min |
+| CLIP embedding (ONNX CPU) | ~27 min |
+| PCA (512d → 50d) | ~0.1s |
+| openTSNE (FFT) | ~24s |
+| Overlap removal | ~3s |
+| HDBSCAN | ~16s |
+| Image features (brightness, complexity, edge) | ~80s |
+| **Total (first run)** | **~45 min** |
+| **Total (cached embeddings)** | **~15 min** |
+| **Total (relayout only)** | **~45s** |
+| **Feature extraction only (add_features.py)** | **~80s** |

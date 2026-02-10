@@ -1,53 +1,53 @@
 # ImageSpace — Active Context
 
-## Current State (Task 11 / Session 2)
-Property slider bubble cards inline in right column. Uniform zoom across all views. Canvas thumbnail. Pushed to GitHub.
+## Current State (End of Session 2)
+Project is **feature-complete and performance-optimized**. All features working, pushed to GitHub (commit 299fc94). No active work items.
 
-### Recent Changes (This Session)
-- **Pipeline: image features** — Added `compute_image_features()` computing brightness (BT.601 luminance), complexity (Shannon entropy), edge density (Sobel magnitude), all normalized 0-100
-- **Pipeline: outlier scores** — Mean k-NN distance normalized to 0-100 (uses existing neighbors data)
-- **Pipeline: cluster confidence** — HDBSCAN `probabilities_` (or inverse-centroid-distance for KMeans fallback), 0-100 scale
-- **Pipeline: updated `write_metadata_csv`** — Accepts and writes new feature columns
-- **Pipeline: returns 4 values** — `reduce_dimensions()` now returns `(tsne_coords, cluster_ids, embeddings_pca, cluster_probs)`
-- **Standalone script: `scripts/add_features.py`** — Extracts features from existing atlas thumbnails without re-running full pipeline. Ran successfully on WikiArt dataset (~80s for 49,585 images)
-- **Viewer: `continuousFilterOptions`** — Auto-detects known continuous columns (`brightness`, `complexity`, `edge_density`, `outlier_score`, `cluster_confidence`) with min/max ranges
-- **Viewer: `rangeFilters` state** — `{ col: [min, max] }` for active range filters
-- **Viewer: `handleRangeChange`** — Callback that updates range filters and recomputes visible set
-- **Viewer: range slider UI** — Dual-handle range sliders below checkbox filter bar, matching Rose Pine Dawn theme
-- **Viewer: `computeVisibleSet` updated** — Now takes 5th parameter `ranges` for continuous filters, intersects with existing hotspot + CSV filters
-- **Auto-open detail panel** on image click
-- **Pointer cursor** on image hover
-- **Thumbnail fix** — switched from CSS `backgroundImage` to canvas `drawImage()` for atlas crop rendering in detail panel (CSS approach fails with large 4096×4096 atlases)
-- **Range slider redesign** — inline bubble cards in right flex column (200px wide), stacked below Properties toggle button. Each card individually styled with rounded-xl border. Has "Reset all" + close controls. `cursor-default` on cards.
-- **Uniform zoom** — removed `scale *= 1.8/1.2` multiplier, removed timeline left-edge centering. All views now fit content bounds equally and center on content center.
-- **Simplified logo** — removed dynamic "50K images" subtitle, just logo + "ImageSpace" text
-- **`showRangePanel` state** — controls visibility of bottom range panel
+### What Was Done (Session 2 — Comprehensive Summary)
+1. **Server setup** — Built + served on http://localhost:5174 (Vite 5 build, Python HTTP server with absolute `-d` path)
+2. **Detail panel fixes** — Canvas-based thumbnail (drawImage from atlas), auto-open on click, pointer cursor on hover
+3. **Pipeline features** — Added `compute_image_features()` to imagespace.py: brightness (BT.601), complexity (Shannon entropy), edge density (Sobel), all 0-100. Added outlier scores (mean k-NN distance). Added cluster confidence (HDBSCAN probabilities).
+4. **Standalone feature script** — Created `scripts/add_features.py` for adding features to existing datasets. Ran on WikiArt (~80s for 49,585 images).
+5. **Range slider filters** — `rangeFilters` state, `handleRangeChange` callback, `continuousFilterOptions` useMemo, integrated with `computeVisibleSet` (5th parameter). Dual-handle sliders as inline bubble cards in right column.
+6. **UI polish** — Multiple iterations on Properties button placement, zoom levels (removed multiplier), timeline centering (center on content), logo simplification (removed subtitle), detail panel reorder (Image→Thumbnail→Similar→Metadata), cursor fixes.
+7. **Performance optimization (adversarial critic loop)**:
+   - Float32Array pre-parsing for numeric metadata columns
+   - Deferred `computeAvgColors` as fire-and-forget async (100ms delay, 8K batch)
+   - `requestAnimationFrame` throttle on `handleRangeChange`
+   - `DetailThumb` React.memo component (replaced createRef+setTimeout IIFE)
+   - Offscreen canvas cache for minimap dots
+   - Squared distance in hover (replaced Math.hypot)
+8. **README** — Comprehensive rewrite with architecture diagram, data file table, optimization details, scripts table
+9. **GitHub push** — Commit 299fc94
 
-### Metadata CSV Columns (WikiArt)
-id, filename, cluster, timestamp, dominant_color (12 unique), artist (1,092), style (27), title (47,121), width, height, **brightness** (0-100), **complexity** (0-100), **edge_density** (0-100), **outlier_score** (0-100), **cluster_confidence** (0-100)
+### Metadata CSV Columns (WikiArt, 15 columns)
+`id, filename, cluster, timestamp, dominant_color (12 unique), artist (1,092), style (27), title (47,121), width, height, brightness (0-100), complexity (0-100), edge_density (0-100), outlier_score (0-100), cluster_confidence (0-100)`
 
 ## Active View Modes
 - **t-SNE** — Visual similarity layout (openTSNE FFT-accelerated)
 - **Grid** — Square grid layout
-- **Color** — Sorted by average hue
+- **Color** — Sorted by average hue (requires colors computed in background)
 - **Timeline** — Sorted by extracted year/timestamp
-- **Carousel** — Full-screen single image with hotspots visible
 
 ## Key Interactions
-- **Range sliders** (right-side bubble cards, toggle via "Properties" button in top-right): Stacked vertical cards for brightness, complexity, edge density, uniqueness, cluster fit. Each card is individually styled. Shifts left when detail panel open. Intersects with all other filters.
-- **Click image** → detail panel auto-opens
-- **Hover image** → pointer cursor, scale 1.5x, gold tint, tooltip
-- **Hotspot cards** (left column): HDBSCAN clusters. Click to filter.
-- **CSV Filters** (top-right, checkboxes): Multi-select, additive/union.
+- **Range sliders** (right-side bubble cards, toggle via "Properties" button): brightness, complexity, edge density, uniqueness, cluster fit. Each card individually styled. Shifts layout when detail panel opens.
+- **Click image** → detail panel auto-opens with canvas thumbnail, similar images, metadata
+- **Hover image** → pointer cursor, scale 1.5x, gold tint (0xea9d34), tooltip
+- **Hotspot cards** (left column): HDBSCAN clusters with thumbnails. Click to filter + zoom.
+- **CSV Filters** (top-right dropdowns): Multi-select checkboxes, additive/union. ≤200 unique values shown.
 - **Clear buttons**: Per-bar reset for range sliders, per-column and global clear for all filters.
 
-## Next Steps
-- Test in browser (inline property cards, canvas thumbnail, centered views)
-- Consider: export filtered set, bookmarks, keyboard shortcuts, permalink state
-- Architecture: split App.jsx monolith (~1885 lines now)
-- Never use Simple Browser
+## Future Considerations
+- Export filtered set (CSV download of visible images)
+- Bookmark/favorites with localStorage
+- Keyboard shortcuts (arrows, Esc, 1-5 for views)
+- Permalink/share state via URL hash
+- Architecture: split App.jsx monolith (~1921 lines)
+- GitHub Pages deployment guide
+- Carousel view mode (exists in code as 'clusters' case, not currently in UI tabs)
 
 ## Key Rules
 - **NEVER open Simple Browser** (destroys user's memory/context)
-- Use absolute paths for Python HTTP server
+- Use absolute paths for Python HTTP server `-d` flag
 - Use `npx vite build` (not `vite build`) for local Vite 5
+- Server port: 5174
