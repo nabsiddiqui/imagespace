@@ -5,7 +5,7 @@ import {
   Flame, PanelLeftClose, PanelLeft, PanelRight,
   Palette, Info,
   ChevronLeft, ChevronRight, Filter, ChevronDown,
-  Clock
+  Clock, SlidersHorizontal
 } from 'lucide-react';
 
 const THUMB_SIZE = 64;
@@ -317,6 +317,8 @@ export default function App() {
   const timelineMapRef = useRef(null); // maps x-world-pos to timestamp
   const [metadata, setMetadata] = useState(null);   // { columns: string[], rows: {[col]: string}[] }
   const [csvFilters, setCsvFilters] = useState({});  // { columnName: selectedValue | null }
+  const [rangeFilters, setRangeFilters] = useState({}); // { columnName: [min, max] } for continuous columns
+  const [showRangePanel, setShowRangePanel] = useState(false); // toggle range slider panel
   const [openFilter, setOpenFilter] = useState(null); // which dropdown is open
   const [filterSearch, setFilterSearch] = useState(''); // search text within open filter dropdown
   const visibleSetRef = useRef(null);                // current Set<id> or null (all visible)
@@ -326,8 +328,8 @@ export default function App() {
   const minimapRef = useRef(null);                    // minimap canvas element
   const minimapDataRef = useRef(null);                // { minX, minY, rangeX, rangeY, dots: [{nx, ny, color}] }
 
-  /* ── Compute visible set from hotspot + csvFilters ── */
-  const computeVisibleSet = useCallback((hotspotId, filters, hotspotsData, meta) => {
+  /* ── Compute visible set from hotspot + csvFilters + rangeFilters ── */
+  const computeVisibleSet = useCallback((hotspotId, filters, hotspotsData, meta, ranges = {}) => {
     let ids = null;
 
     // Hotspot filter
@@ -348,10 +350,32 @@ export default function App() {
       if (ids === null) {
         ids = csvSet;
       } else {
-        // Intersect hotspot with CSV union
         const intersection = new Set();
         for (const id of ids) {
           if (csvSet.has(id)) intersection.add(id);
+        }
+        ids = intersection;
+      }
+    }
+
+    // Range filters — intersect with current set
+    const activeRanges = Object.entries(ranges).filter(([, v]) => v !== null);
+    if (activeRanges.length > 0 && meta) {
+      const rangeSet = new Set();
+      for (let i = 0; i < meta.rows.length; i++) {
+        let pass = true;
+        for (const [col, [min, max]] of activeRanges) {
+          const val = parseFloat(meta.rows[i][col]);
+          if (isNaN(val) || val < min || val > max) { pass = false; break; }
+        }
+        if (pass) rangeSet.add(i);
+      }
+      if (ids === null) {
+        ids = rangeSet;
+      } else {
+        const intersection = new Set();
+        for (const id of ids) {
+          if (rangeSet.has(id)) intersection.add(id);
         }
         ids = intersection;
       }
@@ -448,21 +472,6 @@ export default function App() {
           const scaleY = vp.screenHeight / h;
           let scale = Math.min(scaleX, scaleY);
 
-          // For timeline, ensure thumbnails are visible (min ~30px on screen)
-          if (mode === 'timeline') {
-            const minThumbPx = 30; // minimum thumbnail size in screen pixels
-            const minScale = minThumbPx / THUMB_SIZE;
-            if (scale < minScale) {
-              scale = minScale;
-              // Center on the start of the timeline instead of the middle
-              vp.setZoom(scale, true);
-              vp.moveCenter(minX + vp.screenWidth / scale / 2, cy);
-              return;
-            }
-          } else {
-            scale *= 1.8; // zoom in a bit more than fit-all (non-timeline views)
-          }
-
           vp.setZoom(scale, true);
           vp.moveCenter(cx, cy);
         } else {
@@ -483,11 +492,11 @@ export default function App() {
     }
     // Recompute visible set with current filters (keep hotspot + csv filters active)
     setActiveHotspot(prev => {
-      const visSet = computeVisibleSet(prev, csvFilters, hotspots, metadata);
+      const visSet = computeVisibleSet(prev, csvFilters, hotspots, metadata, rangeFilters);
       relayout(mode, visSet);
       return prev;
     });
-  }, [csvFilters, hotspots, metadata, computeVisibleSet, relayout]);
+  }, [csvFilters, rangeFilters, hotspots, metadata, computeVisibleSet, relayout]);
 
   /* ── PixiJS boot ────────────────────────────── */
   useEffect(() => {
@@ -932,8 +941,10 @@ export default function App() {
             lastHovered = closest;
             if (closest) {
               setTooltip({ id: closest.id, x: e.global.x, y: e.global.y });
+              canvasRef.current.style.cursor = 'pointer';
             } else {
               setTooltip(null);
+              canvasRef.current.style.cursor = 'default';
             }
           }
         });
@@ -941,6 +952,7 @@ export default function App() {
         app.stage.on('pointerdown', () => {
           if (lastHovered) {
             setSelectedItem({ id: lastHovered.id, x: lastHovered.x, y: lastHovered.y });
+            setShowDetailPanel(true);
           }
         });
 
@@ -986,9 +998,9 @@ export default function App() {
     const newActive = activeHotspot === h.id ? null : h.id;
     setActiveHotspot(newActive);
     // Recompute visible set with hotspot + csv filters
-    const visSet = computeVisibleSet(newActive, csvFilters, hotspots, metadata);
+    const visSet = computeVisibleSet(newActive, csvFilters, hotspots, metadata, rangeFilters);
     relayout(viewMode, visSet);
-  }, [activeHotspot, csvFilters, hotspots, metadata, viewMode, computeVisibleSet, relayout]);
+  }, [activeHotspot, csvFilters, rangeFilters, hotspots, metadata, viewMode, computeVisibleSet, relayout]);
 
   const handleZoom = (dir) => {
     const vp = viewportRef.current;
@@ -1096,6 +1108,54 @@ export default function App() {
     return opts;
   }, [metadata]);
 
+  /* ── Continuous (numeric) filter options: { col: { min, max, label } } ── */
+  const CONTINUOUS_COLS = new Set(['brightness', 'complexity', 'edge_density', 'outlier_score', 'cluster_confidence']);
+  const continuousFilterOptions = useMemo(() => {
+    if (!metadata) return {};
+    const opts = {};
+    for (const col of metadata.columns) {
+      if (!CONTINUOUS_COLS.has(col)) continue;
+      let min = Infinity, max = -Infinity, hasValue = false;
+      for (const row of metadata.rows) {
+        const v = parseFloat(row[col]);
+        if (!isNaN(v)) {
+          if (v < min) min = v;
+          if (v > max) max = v;
+          hasValue = true;
+        }
+      }
+      if (hasValue && max > min) {
+        const labels = {
+          brightness: 'Brightness',
+          complexity: 'Complexity',
+          edge_density: 'Edge Density',
+          outlier_score: 'Uniqueness',
+          cluster_confidence: 'Cluster Fit',
+        };
+        opts[col] = { min: Math.floor(min), max: Math.ceil(max), label: labels[col] || col };
+      }
+    }
+    return opts;
+  }, [metadata]);
+
+  const handleRangeChange = useCallback((col, values) => {
+    setRangeFilters(prev => {
+      const next = { ...prev };
+      const opt = continuousFilterOptions[col];
+      // If range covers full extent, remove filter
+      if (opt && values[0] <= opt.min && values[1] >= opt.max) {
+        delete next[col];
+      } else {
+        next[col] = values;
+      }
+      setActiveHotspot(hotId => {
+        const visSet = computeVisibleSet(hotId, csvFilters, hotspots, metadata, next);
+        relayout(viewMode, visSet);
+        return hotId;
+      });
+      return next;
+    });
+  }, [continuousFilterOptions, csvFilters, hotspots, metadata, viewMode, computeVisibleSet, relayout]);
 
 
   const handleFilterChange = useCallback((col, val) => {
@@ -1113,22 +1173,24 @@ export default function App() {
         next[col] = existing;
       }
       setActiveHotspot(hotId => {
-        const visSet = computeVisibleSet(hotId, next, hotspots, metadata);
+        const visSet = computeVisibleSet(hotId, next, hotspots, metadata, rangeFilters);
         relayout(viewMode, visSet);
         return hotId;
       });
       return next;
     });
-  }, [hotspots, metadata, viewMode, computeVisibleSet, relayout]);
+  }, [hotspots, metadata, viewMode, computeVisibleSet, relayout, rangeFilters]);
 
   const clearAllFilters = useCallback(() => {
     setCsvFilters({});
+    setRangeFilters({});
     setActiveHotspot(null);
     const visSet = null;
     relayout(viewMode, visSet);
   }, [viewMode, relayout]);
 
-  const activeFilterCount = Object.values(csvFilters).reduce((sum, s) => sum + (s ? s.size : 0), 0) + (activeHotspot !== null ? 1 : 0);
+  const activeRangeCount = Object.keys(rangeFilters).length;
+  const activeFilterCount = Object.values(csvFilters).reduce((sum, s) => sum + (s ? s.size : 0), 0) + (activeHotspot !== null ? 1 : 0) + activeRangeCount;
 
   /* ── Render ─────────────────────────────────── */
 
@@ -1189,14 +1251,9 @@ export default function App() {
             {/* Logo */}
             <div className="pointer-events-auto rp-card flex items-center gap-3">
               <ImageSpaceLogo size={36} />
-              <div>
-                <h1 className="text-lg font-extrabold tracking-tight text-rp-text leading-none">
-                  ImageSpace
-                </h1>
-                <p className="text-[9px] font-medium text-rp-muted tracking-wider uppercase mt-0.5">
-                  {stats.count > 0 ? `${(stats.count / 1000).toFixed(0)}K images` : 'Visual Explorer'}
-                </p>
-              </div>
+              <h1 className="text-lg font-extrabold tracking-tight text-rp-text leading-none">
+                ImageSpace
+              </h1>
             </div>
 
             {/* Hotspots (larger cards) */}
@@ -1311,7 +1368,7 @@ export default function App() {
                                   const next = { ...prev };
                                   delete next[col];
                                   setActiveHotspot(hotId => {
-                                    const visSet = computeVisibleSet(hotId, next, hotspots, metadata);
+                                    const visSet = computeVisibleSet(hotId, next, hotspots, metadata, rangeFilters);
                                     relayout(viewMode, visSet);
                                     return hotId;
                                   });
@@ -1359,6 +1416,101 @@ export default function App() {
                 )}
               </div>
             )}
+
+            {/* Range filter toggle button — own card */}
+            {Object.keys(continuousFilterOptions).length > 0 && (
+              <button
+                onClick={() => setShowRangePanel(p => !p)}
+                className={`pointer-events-auto rp-card flex items-center gap-1.5 px-3 py-1.5 transition-all ${
+                  showRangePanel || activeRangeCount > 0
+                    ? 'ring-1 ring-rp-pine/30'
+                    : ''
+                }`}
+              >
+                <SlidersHorizontal size={12} className={activeRangeCount > 0 ? 'text-rp-pine' : 'text-rp-muted'} />
+                <span className={`text-[11px] font-semibold ${activeRangeCount > 0 ? 'text-rp-pine' : 'text-rp-subtle'}`}>
+                  Properties{activeRangeCount > 0 ? ` (${activeRangeCount})` : ''}
+                </span>
+              </button>
+            )}
+
+            {/* Inline property slider cards */}
+            {showRangePanel && Object.keys(continuousFilterOptions).length > 0 && (
+              <div className="flex flex-col gap-1.5 w-[200px]">
+                {/* Reset + close controls */}
+                <div className="pointer-events-auto flex items-center justify-end gap-1.5 px-1">
+                  {activeRangeCount > 0 && (
+                    <button
+                      onClick={() => {
+                        setRangeFilters({});
+                        setActiveHotspot(hotId => {
+                          const visSet = computeVisibleSet(hotId, csvFilters, hotspots, metadata, {});
+                          relayout(viewMode, visSet);
+                          return hotId;
+                        });
+                      }}
+                      className="text-[9px] font-semibold text-rp-love hover:underline"
+                    >
+                      Reset all
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowRangePanel(false)}
+                    className="pointer-events-auto p-0.5 rounded hover:bg-rp-hlLow transition-colors text-rp-muted"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+                {Object.entries(continuousFilterOptions).map(([col, { min, max, label }]) => {
+                  const current = rangeFilters[col] || [min, max];
+                  const isActive = rangeFilters[col] != null;
+                  const pctLow = ((current[0] - min) / (max - min)) * 100;
+                  const pctHigh = ((current[1] - min) / (max - min)) * 100;
+                  return (
+                    <div
+                      key={col}
+                      className={`pointer-events-auto rounded-xl border px-3 py-2 backdrop-blur-sm shadow-sm transition-all cursor-default ${
+                        isActive
+                          ? 'bg-rp-surface/95 border-rp-pine/30 shadow-md'
+                          : 'bg-rp-surface/90 border-rp-hlHigh hover:border-rp-hlMed'
+                      }`}
+                    >
+                      <div className="flex justify-between items-baseline mb-1">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? 'text-rp-pine' : 'text-rp-muted'}`}>{label}</span>
+                        <span className={`text-[10px] font-mono tabular-nums ${isActive ? 'text-rp-pine' : 'text-rp-subtle'}`}>
+                          {current[0]}–{current[1]}
+                        </span>
+                      </div>
+                      <div className="relative h-5 flex items-center">
+                        <div className="absolute inset-x-0 h-1.5 bg-rp-hlMed rounded-full" />
+                        <div
+                          className={`absolute h-1.5 rounded-full transition-colors ${isActive ? 'bg-rp-pine/50' : 'bg-rp-pine/20'}`}
+                          style={{ left: `${pctLow}%`, right: `${100 - pctHigh}%` }}
+                        />
+                        <input
+                          type="range"
+                          min={min}
+                          max={max}
+                          step={1}
+                          value={current[0]}
+                          onChange={(e) => handleRangeChange(col, [Number(e.target.value), current[1]])}
+                          className="absolute inset-0 w-full h-full appearance-none bg-transparent pointer-events-none z-[2] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-rp-pine [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-0"
+                        />
+                        <input
+                          type="range"
+                          min={min}
+                          max={max}
+                          step={1}
+                          value={current[1]}
+                          onChange={(e) => handleRangeChange(col, [current[0], Number(e.target.value)])}
+                          className="absolute inset-0 w-full h-full appearance-none bg-transparent pointer-events-none z-[3] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-rp-pine [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-runnable-track]:h-0"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1366,6 +1518,7 @@ export default function App() {
       {/* Bottom section — pinned to bottom */}
       <div className="absolute bottom-0 left-0 right-0 pointer-events-none z-50 p-4">
         <div className="flex flex-col gap-2 items-stretch">
+
           {/* Timeline indicator — offset from hotspots */}
           {viewMode === 'timeline' && timeRange && (() => {
             const range = timeRange.max - timeRange.min || 1;
@@ -1527,22 +1680,33 @@ export default function App() {
                 </h2>
                 <div className="h-0.5 w-10 bg-rp-love rounded-full mt-2" />
               </div>
-              {/* Thumbnail */}
+              {/* Thumbnail — canvas-based extraction from atlas */}
               {pointsRef.current[selectedItem.id] && (() => {
                 const _p = pointsRef.current[selectedItem.id];
                 const _displaySize = 256;
-                const _scale = _displaySize / thumbSizeRef.current;
-                const _as = atlasSizeRef.current;
+                const _ts = thumbSizeRef.current;
+                const canvasRefDetail = React.createRef();
+                const drawThumb = () => {
+                  const canvas = canvasRefDetail.current;
+                  if (!canvas) return;
+                  const ctx = canvas.getContext('2d');
+                  const img = new window.Image();
+                  img.crossOrigin = 'anonymous';
+                  img.onload = () => {
+                    ctx.clearRect(0, 0, _displaySize, _displaySize);
+                    ctx.drawImage(img, _p.u, _p.v, _ts, _ts, 0, 0, _displaySize, _displaySize);
+                  };
+                  img.src = `/data/atlas_${_p.ai}.${atlasFormatRef.current}`;
+                };
+                // Use setTimeout to ensure canvas ref is mounted
+                setTimeout(drawThumb, 0);
                 return (
-                  <div
-                    className="rounded-xl overflow-hidden border border-rp-hlMed mx-auto"
-                    style={{
-                      width: _displaySize,
-                      height: _displaySize,
-                      backgroundImage: `url(/data/atlas_${_p.ai}.${atlasFormatRef.current})`,
-                      backgroundPosition: `-${_p.u * _scale}px -${_p.v * _scale}px`,
-                      backgroundSize: `${_as * _scale}px ${_as * _scale}px`,
-                    }}
+                  <canvas
+                    ref={canvasRefDetail}
+                    width={_displaySize}
+                    height={_displaySize}
+                    className="rounded-xl border border-rp-hlMed mx-auto bg-rp-hlLow"
+                    style={{ width: _displaySize, height: _displaySize, imageRendering: 'auto' }}
                   />
                 );
               })()}

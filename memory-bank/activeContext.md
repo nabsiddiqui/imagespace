@@ -1,30 +1,28 @@
 # ImageSpace — Active Context
 
-## Current State (Task 36)
-Major performance overhaul completed. Pipeline rewritten for speed, viewer optimized with critic subagent feedback.
+## Current State (Task 7 / Session 2)
+Range slider filters redesigned as collapsible bottom panel. Canvas-based detail panel thumbnail.
 
-### Pipeline Rewrite
-- **ONNX CLIP** (Xenova/clip-vit-base-patch32) as primary embedding — 2-3x faster than PyTorch
-- **openTSNE** FFT-accelerated — 10-20x faster than sklearn t-SNE
-- **HDBSCAN** with cKDTree noise reassignment (fallback: MiniBatchKMeans)
-- **WebP atlases** (method=2, quality 80) — ~30% smaller than JPEG
-- **PCA** 512→50d before t-SNE for faster convergence
-- Fallback chain: ONNX CLIP → PyTorch CLIP → Color histograms
+### Recent Changes (This Session)
+- **Pipeline: image features** — Added `compute_image_features()` computing brightness (BT.601 luminance), complexity (Shannon entropy), edge density (Sobel magnitude), all normalized 0-100
+- **Pipeline: outlier scores** — Mean k-NN distance normalized to 0-100 (uses existing neighbors data)
+- **Pipeline: cluster confidence** — HDBSCAN `probabilities_` (or inverse-centroid-distance for KMeans fallback), 0-100 scale
+- **Pipeline: updated `write_metadata_csv`** — Accepts and writes new feature columns
+- **Pipeline: returns 4 values** — `reduce_dimensions()` now returns `(tsne_coords, cluster_ids, embeddings_pca, cluster_probs)`
+- **Standalone script: `scripts/add_features.py`** — Extracts features from existing atlas thumbnails without re-running full pipeline. Ran successfully on WikiArt dataset (~80s for 49,585 images)
+- **Viewer: `continuousFilterOptions`** — Auto-detects known continuous columns (`brightness`, `complexity`, `edge_density`, `outlier_score`, `cluster_confidence`) with min/max ranges
+- **Viewer: `rangeFilters` state** — `{ col: [min, max] }` for active range filters
+- **Viewer: `handleRangeChange`** — Callback that updates range filters and recomputes visible set
+- **Viewer: range slider UI** — Dual-handle range sliders below checkbox filter bar, matching Rose Pine Dawn theme
+- **Viewer: `computeVisibleSet` updated** — Now takes 5th parameter `ranges` for continuous filters, intersects with existing hotspot + CSV filters
+- **Auto-open detail panel** on image click
+- **Pointer cursor** on image hover
+- **Thumbnail fix** — switched from CSS `backgroundImage` to canvas `drawImage()` for atlas crop rendering in detail panel (CSS approach fails with large 4096×4096 atlases)
+- **Range slider redesign** — moved from bottom panel to right-side vertical bubble cards (200px wide, stacked individually, each with own border/shadow). Shifts left when detail panel is open. Toggle via "Properties" button in top-right filter area. Header row has "Reset all" + close button.
+- **`showRangePanel` state** — controls visibility of bottom range panel
 
-### Viewer Performance Fixes (from Critic Subagent)
-- **CRITICAL FIX**: Detail panel was hardcoded to `.jpg` — now uses `atlasFormatRef.current`
-- **Spatial hash**: Deferred rebuild to animation end (was O(n) per frame during transitions)
-- **Cluster labels**: Throttled setState to 200ms (was 60fps React re-renders)
-- **Timeline current time**: Throttled to 200ms (was 60fps setState)
-- **Time filter dimming**: Only runs when slider values change (was every frame, 50K iterations)
-- **PIXI imports**: Parallel `Promise.all` (was sequential awaits)
-- **Atlas count**: Dynamic from manifest (was hardcoded "13")
-
-### New Features
-- Rose Pine Dawn logo adapted from legacy ImageSpace SVG
-- Hotspots now visible in carousel mode
-- Google Colab notebook for remote processing on GPU
-- Improved loading progress bar (gradient, larger)
+### Metadata CSV Columns (WikiArt)
+id, filename, cluster, timestamp, dominant_color (12 unique), artist (1,092), style (27), title (47,121), width, height, **brightness** (0-100), **complexity** (0-100), **edge_density** (0-100), **outlier_score** (0-100), **cluster_confidence** (0-100)
 
 ## Active View Modes
 - **t-SNE** — Visual similarity layout (openTSNE FFT-accelerated)
@@ -34,21 +32,20 @@ Major performance overhaul completed. Pipeline rewritten for speed, viewer optim
 - **Carousel** — Full-screen single image with hotspots visible
 
 ## Key Interactions
-- **Hotspot cards** (left column): HDBSCAN clusters. Click to filter. Visible in ALL views including carousel.
+- **Range sliders** (right-side bubble cards, toggle via "Properties" button in top-right): Stacked vertical cards for brightness, complexity, edge density, uniqueness, cluster fit. Each card is individually styled. Shifts left when detail panel open. Intersects with all other filters.
+- **Click image** → detail panel auto-opens
+- **Hover image** → pointer cursor, scale 1.5x, gold tint, tooltip
+- **Hotspot cards** (left column): HDBSCAN clusters. Click to filter.
 - **CSV Filters** (top-right, checkboxes): Multi-select, additive/union.
-- **Detail Panel** (right side): Toggle tab. Shows thumbnail from correct atlas format.
-- **Timeline slider**: Dual-handle range for time filtering.
+- **Clear buttons**: Per-bar reset for range sliders, per-column and global clear for all filters.
 
 ## Next Steps
-- Test WikiArt pipeline output (49,585 images running now)
-- Further critic iteration (architecture split of monolith App.jsx)
-- Feature suggestions for non-technical users
-- Consider: search, progressive atlas loading/LOD, CSV parser fix (commas in quoted fields)
+- Test in browser (range sliders bottom panel, canvas thumbnail detail panel)
+- Consider: export filtered set, bookmarks, keyboard shortcuts, permalink state
+- Architecture: split App.jsx monolith (~1905 lines now)
+- Never use Simple Browser
 
-## Recent Decisions (Task 36)
-- UMAP removed entirely — only t-SNE (openTSNE)
-- Renamed "Semantic embedding projection" → "Visual similarity layout"
-- ONNX preferred over PyTorch for inference speed
-- WebP over JPEG for atlases
-- PCA dimensionality reduction before t-SNE
-- Binary format v2 still 24 bytes but writes t-SNE coords to both slots
+## Key Rules
+- **NEVER open Simple Browser** (destroys user's memory/context)
+- Use absolute paths for Python HTTP server
+- Use `npx vite build` (not `vite build`) for local Vite 5

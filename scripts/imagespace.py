@@ -449,6 +449,7 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
             core_dist_n_jobs=-1,
         )
         cluster_ids = clusterer.fit_predict(embeddings_pca)
+        cluster_probs = clusterer.probabilities_.copy()
         n_clusters = len(set(cluster_ids)) - (1 if -1 in cluster_ids else 0)
         n_noise = (cluster_ids == -1).sum()
 
@@ -457,21 +458,29 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
             valid_mask = cluster_ids >= 0
             tree = cKDTree(embeddings_pca[valid_mask])
             valid_labels = cluster_ids[valid_mask]
+            valid_probs = cluster_probs[valid_mask]
             _, nearest = tree.query(embeddings_pca[cluster_ids == -1])
             cluster_ids[cluster_ids == -1] = valid_labels[nearest]
+            # Give reassigned noise points low confidence
+            cluster_probs[cluster_probs == 0] = 0.1
         print(f"  HDBSCAN: {n_clusters} clusters, {n_noise} noise reassigned ({time.time() - start:.1f}s)")
     except ImportError:
         from sklearn.cluster import MiniBatchKMeans
         n_clusters = min(NUM_CLUSTERS, n)
         print(f"\n  Using MiniBatchKMeans (k={n_clusters})...")
         start = time.time()
-        cluster_ids = MiniBatchKMeans(
+        kmeans = MiniBatchKMeans(
             n_clusters=n_clusters, batch_size=max(1024, n // 10),
             random_state=42, n_init=3
-        ).fit_predict(embeddings_pca)
+        )
+        cluster_ids = kmeans.fit_predict(embeddings_pca)
+        # Distance-based confidence for KMeans (inverse of distance to centroid, normalized)
+        dists = kmeans.transform(embeddings_pca).min(axis=1)
+        max_d = dists.max() if dists.max() > 0 else 1
+        cluster_probs = (1 - dists / max_d).astype(np.float32)
         print(f"  MiniBatchKMeans: {time.time() - start:.1f}s")
 
-    return tsne_coords.astype(np.float32), cluster_ids.astype(np.int32), embeddings_pca
+    return tsne_coords.astype(np.float32), cluster_ids.astype(np.int32), embeddings_pca, cluster_probs
 
 
 # ── Stage 4b: k-Nearest Neighbors ────────────────────────────
@@ -694,6 +703,71 @@ def extract_dominant_colors(images, thumb_size=32):
     return colors
 
 
+# ── Stage 5b: Image Features (brightness, complexity, edge density) ──
+def compute_image_features(images, thumb_size=32):
+    """Compute brightness, complexity (Shannon entropy), and edge density for each image.
+    Returns dict with 'brightness', 'complexity', 'edge_density' arrays (0-100 scale)."""
+    from scipy.ndimage import sobel
+    n = len(images)
+    brightness = np.zeros(n, dtype=np.float32)
+    complexity = np.zeros(n, dtype=np.float32)
+    edge_density = np.zeros(n, dtype=np.float32)
+
+    start = time.time()
+    for idx, img_path in enumerate(images):
+        try:
+            img = Image.open(img_path).convert('RGB').resize((thumb_size, thumb_size), Image.BILINEAR)
+            arr = np.array(img, dtype=np.float32) / 255.0
+
+            # Brightness: mean luminance (BT.601 weights)
+            lum = arr[:, :, 0] * 0.299 + arr[:, :, 1] * 0.587 + arr[:, :, 2] * 0.114
+            brightness[idx] = float(lum.mean())
+
+            # Complexity: Shannon entropy of grayscale histogram
+            gray = (lum * 255).astype(np.uint8)
+            hist, _ = np.histogram(gray, bins=64, range=(0, 255))
+            hist = hist[hist > 0].astype(np.float32)
+            hist /= hist.sum()
+            complexity[idx] = float(-np.sum(hist * np.log2(hist)))
+
+            # Edge density: mean Sobel gradient magnitude
+            sx = sobel(lum, axis=0)
+            sy = sobel(lum, axis=1)
+            edge_density[idx] = float(np.sqrt(sx**2 + sy**2).mean())
+        except Exception:
+            pass
+
+        if idx > 0 and idx % 5000 == 0:
+            print(f"    Features: {idx}/{n} ({idx/n*100:.0f}%)")
+
+    # Normalize to 0-100 scale
+    def norm100(arr):
+        mn, mx = arr.min(), arr.max()
+        if mx > mn:
+            return ((arr - mn) / (mx - mn) * 100).round(1)
+        return np.zeros_like(arr)
+
+    brightness = norm100(brightness)
+    complexity = norm100(complexity)
+    edge_density = norm100(edge_density)
+
+    print(f"  Features computed in {time.time() - start:.1f}s")
+    return {
+        'brightness': brightness,
+        'complexity': complexity,
+        'edge_density': edge_density,
+    }
+
+
+def compute_outlier_scores(knn_distances):
+    """Compute outlier score from mean k-NN distance, normalized to 0-100."""
+    mean_dist = knn_distances.mean(axis=1)
+    mn, mx = mean_dist.min(), mean_dist.max()
+    if mx > mn:
+        return ((mean_dist - mn) / (mx - mn) * 100).round(1)
+    return np.zeros(len(mean_dist), dtype=np.float32)
+
+
 # ── Stage 6: Extract Timestamps ──────────────────────────────
 def extract_timestamps(images):
     """Extract timestamps from EXIF or filename year patterns."""
@@ -766,7 +840,9 @@ def write_manifest(output_dir, count, atlas_count, thumb_size=THUMB_SIZE, atlas_
     print(f"  Manifest: {output_path}")
 
 
-def write_metadata_csv(output_dir, images, cluster_ids, timestamps, colors, external_metadata=None):
+def write_metadata_csv(output_dir, images, cluster_ids, timestamps, colors,
+                       external_metadata=None, image_features=None,
+                       outlier_scores=None, cluster_confidence=None):
     """Write metadata.csv with image info, merging with external metadata if provided."""
     output_path = os.path.join(output_dir, 'metadata.csv')
 
@@ -788,7 +864,14 @@ def write_metadata_csv(output_dir, images, cluster_ids, timestamps, colors, exte
             break
 
     base_cols = ['id', 'filename', 'cluster', 'timestamp', 'dominant_color']
-    all_cols = base_cols + extra_cols
+    feature_cols = []
+    if image_features:
+        feature_cols.extend(['brightness', 'complexity', 'edge_density'])
+    if outlier_scores is not None:
+        feature_cols.append('outlier_score')
+    if cluster_confidence is not None:
+        feature_cols.append('cluster_confidence')
+    all_cols = base_cols + feature_cols + extra_cols
 
     with open(output_path, 'w', newline='') as f:
         writer = csv.writer(f)
@@ -799,6 +882,15 @@ def write_metadata_csv(output_dir, images, cluster_ids, timestamps, colors, exte
             color_name = hue_to_name(h) if s > 0.1 else 'gray'
             row = [i, img_path.name, int(cluster_ids[i]),
                    timestamps[i] if timestamps[i] > 0 else '', color_name]
+            # Append computed features
+            if image_features:
+                row.append(image_features['brightness'][i])
+                row.append(image_features['complexity'][i])
+                row.append(image_features['edge_density'][i])
+            if outlier_scores is not None:
+                row.append(outlier_scores[i])
+            if cluster_confidence is not None:
+                row.append(cluster_confidence[i])
             if external_metadata:
                 ext = external_metadata.get(img_path.name, {})
                 if ext: matched += 1
@@ -902,16 +994,17 @@ def main():
         print(f"  Cached embeddings to {emb_cache}")
 
     # Stage 4
-    print(f"\n[4/8] PCA → openTSNE → HDBSCAN...")
-    tsne_coords, cluster_ids, embeddings_pca = reduce_dimensions(embeddings, args.min_cluster_size, args.tsne_perplexity, args.thumb_size)
+    print(f"\n[4/9] PCA → openTSNE → HDBSCAN...")
+    tsne_coords, cluster_ids, embeddings_pca, cluster_probs = reduce_dimensions(embeddings, args.min_cluster_size, args.tsne_perplexity, args.thumb_size)
 
     # Stage 4b: k-NN
-    print(f"\n[5/8] k-Nearest Neighbors...")
+    print(f"\n[5/9] k-Nearest Neighbors...")
     knn_indices, knn_distances = compute_knn(embeddings_pca, k=10)
     write_neighbors_bin(str(output_dir), knn_indices, knn_distances)
+    outlier_scores = compute_outlier_scores(knn_distances)
 
     # Stage 4c: CLIP cluster labels
-    print(f"\n[6/8] CLIP cluster labels...")
+    print(f"\n[6/9] CLIP cluster labels...")
     cluster_labels = generate_cluster_labels(embeddings, cluster_ids)
     if cluster_labels:
         write_cluster_labels(str(output_dir), cluster_labels)
@@ -920,15 +1013,19 @@ def main():
     meta_csv_path = os.path.join(str(output_dir), 'metadata.csv')
     skip_metadata = args.relayout and os.path.exists(meta_csv_path) and not args.metadata
     if skip_metadata:
-        print(f"\n[7/8] Skipping metadata (relayout mode, no external metadata)")
+        print(f"\n[7/9] Skipping metadata (relayout mode, no external metadata)")
         timestamps = None
         colors = None
         external_metadata = None
+        image_features = None
     else:
-        print(f"\n[7/8] Extracting metadata...")
+        print(f"\n[7/9] Extracting metadata...")
         timestamps = extract_timestamps(images)
         colors = extract_dominant_colors(images)
         print(f"  Timestamps: {sum(1 for t in timestamps if t > 0)}/{len(images)}")
+
+        print(f"\n[8/9] Computing image features (brightness, complexity, edge density)...")
+        image_features = compute_image_features(images)
 
         external_metadata = None
         if args.metadata:
@@ -939,11 +1036,14 @@ def main():
                 print(f"  WARNING: External metadata not found: {meta_src}")
 
     # Stage 6
-    print(f"\n[8/8] Writing output files...")
+    print(f"\n[9/9] Writing output files...")
     write_binary_data(str(output_dir), tsne_coords, atlas_data, cluster_ids)
     write_manifest(str(output_dir), len(images), atlas_count, args.thumb_size, args.atlas_size)
+    # Normalize cluster confidence to 0-100 scale
+    cluster_confidence = (cluster_probs * 100).round(1) if cluster_probs is not None else None
     if timestamps is not None:
-        write_metadata_csv(str(output_dir), images, cluster_ids, timestamps, colors, external_metadata)
+        write_metadata_csv(str(output_dir), images, cluster_ids, timestamps, colors,
+                           external_metadata, image_features, outlier_scores, cluster_confidence)
 
     elapsed = time.time() - total_start
     print(f"\n{'='*60}")
