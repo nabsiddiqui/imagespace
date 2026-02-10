@@ -143,21 +143,35 @@ Open http://localhost:5174
 
 ## Performance
 
-### Pipeline (CPU-only, Apple M3 Air, ~50K WikiArt images)
+### Pipeline Benchmark (CPU-only, Apple M-series, 49,585 WikiArt images)
 
 | Stage | Time | Notes |
 |-------|------|-------|
-| Atlas generation (128px) | ~7.5 min | 49 WebP atlases, ~110 img/s |
-| CLIP embeddings | ~27 min | First run only; cached as .npy |
-| PCA (512d → 50d) | ~0.1s | 69% variance retained |
-| openTSNE | ~24s | FFT-accelerated, Annoy neighbors |
-| Overlap removal | ~3s | Grid-snap to prevent overlapping |
-| HDBSCAN | ~16s | On PCA embeddings, leaf selection |
-| Image features | ~80s | Brightness, complexity, edge density |
-| Metadata extraction | ~7 min | Dominant colors + timestamps |
-| **Total (first run)** | **~45 min** | |
-| **Total (cached embeddings)** | **~15 min** | |
-| **Total (relayout only)** | **~45s** | |
+| Atlas generation (128px, q85) | **432.5s** (7.2 min) | 49 WebP atlases, 115 img/s |
+| CLIP embeddings (ONNX, CPU) | **1084.0s** (18.1 min) | 45.7 img/s; cached as .npy |
+| PCA (512d → 50d) | **< 0.1s** | 69% variance retained |
+| openTSNE | **26.2s** | FFT-accelerated, Annoy neighbors |
+| Overlap removal | **3.3s** | Grid-snap to prevent overlapping |
+| HDBSCAN | **19.0s** | 19 clusters, 44K noise reassigned |
+| k-Nearest Neighbors | **15.5s** | k=10 on 50d PCA, cosine distance |
+| Cluster labels (CLIP) | **1.3s** | 19 auto-generated semantic labels |
+| Metadata extraction | **418.7s** (7.0 min) | Dominant colors + timestamps |
+| Image features | **423.1s** (7.1 min) | Brightness, complexity, edge density |
+| **Total (first run)** | **2441.6s (40.7 min)** | |
+| **Total (cached embeddings)** | **~22 min** | Skips CLIP stage |
+| **Total (relayout only)** | **~45s** | t-SNE + HDBSCAN only |
+
+### CPU Expectations
+
+| Hardware | Estimated Total (50K images) |
+|----------|------------------------------|
+| Apple M1/M2/M3/M4 | ~40 min |
+| Modern x86 desktop (i7/Ryzen 7, AVX2) | ~45–55 min |
+| Mid-range laptop (i5 10th–12th gen) | ~60–75 min |
+| Older laptop (i5 8th gen) | ~70–90 min |
+| With GPU (CUDA) | ~15–20 min (CLIP drops to ~3–5 min) |
+
+CLIP embedding extraction is the single largest cost (44% of total). Subsequent runs with cached embeddings skip this stage entirely.
 
 ### Viewer Optimizations
 

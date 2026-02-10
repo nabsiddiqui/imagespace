@@ -92,17 +92,20 @@
 14. requestAnimationFrame throttle for range sliders (not per-pixel)
 15. Fire-and-forget async for computeAvgColors (non-blocking initial render)
 
-## CPU Pipeline Timing Estimates (50K images, Apple M3 Air)
-| Stage | Time |
-|---|---|
-| Atlas generation (128px WebP) | ~7.5 min |
-| CLIP embedding (ONNX CPU) | ~27 min |
-| PCA (512d → 50d) | ~0.1s |
-| openTSNE (FFT) | ~24s |
-| Overlap removal | ~3s |
-| HDBSCAN | ~16s |
-| Image features (brightness, complexity, edge) | ~80s |
-| **Total (first run)** | **~45 min** |
-| **Total (cached embeddings)** | **~15 min** |
-| **Total (relayout only)** | **~45s** |
-| **Feature extraction only (add_features.py)** | **~80s** |
+## CPU Pipeline Timing — MEASURED (49,585 WikiArt images, Apple M-series)
+| Stage | Time | Rate |
+|---|---|---|
+| Atlas generation (128px, q85) | **432.5s** (7.2 min) | 115 img/s |
+| CLIP embeddings (ONNX CPU) | **1084.0s** (18.1 min) | 45.7 img/s |
+| PCA (512d → 50d) | < 0.1s | 69% variance |
+| openTSNE (FFT) | **26.2s** | — |
+| Overlap removal | **3.3s** | — |
+| HDBSCAN | **19.0s** | 19 clusters |
+| k-NN (k=10, cosine) | **15.5s** | — |
+| Cluster labels (CLIP) | **1.3s** | 19 labels |
+| Metadata extraction (colors + timestamps) | **418.7s** (7.0 min) | — |
+| Image features (brightness, complexity, edge) | **423.1s** (7.1 min) | — |
+| **Total (first run)** | **2441.6s (40.7 min)** | |
+| **Total (cached embeddings)** | **~22 min** | |
+| **Total (relayout only)** | **~45s** | |
+| **Feature extraction only (add_features.py)** | **~80s** | |

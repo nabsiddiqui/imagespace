@@ -1,7 +1,13 @@
 # ImageSpace — Active Context
 
-## Current State (End of Session 2)
-Project is **feature-complete and performance-optimized**. All features working, pushed to GitHub (commit 299fc94). No active work items.
+## Current State (End of Session 3)
+Project is **feature-complete and performance-optimized**. Full pipeline e2e test completed with measured timings. Pushed to GitHub.
+
+### What Was Done (Session 3)
+1. **Cursor re-fix** — Properties panel buttons (Properties, Reset All, Close) had cursor issue again. Applied inline `style={{ cursor: 'pointer' }}` for max specificity.
+2. **Full pipeline e2e test** — Ran `imagespace.py` from scratch on 49,585 WikiArt images. Total: **2441.6s (40.7 min)** on Apple M-series CPU. All 9 stages completed successfully.
+3. **README updated** — Replaced estimated timings with actual measured benchmarks. Added CPU expectations table for different hardware.
+4. **Memory bank updated** — All timing data replaced with measured values.
 
 ### What Was Done (Session 2 — Comprehensive Summary)
 1. **Server setup** — Built + served on http://localhost:5174 (Vite 5 build, Python HTTP server with absolute `-d` path)
