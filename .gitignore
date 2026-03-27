@@ -3,8 +3,14 @@ image_space/output/
 .DS_Store
 *.log
 
+# Private project notes — never publish
+memory-bank/
+
 # Large data files (atlas textures, binary layout, Python artifacts)
 # atlas_*.jpg removed — pipeline now outputs WebP only (manifest.atlasFormat=webp)
 image_space/public/data/data.bin
 image_space/public/data/data.json
 scripts/embeddings.npy
+
+# Local Netlify folder
+.netlify
