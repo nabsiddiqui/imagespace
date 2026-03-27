@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/logo.svg" width="100" alt="ImageSpace logo"/>
   <h1>ImageSpace</h1>
-  <strong><a href="https://imagespace-demo.netlify.app">Live Demo →</a></strong> — 49,585 WikiArt paintings visualized with CLIP + t-SNE
+  <strong><a href="https://nabeelsiddiqui.net/imagespace-demo">Live Demo →</a></strong> — 49,585 WikiArt paintings visualized with CLIP + t-SNE
 </div>
 
 ---
@@ -21,13 +21,19 @@ An interactive browser-based tool for exploring large image collections. Point i
 - Shows similar images and full metadata in a slide-in detail panel
 - Renders 50,000 images at ~30 FPS in a browser via PixiJS WebGL
 
-## Quick Start
-
-> **Looking for a dataset to try?** The [WikiArt dataset](https://github.com/cs-chan/ArtGAN/tree/master/WikiArt%20Dataset) on GitHub contains 80K+ fine art images across styles and genres — a good starting point.
-
 ### Process your own images
 
-**1a. Install dependencies (NVIDIA GPU)**
+**1a. Install dependencies (Apple Silicon or CPU only)**
+
+```bash
+# Python pipeline — CoreML (Neural Engine) is auto-detected on Apple Silicon
+pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime scipy
+
+# Frontend
+cd image_space && npm install && cd ..
+```
+
+**1b. Install dependencies (NVIDIA GPU)**
 
 ```bash
 # Python pipeline with CUDA GPU support
@@ -38,17 +44,6 @@ cd image_space && npm install && cd ..
 ```
 
 CUDA is auto-detected. No extra flags needed.
-
-**1b. Install dependencies (Apple Silicon or CPU only)**
-
-```bash
-# Python pipeline — CoreML (Neural Engine) is auto-detected on Apple Silicon
-pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime scipy
-
-# Frontend
-cd image_space && npm install && cd ..
-```
-
 **2. Run the pipeline**
 
 ```bash
@@ -124,29 +119,6 @@ picasso_guernica.jpg,Pablo Picasso,Cubism,Guernica
 ```
 
 The pipeline also computes and appends: `brightness`, `complexity`, `edge_density`, `outlier_score`, `cluster_confidence` (all 0–100 scale).
-
-## Performance (50K images, Apple M-series CPU)
-
-| Stage | Time |
-|-------|------|
-| Atlas generation (128px, q85) | 7.2 min |
-| CLIP embeddings (ONNX, CPU-only) | 18.1 min |
-| PCA + t-SNE + HDBSCAN | ~1 min |
-| k-NN + features + metadata | ~15 min |
-| **Total (first run)** | **~41 min** |
-| **Total (cached embeddings)** | **~22 min** |
-| **Total (relayout only)** | **~45 sec** |
-
-CLIP embedding is the dominant cost. Cache it with `--cache-dir` and skip it on re-runs.
-
-| Hardware | Estimated (50K images, first run) |
-|----------|----------------------------------|
-| Apple M1–M4 | ~40 min |
-| Modern desktop (Ryzen 7 / i7) | ~45–55 min |
-| Mid-range laptop (i5, 10th–12th gen) | ~60–75 min |
-| With NVIDIA GPU | ~15–20 min |
-
-`ImageSpace_Colab.ipynb` — Google Colab notebook for cloud GPU processing.
 
 ## License
 
