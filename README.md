@@ -4,6 +4,8 @@ An interactive browser-based tool for exploring large image collections. Point i
 
 **The viewer is a static site — no backend, no server, no database.** Once processed, share the `output/` folder on GitHub Pages, any CDN, or a USB drive.
 
+**No GPU required.** The pipeline runs entirely on CPU using ONNX Runtime. GPU acceleration is optional and reduces the CLIP embedding stage from ~18 minutes to ~5 minutes for 50K images.
+
 ## What It Does
 
 - Lays out images by visual similarity (CLIP embeddings → t-SNE)
@@ -15,44 +17,11 @@ An interactive browser-based tool for exploring large image collections. Point i
 
 ## Quick Start
 
-There are two paths depending on what you want to do.
+> **Looking for a dataset to try?** The [WikiArt dataset](https://github.com/cs-chan/ArtGAN/tree/master/WikiArt%20Dataset) on GitHub contains 80K+ fine art images across styles and genres — a good starting point.
 
-### Option A — Try it immediately with test data (minimal deps)
+### Process your own images
 
-This generates synthetic dummy data so you can try the viewer without processing real images. You only need Node.js and Python with Pillow.
-
-**1. Install Node dependencies**
-
-```bash
-cd image_space
-npm install
-```
-
-**2. Generate dummy data**
-
-```bash
-cd ..
-pip install pillow
-python3 scripts/generate_data.py
-```
-
-This creates 50,000 dummy images in `image_space/public/data/` (takes ~1-2 minutes).
-
-**3. Build and open**
-
-```bash
-cd image_space
-npx vite build
-python3 -m http.server 5174 -d "$(pwd)/output"
-```
-
-Open http://localhost:5174
-
----
-
-### Option B — Process your own images
-
-**1. Install dependencies**
+**1a. Install dependencies (CPU only — no GPU required)**
 
 ```bash
 # Python pipeline
@@ -62,7 +31,19 @@ pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime scipy
 cd image_space && npm install && cd ..
 ```
 
-> **GPU acceleration (optional):** Add `--gpu` to the pipeline command. On Apple Silicon, install `onnxruntime` normally — CoreML is auto-detected. For NVIDIA, install `onnxruntime-gpu` instead.
+> **Apple Silicon:** `onnxruntime` auto-detects CoreML — no extra steps needed.
+
+**1b. Install dependencies (GPU — NVIDIA only)**
+
+```bash
+# Python pipeline with GPU support
+pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime-gpu scipy
+
+# Frontend
+cd image_space && npm install && cd ..
+```
+
+Add `--gpu` to the pipeline command (step 2) to enable GPU acceleration.
 
 **2. Run the pipeline**
 
@@ -91,8 +72,6 @@ python3 -m http.server 5174 -d "$(pwd)/output"
 ```
 
 Open http://localhost:5174
-
-> **Note:** Use `npx vite build`, not `vite build`. This ensures the local Vite 5 (in `node_modules`) is used rather than any globally installed version.
 
 ---
 
@@ -220,16 +199,6 @@ The built `output/` folder is a self-contained static site with relative paths. 
 Your site is live at `https://your-username.github.io/my-collection/` — no server, no backend.
 
 > **Size note:** Atlas textures for 50K images are ~200 MB total. GitHub Pages supports repositories up to 1 GB; individual files must be under 100 MB. For 128px thumbnails, each atlas is 3–8 MB — well under the limit.
-
-### Auto-deploy with GitHub Actions (optional)
-
-The included [.github/workflows/deploy.yml](.github/workflows/deploy.yml) lets you commit data to `image_space/public/data/` and have GitHub Pages rebuild automatically on every push. See the workflow file for setup instructions.
-
-## Technology Stack
-
-- **Pipeline**: Python · ONNX Runtime · openTSNE · HDBSCAN · scikit-learn · Pillow · scipy
-- **Viewer**: React 18 · PixiJS 8 · pixi-viewport · Vite 5 · Tailwind CSS · lucide-react
-- **Design**: Rosé Pine Dawn palette · Inter font
 
 ## License
 
