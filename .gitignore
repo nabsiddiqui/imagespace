@@ -14,3 +14,4 @@ scripts/embeddings.npy
 
 # Local Netlify folder
 .netlify
+__pycache__/
