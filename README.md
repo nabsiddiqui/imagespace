@@ -4,7 +4,7 @@ An interactive browser-based tool for exploring large image collections. Point i
 
 **The viewer is a static site — no backend, no server, no database.** Once processed, share the `output/` folder on GitHub Pages, any CDN, or a USB drive.
 
-**No GPU required.** The pipeline runs entirely on CPU using ONNX Runtime. GPU acceleration is optional and reduces the CLIP embedding stage from ~18 minutes to ~5 minutes for 50K images.
+**GPU recommended but not required.** On NVIDIA hardware, the CLIP embedding stage drops from ~18 minutes to ~5 minutes for 50K images. The pipeline also runs fully on CPU (or Apple Silicon with CoreML) if you don't have a GPU.
 
 ## What It Does
 
@@ -21,19 +21,7 @@ An interactive browser-based tool for exploring large image collections. Point i
 
 ### Process your own images
 
-**1a. Install dependencies (CPU only — no GPU required)**
-
-```bash
-# Python pipeline
-pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime scipy
-
-# Frontend
-cd image_space && npm install && cd ..
-```
-
-> **Apple Silicon:** `onnxruntime` auto-detects CoreML — no extra steps needed.
-
-**1b. Install dependencies (GPU — NVIDIA only)**
+**1a. Install dependencies (GPU — NVIDIA)**
 
 ```bash
 # Python pipeline with GPU support
@@ -44,6 +32,18 @@ cd image_space && npm install && cd ..
 ```
 
 Add `--gpu` to the pipeline command (step 2) to enable GPU acceleration.
+
+**1b. Install dependencies (CPU only — no GPU)**
+
+```bash
+# Python pipeline
+pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime scipy
+
+# Frontend
+cd image_space && npm install && cd ..
+```
+
+> **Apple Silicon:** `onnxruntime` auto-detects CoreML — no extra steps needed.
 
 **2. Run the pipeline**
 
