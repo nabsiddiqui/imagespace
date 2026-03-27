@@ -1,0 +1,66 @@
+# ImageSpace — GitHub Pages Deployment
+#
+# Triggers on every push to main. Assumes the processed data files
+# (atlas_*.webp, data.bin, manifest.json, etc.) are already committed
+# to image_space/public/data/ — either tracked normally or via Git LFS.
+#
+# HOW TO USE:
+#   1. Go to your repo → Settings → Pages → Source: "GitHub Actions"
+#   2. Push your processed data to image_space/public/data/ and push to main.
+#      The workflow builds and deploys automatically.
+#
+# The built site uses relative paths and works at any URL — user pages,
+# project pages, or any subdirectory — no configuration needed.
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # Allow manual trigger from the Actions tab
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true   # Pull Git LFS files (atlas textures, binary data)
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: image_space/package-lock.json
+
+      - name: Install dependencies
+        working-directory: image_space
+        run: npm ci
+
+      - name: Build
+        working-directory: image_space
+        run: npx vite build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: image_space/output
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

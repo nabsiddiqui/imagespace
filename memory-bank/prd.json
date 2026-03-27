@@ -1,0 +1,69 @@
+{
+  "project": "ImageSpace",
+  "updated": "2026-03-27",
+  "tasks": [
+    {
+      "id": "export-csv",
+      "title": "Export filtered set as CSV download",
+      "status": "deferred",
+      "priority": "low",
+      "acceptance": "Button in UI downloads current visible set as CSV with all metadata columns"
+    },
+    {
+      "id": "bookmarks",
+      "title": "Bookmark / favorites with localStorage",
+      "status": "deferred",
+      "priority": "low",
+      "acceptance": "User can mark images as favorites; favorites persist across sessions via localStorage; filter to show only favorites"
+    },
+    {
+      "id": "keyboard-shortcuts",
+      "title": "Keyboard shortcuts",
+      "status": "deferred",
+      "priority": "low",
+      "acceptance": "Arrow keys navigate between similar images in detail panel; Esc closes panel; 1-4 switch view modes"
+    },
+    {
+      "id": "permalink",
+      "title": "Permalink / share state via URL hash",
+      "status": "deferred",
+      "priority": "medium",
+      "acceptance": "URL hash encodes current view mode + active filters; sharing URL restores exact state"
+    },
+    {
+      "id": "split-app",
+      "title": "Split App.jsx monolith into components",
+      "status": "deferred",
+      "priority": "low",
+      "acceptance": "App.jsx refactored into ~5-8 component files; no behavior change; all tests pass"
+    },
+    {
+      "id": "github-pages-guide",
+      "title": "GitHub Pages deployment guide",
+      "status": "deferred",
+      "priority": "medium",
+      "acceptance": "README section with exact steps for GitHub Pages deployment including Vite base config"
+    },
+    {
+      "id": "carousel-view",
+      "title": "Expose carousel / cluster view mode in UI",
+      "status": "deferred",
+      "priority": "low",
+      "acceptance": "Clusters view mode added to VIEW_MODES and visible in tab bar (code already exists as 'clusters' case)"
+    },
+    {
+      "id": "rfc4180-csv",
+      "title": "RFC 4180-compliant CSV parser",
+      "status": "deferred",
+      "priority": "low",
+      "acceptance": "CSV parser handles quoted fields with embedded commas; titles like \"Monet, Water Lilies\" parse correctly"
+    },
+    {
+      "id": "pip-package",
+      "title": "Distribute pipeline as pip-installable package",
+      "status": "deferred",
+      "priority": "low",
+      "acceptance": "pip install imagespace; imagespace /path/to/images -o dist/data runs pipeline"
+    }
+  ]
+}

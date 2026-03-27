@@ -22,12 +22,10 @@
 
 ## Build & Serve
 ```bash
-cd frontend-pixi
-npx vite build                    # → dist/ (~2.5s, uses local Vite 5)
-# Copy data into dist (Vite copies public/ but only at build time)
-cp -r public/data/* dist/data/
+cd image_space
+npx vite build                    # → output/ (~2.5s, uses local Vite 5)
 # Serve — MUST use absolute path for -d flag
-python3 -m http.server 5174 -d /absolute/path/to/frontend-pixi/dist
+python3 -m http.server 5174 -d /absolute/path/to/image_space/output
 ```
 
 **CRITICAL**: Use `npx vite build` (not `vite build`) to ensure local Vite 5 is used, not any globally installed version.
@@ -35,44 +33,45 @@ python3 -m http.server 5174 -d /absolute/path/to/frontend-pixi/dist
 ## Pipeline Commands
 ```bash
 # Full run
-python3 scripts/imagespace.py /path/to/images/ -o frontend-pixi/public/data/ \
+python3 scripts/imagespace.py /path/to/images/ -o image_space/public/data/ \
     --metadata /path/to/metadata.csv --thumb-size 128 --quality 85
 
 # With caching (recommended)
-python3 scripts/imagespace.py /path/to/images/ -o frontend-pixi/public/data/ \
-    --metadata /path/to/metadata.csv --cache-dir frontend-pixi/public/data/ --thumb-size 128
+python3 scripts/imagespace.py /path/to/images/ -o image_space/public/data/ \
+    --metadata /path/to/metadata.csv --cache-dir image_space/public/data/ --thumb-size 128
 
 # Relayout only (skip atlas + CLIP)
-python3 scripts/imagespace.py /path/to/images/ -o frontend-pixi/public/data/ \
-    --metadata /path/to/metadata.csv --cache-dir frontend-pixi/public/data/ --relayout --thumb-size 128
+python3 scripts/imagespace.py /path/to/images/ -o image_space/public/data/ \
+    --metadata /path/to/metadata.csv --cache-dir image_space/public/data/ --relayout --thumb-size 128
 
 # Add features to existing data (standalone)
-python3 scripts/add_features.py --data-dir frontend-pixi/public/data/ \
-    --metadata frontend-pixi/public/data/metadata.csv
+python3 scripts/add_features.py --data-dir image_space/public/data/ \
+    --metadata image_space/public/data/metadata.csv
 ```
 
 ## File Structure
 ```
-frontend-pixi/
+image_space/
   src/
     App.jsx             # Main app (~1921 lines, monolith)
     main.jsx            # React root + ErrorBoundary
     index.css           # Tailwind + custom classes (.rp-card)
     TestApp.jsx         # Unused test component
-  public/data/          # Generated output (gitignored)
+  output/data/          # Generated output (gitignored)
     data.bin            # Binary layout (24 bytes/image, v2)
     manifest.json       # Manifest with count, format, version
     metadata.csv        # 15 columns (WikiArt) with computed features
     neighbors.bin       # k-NN binary data
     cluster_labels.json # CLIP semantic labels
-    embeddings.npy      # Cached CLIP embeddings
+    embeddings.npy      # Cached CLIP embeddings (in scripts/ now)
     atlas_0..48.webp    # 49 WebP atlas textures (4096×4096, 128px thumbs)
-  dist/                 # Vite build output (served statically)
+  output/               # Vite build output (served statically, user uploads this)
 scripts/
   imagespace.py         # Main pipeline (~1057 lines)
   add_features.py       # Standalone feature extraction (~223 lines)
   reprocess_layout.py   # Re-run layout only
   generate_data.py      # Dummy data generator
+  embeddings.npy        # Cached CLIP embeddings (moved from output/data/)
 ImageSpace_Colab.ipynb  # Google Colab notebook for GPU processing
 memory-bank/            # Project documentation
 ```

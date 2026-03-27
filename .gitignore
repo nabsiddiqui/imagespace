@@ -1,9 +1,10 @@
 node_modules/
-dist/
+image_space/output/
 .DS_Store
 *.log
 
-# Large data files (atlas textures, binary layout)
-frontend-pixi/public/data/atlas_*.jpg
-frontend-pixi/public/data/data.bin
-frontend-pixi/public/data/data.json
+# Large data files (atlas textures, binary layout, Python artifacts)
+# atlas_*.jpg removed — pipeline now outputs WebP only (manifest.atlasFormat=webp)
+image_space/public/data/data.bin
+image_space/public/data/data.json
+scripts/embeddings.npy

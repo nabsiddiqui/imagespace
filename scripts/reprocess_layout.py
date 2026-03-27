@@ -2,7 +2,7 @@
 """Reprocess existing data.bin: apply non-overlap + re-cluster without re-embedding.
 
 Usage:
-    python3 scripts/reprocess_layout.py frontend-pixi/public/data/
+    python3 scripts/reprocess_layout.py image_space/output/data/
 """
 import sys, struct, time
 import numpy as np
@@ -11,7 +11,7 @@ THUMB_SIZE = 64
 ATLAS_SIZE = 4096
 
 def main():
-    data_dir = sys.argv[1] if len(sys.argv) > 1 else 'frontend-pixi/public/data'
+    data_dir = sys.argv[1] if len(sys.argv) > 1 else 'image_space/public/data'
     bin_path = f'{data_dir}/data.bin'
 
     # Read existing binary data

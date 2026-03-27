@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  background-color: #faf4ed;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .rp-card {
+    @apply bg-rp-surface border border-rp-hlHigh rounded-xl px-4 py-3 shadow-rp;
+  }
+  .rp-card-dark {
+    @apply bg-rp-text rounded-xl px-4 py-3 shadow-rp-lg;
+  }
+  .rp-btn {
+    @apply pointer-events-auto flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold text-sm
+           shadow-rp transition-all duration-150
+           hover:shadow-rp-lg hover:-translate-y-0.5
+           active:translate-y-0 active:shadow-none;
+  }
+}

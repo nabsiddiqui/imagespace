@@ -2,26 +2,26 @@
 
 ## Architecture
 ```
-frontend-pixi/
+image_space/
   src/
     App.jsx             — Main app (~1921 lines, monolith)
     main.jsx            — React entry with ErrorBoundary
     index.css           — Tailwind imports + custom component classes (.rp-card)
     TestApp.jsx         — Unused test component
-  public/data/          — Generated output (gitignored)
+  public/data/          — Pipeline-generated files (gitignored)
     data.bin            — Binary layout (24 bytes/image, v2)
     manifest.json       — {count, atlasCount, thumbSize, bytesPerImage:24, version:2, atlasFormat:'webp'}
     metadata.csv        — Per-image metadata with computed features
     neighbors.bin       — Binary k-NN indices + distances
     cluster_labels.json — CLIP-generated semantic cluster labels
     atlas_0..N.webp     — WebP atlas textures (4096×4096)
-    embeddings.npy      — Cached CLIP embeddings
-  dist/                 — Vite build output (served statically)
+  output/               — Vite build output (user uploads this to GitHub Pages)
 scripts/
   imagespace.py         — Main pipeline (~1057 lines): ONNX→PCA→openTSNE→HDBSCAN→k-NN→features→WebP
   add_features.py       — Standalone feature extraction from existing atlases (~223 lines)
   reprocess_layout.py   — Re-run t-SNE/HDBSCAN without regenerating atlases
   generate_data.py      — Generates dummy data for testing
+  embeddings.npy        — Cached CLIP embeddings (49585 × 512, moved out of output/)
 memory-bank/            — Documentation files (this system)
 ```
 

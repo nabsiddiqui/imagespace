@@ -1,0 +1,33 @@
+Session 1 — Initial scaffolding
+- Set up PixiJS app, viewport, atlas loader, basic t-SNE scatter view
+- Established 24-byte binary format: float32 umapX/umapY/tsneX/tsneY + uint16 atlas/u/v/cluster
+- React monolith pattern chosen (App.jsx) for simplicity at 50K sprite scale
+
+Session 2 — Feature buildout
+- Added detail panel (DetailThumb via canvas crop from atlas, React.memo + useRef + useEffect — NOT createRef+setTimeout)
+- Built full Python pipeline: ONNX CLIP → PCA → openTSNE → HDBSCAN → k-NN
+- Features: brightness (BT.601), complexity (Shannon entropy), edge density (Sobel), outlier score (mean k-NN dist), cluster_confidence (HDBSCAN probabilities) — all 0–100 scale
+- CSV filters: multi-select dropdown checkboxes, additive/union across values
+- Range slider filters: pre-parsed Float32Arrays per column for hot-loop performance
+- computeVisibleSet: unified hotspot ∩ CSV ∩ range filtering
+- Hotspot cards (left column, click to zoom+filter)
+- CLIP cluster labels (cluster_labels.json, floating at centroids, 100ms throttle)
+- Minimap (offscreen canvas cache, only viewport rect redrawn per frame)
+- Timeline view: dual-handle slider + deferred timestamp attachment
+- Color view: deferred computeAvgColors (fire-and-forget, 8K batch, non-blocking)
+- Performance: movingSet for animation, spatial hash for hover, requestAnimationFrame debounce on range sliders
+
+Session 3 — Polish + testing
+- Cursor fix v2: cursor-pointer on <button>, pointer-events-none on icon children
+- Full pipeline e2e test on 49,585 WikiArt images: 2441.6s (40.7 min) on Apple M-series
+- Removed redundant "Visual similarity layout" label from bottom-left
+- Zoom controls repositioned to bottom-right with justify-end
+- README rewritten with measured benchmarks and CPU expectation table
+- WikiArt dataset: 49,585 images, 49 WebP atlas textures (128px), 19 HDBSCAN clusters
+
+Session 4 — Bug fixes + memory bank migration
+- FIXED: Minimap always grey — p.avgColor was never set; now uses p.avgR ?? 150 / p.avgG / p.avgB (set by computeAvgColors)
+- FIXED: Timeline filter reset didn't restore sprite alpha — added else branch to restore alpha=1 for all visible sprites when tf=[0,1000]
+- FIXED: Stats modal showed hardcoded THUMB_SIZE=64 — now uses thumbSizeRef.current from manifest
+- Migrated memory bank from 6-file format to new CONTEXT.md + prd.json + progress.txt + sources.md format
+- Created comprehensive README.md with quick-start focus (viewer-first, minimal deps path)
