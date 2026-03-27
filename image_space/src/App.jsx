@@ -1895,23 +1895,6 @@ export default function App() {
                 </div>
               ))}
             </div>
-            {hotspots.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-sm font-bold text-rp-text mb-3">Cluster Distribution</h3>
-                <div className="space-y-1.5">
-                  {hotspots.map((h, i) => (
-                    <div key={h.id} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: h.color }} />
-                      <span className="text-xs text-rp-muted w-16">Region {i + 1}</span>
-                      <div className="flex-1 h-2 bg-rp-hlMed rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${stats.count > 0 ? (h.count / stats.count * 100) : 0}%`, backgroundColor: h.color }} />
-                      </div>
-                      <span className="text-[10px] text-rp-subtle font-semibold tabular-nums w-14 text-right">{h.count.toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
