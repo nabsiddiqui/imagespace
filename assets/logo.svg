@@ -1,30 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
-  <!-- Background circle -->
-  <circle cx="60" cy="60" r="58" fill="#1a1625" stroke="#3d3352" stroke-width="2"/>
-  <!-- Cluster 1 — warm coral -->
-  <circle cx="42" cy="48" r="4.5" fill="#ea9a97" opacity="0.9"/>
-  <circle cx="50" cy="42" r="3.5" fill="#ea9a97" opacity="0.8"/>
-  <circle cx="36" cy="55" r="3"   fill="#ea9a97" opacity="0.7"/>
-  <circle cx="44" cy="56" r="3"   fill="#ea9a97" opacity="0.75"/>
-  <circle cx="52" cy="50" r="2.5" fill="#ea9a97" opacity="0.7"/>
-  <!-- Cluster 2 — soft gold -->
-  <circle cx="72" cy="44" r="4"   fill="#f6c177" opacity="0.9"/>
-  <circle cx="80" cy="50" r="3.5" fill="#f6c177" opacity="0.8"/>
-  <circle cx="76" cy="38" r="2.5" fill="#f6c177" opacity="0.75"/>
-  <circle cx="85" cy="43" r="2.5" fill="#f6c177" opacity="0.7"/>
-  <!-- Cluster 3 — muted teal -->
-  <circle cx="55" cy="76" r="4.5" fill="#9ccfd8" opacity="0.9"/>
-  <circle cx="47" cy="82" r="3.5" fill="#9ccfd8" opacity="0.8"/>
-  <circle cx="62" cy="83" r="3"   fill="#9ccfd8" opacity="0.75"/>
-  <circle cx="40" cy="74" r="2.5" fill="#9ccfd8" opacity="0.7"/>
-  <circle cx="53" cy="86" r="2"   fill="#9ccfd8" opacity="0.65"/>
-  <!-- Cluster 4 — lavender -->
-  <circle cx="80" cy="72" r="4"   fill="#c4a7e7" opacity="0.85"/>
-  <circle cx="88" cy="65" r="3"   fill="#c4a7e7" opacity="0.8"/>
-  <circle cx="86" cy="78" r="2.5" fill="#c4a7e7" opacity="0.75"/>
-  <circle cx="75" cy="80" r="2.5" fill="#c4a7e7" opacity="0.7"/>
-  <!-- Scattered individual points -->
-  <circle cx="63" cy="58" r="2"   fill="#e0def4" opacity="0.5"/>
-  <circle cx="68" cy="63" r="1.5" fill="#e0def4" opacity="0.4"/>
-  <circle cx="57" cy="63" r="1.5" fill="#e0def4" opacity="0.4"/>
+<svg width="120" height="120" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="2" y="2" width="36" height="36" rx="4" fill="#f2e9e1" stroke="#286983" stroke-width="2.5"/>
+  <rect x="7" y="7" width="26" height="18" rx="2" fill="#d7827e" stroke="#286983" stroke-width="1.5"/>
+  <circle cx="13" cy="13" r="3" fill="#ea9d34"/>
+  <polygon points="11,23 19,14 27,23" fill="#286983"/>
+  <polygon points="21,23 27,17 33,23" fill="#56949f"/>
+  <rect x="7" y="28" width="10" height="4" rx="1" fill="#286983"/>
+  <rect x="19" y="28" width="14" height="4" rx="1" fill="#907aa9"/>
 </svg>
