@@ -1,5 +1,7 @@
 # ImageSpace
 
+**[Live Demo →](https://nabeelsiddiqui.net/imagespace-demo/)** — 49,585 WikiArt paintings visualized with CLIP + t-SNE
+
 An interactive browser-based tool for exploring large image collections. Point it at a folder of images; it produces a navigable 2D scatter plot where similar images cluster together.
 
 **The viewer is a static site — no backend, no server, no database.** Once processed, share the `output/` folder on GitHub Pages, any CDN, or a USB drive.
@@ -31,8 +33,6 @@ pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime-gpu scipy
 cd image_space && npm install && cd ..
 ```
 
-CUDA is auto-detected. No extra flags needed.
-
 **1b. Install dependencies (Apple Silicon — CoreML)**
 
 ```bash
@@ -42,8 +42,6 @@ pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime scipy
 # Frontend
 cd image_space && npm install && cd ..
 ```
-
-No flags needed. ONNX Runtime detects CoreML automatically on Apple Silicon.
 
 **1c. Install dependencies (CPU only)**
 
