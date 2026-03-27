@@ -728,14 +728,48 @@ export default function App() {
           const csvRes = await fetch(`${BASE}data/metadata.csv`);
           if (csvRes.ok) {
             const csvText = await csvRes.text();
+            // RFC 4180 CSV line parser — handles quoted fields with commas and escaped quotes ("")
+            const parseCSVLine = (line) => {
+              const fields = [];
+              let i = 0;
+              while (i < line.length) {
+                if (line[i] === '"') {
+                  // Quoted field
+                  let val = '';
+                  i++; // skip opening quote
+                  while (i < line.length) {
+                    if (line[i] === '"' && line[i + 1] === '"') {
+                      val += '"'; i += 2; // escaped quote
+                    } else if (line[i] === '"') {
+                      i++; break; // closing quote
+                    } else {
+                      val += line[i++];
+                    }
+                  }
+                  fields.push(val.trim());
+                  if (line[i] === ',') i++; // skip comma
+                } else {
+                  // Unquoted field
+                  const end = line.indexOf(',', i);
+                  if (end === -1) {
+                    fields.push(line.slice(i).trim());
+                    break;
+                  } else {
+                    fields.push(line.slice(i, end).trim());
+                    i = end + 1;
+                  }
+                }
+              }
+              return fields;
+            };
             const lines = csvText.trim().split('\n');
             if (lines.length > 1) {
-              const columns = lines[0].split(',').map(c => c.trim());
+              const columns = parseCSVLine(lines[0]);
               const idCol = columns.indexOf('id');
               const catCols = columns.filter(c => c !== 'id');
               const rows = [];
               for (let i = 1; i < lines.length; i++) {
-                const vals = lines[i].split(',').map(v => v.trim());
+                const vals = parseCSVLine(lines[i]);
                 const row = {};
                 for (let j = 0; j < columns.length; j++) {
                   row[columns[j]] = vals[j] || '';

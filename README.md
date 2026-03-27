@@ -2,8 +2,6 @@
 
 An interactive browser-based tool for exploring large image collections. Point it at a folder of images; it produces a navigable 2D scatter plot where similar images cluster together.
 
-Built as a modern alternative to [PixPlot](https://github.com/yaledhlab/pix-plot) for the article "ImageSpace: A Modern Approach to Image Collection Visualization" in the *Computational Approaches to Art* special issue of *Computational Humanities Research*.
-
 **The viewer is a static site — no backend, no server, no database.** Once processed, share the `output/` folder on GitHub Pages, any CDN, or a USB drive.
 
 ## What It Does
