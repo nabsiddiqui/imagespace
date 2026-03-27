@@ -1,6 +1,10 @@
-# ImageSpace
+<div align="center">
+  <img src="assets/logo.svg" width="100" alt="ImageSpace logo"/>
+  <h1>ImageSpace</h1>
+  <strong><a href="https://imagespace-demo.netlify.app">Live Demo →</a></strong> — 49,585 WikiArt paintings visualized with CLIP + t-SNE
+</div>
 
-**[Live Demo →](https://nabeelsiddiqui.net/imagespace-demo/)** — 49,585 WikiArt paintings visualized with CLIP + t-SNE
+---
 
 An interactive browser-based tool for exploring large image collections. Point it at a folder of images; it produces a navigable 2D scatter plot where similar images cluster together.
 
@@ -33,20 +37,12 @@ pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime-gpu scipy
 cd image_space && npm install && cd ..
 ```
 
-**1b. Install dependencies (Apple Silicon — CoreML)**
+CUDA is auto-detected. No extra flags needed.
+
+**1b. Install dependencies (Apple Silicon or CPU only)**
 
 ```bash
-# Python pipeline — CoreML (Neural Engine) is auto-detected
-pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime scipy
-
-# Frontend
-cd image_space && npm install && cd ..
-```
-
-**1c. Install dependencies (CPU only)**
-
-```bash
-# Python pipeline
+# Python pipeline — CoreML (Neural Engine) is auto-detected on Apple Silicon
 pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime scipy
 
 # Frontend
@@ -103,23 +99,6 @@ python3 scripts/imagespace.py /path/to/images/ \
 
 ---
 
-## Architecture
-
-```
-Pipeline (Python)                    Viewer (React + PixiJS)
-┌─────────────────┐                  ┌────────────────────────┐
-│ Images          │──→ WebP Atlases──→ Atlas Textures         │
-│ CLIP ONNX       │                                           │
-│ PCA + t-SNE     │──→ data.bin    ──→ Binary Layout (24B/img)│
-│ HDBSCAN         │──→ manifest.json→ Manifest                │
-│ k-NN (cosine)   │──→ neighbors.bin→ Similar Images          │
-│ Image Features  │──→ metadata.csv──→ Filters + Sliders      │
-│ Cluster Labels  │──→ cluster_labels.json → Floating Labels  │
-└─────────────────┘                  └────────────────────────┘
-```
-
-**Binary format (v2):** 24 bytes per image — `float32 tsneX, tsneY` (×2 for legacy) + `uint16 atlas, u, v, cluster`
-
 ## Pipeline Flags
 
 | Flag | Default | Description |
@@ -167,45 +146,7 @@ CLIP embedding is the dominant cost. Cache it with `--cache-dir` and skip it on 
 | Mid-range laptop (i5, 10th–12th gen) | ~60–75 min |
 | With NVIDIA GPU | ~15–20 min |
 
-## Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `scripts/imagespace.py` | Main pipeline |
-| `scripts/add_features.py` | Add brightness/complexity/etc. to existing data |
-| `scripts/reprocess_layout.py` | Re-run t-SNE/HDBSCAN only |
-| `scripts/generate_data.py` | Generate synthetic test data (no CLIP needed) |
-
 `ImageSpace_Colab.ipynb` — Google Colab notebook for cloud GPU processing.
-
-## Deployment
-
-The built `output/` folder is a self-contained static site with relative paths. It works on any host — GitHub Pages (root or project page), Netlify, a CDN, or even a USB drive.
-
-### Simple upload to GitHub Pages
-
-1. Run the pipeline and build locally:
-   ```bash
-   python3 scripts/imagespace.py /path/to/images/ -o image_space/public/data/
-   cd image_space && npx vite build
-   ```
-
-2. Create a new GitHub repo (e.g. `my-collection`).
-
-3. Push the **contents of `image_space/output/`** to that repo's `main` branch:
-   ```bash
-   cd image_space/output
-   git init && git add .
-   git commit -m "Deploy"
-   git remote add origin https://github.com/your-username/my-collection.git
-   git push -u origin main
-   ```
-
-4. Go to the repo → **Settings → Pages → Source: Deploy from branch → main / (root)**.
-
-Your site is live at `https://your-username.github.io/my-collection/` — no server, no backend.
-
-> **Size note:** Atlas textures for 50K images are ~200 MB total. GitHub Pages supports repositories up to 1 GB; individual files must be under 100 MB. For 128px thumbnails, each atlas is 3–8 MB — well under the limit.
 
 ## License
 
