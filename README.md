@@ -31,7 +31,7 @@ pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime-gpu scipy
 cd image_space && npm install && cd ..
 ```
 
-Add `--gpu` to the pipeline command (step 2) to enable GPU acceleration.
+CUDA is auto-detected. No extra flags needed.
 
 **1b. Install dependencies (Apple Silicon — CoreML)**
 
@@ -43,7 +43,7 @@ pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime scipy
 cd image_space && npm install && cd ..
 ```
 
-No `--gpu` flag needed. ONNX Runtime detects CoreML automatically on Apple Silicon.
+No flags needed. ONNX Runtime detects CoreML automatically on Apple Silicon.
 
 **1c. Install dependencies (CPU only)**
 
@@ -135,7 +135,6 @@ Pipeline (Python)                    Viewer (React + PixiJS)
 | `--tsne-perplexity` | 30 | t-SNE perplexity |
 | `--cache-dir` | none | Directory to cache CLIP embeddings (`.npy`) |
 | `--relayout` | false | Skip atlas + CLIP, re-run t-SNE/HDBSCAN only |
-| `--gpu` | false | Enable GPU acceleration for CLIP |
 
 ## Metadata Format
 

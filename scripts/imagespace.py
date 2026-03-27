@@ -123,17 +123,17 @@ def generate_atlases(images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS
 
 
 # ── Stage 3: Embedding Extraction ────────────────────────────
-def extract_embeddings(images, use_gpu=False):
+def extract_embeddings(images):
     """Extract CLIP ViT-B/32 embeddings. Tries ONNX first (fastest), then PyTorch, then histograms."""
     # Try ONNX Runtime (fastest)
     try:
-        return _extract_clip_onnx(images, use_gpu)
+        return _extract_clip_onnx(images)
     except Exception as e:
         print(f"  ONNX CLIP failed: {e}")
 
     # Try PyTorch (slower but more compatible)
     try:
-        return _extract_clip_torch(images, use_gpu)
+        return _extract_clip_torch(images)
     except (ImportError, Exception) as e:
         print(f"  PyTorch CLIP failed: {e}")
 
@@ -180,8 +180,8 @@ def _preprocess_clip_batch(images_pil):
     return batch
 
 
-def _extract_clip_onnx(images, use_gpu=False):
-    """CLIP embeddings via ONNX Runtime (fastest path)."""
+def _extract_clip_onnx(images):
+    """CLIP embeddings via ONNX Runtime (fastest path). Auto-detects GPU providers."""
     import onnxruntime as ort
 
     model_path = _get_onnx_model_path()
@@ -197,16 +197,15 @@ def _extract_clip_onnx(images, use_gpu=False):
     sess_opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 
     providers = ['CPUExecutionProvider']
-    if use_gpu:
-        available = ort.get_available_providers()
-        if 'CoreMLExecutionProvider' in available:
-            providers.insert(0, 'CoreMLExecutionProvider')
-            print("  Using Apple Neural Engine (CoreML)")
-        elif 'CUDAExecutionProvider' in available:
-            providers.insert(0, 'CUDAExecutionProvider')
-            print("  Using NVIDIA CUDA")
-        else:
-            print("  No GPU provider found, using CPU")
+    available = ort.get_available_providers()
+    if 'CUDAExecutionProvider' in available:
+        providers.insert(0, 'CUDAExecutionProvider')
+        print("  Using NVIDIA CUDA")
+    elif 'CoreMLExecutionProvider' in available:
+        providers.insert(0, 'CoreMLExecutionProvider')
+        print("  Using Apple Neural Engine (CoreML)")
+    else:
+        print("  Using CPU")
 
     print(f"  Loading CLIP ONNX model...")
     session = ort.InferenceSession(model_path, sess_options=sess_opts, providers=providers)
@@ -249,8 +248,8 @@ def _extract_clip_onnx(images, use_gpu=False):
     return embeddings
 
 
-def _extract_clip_torch(images, use_gpu=False):
-    """CLIP embeddings via transformers + PyTorch (fallback)."""
+def _extract_clip_torch(images):
+    """CLIP embeddings via transformers + PyTorch (fallback). Auto-detects GPU."""
     import torch
     from transformers import CLIPModel, CLIPProcessor
 
@@ -259,13 +258,14 @@ def _extract_clip_torch(images, use_gpu=False):
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
     device = 'cpu'
-    if use_gpu:
-        if torch.cuda.is_available():
-            device = 'cuda'
-            print("  Using CUDA GPU")
-        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            device = 'mps'
-            print("  Using Apple Silicon GPU (MPS)")
+    if torch.cuda.is_available():
+        device = 'cuda'
+        print("  Using CUDA GPU")
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        device = 'mps'
+        print("  Using Apple Silicon GPU (MPS)")
+    else:
+        print("  Using CPU")
 
     model = model.to(device).eval()
     embeddings = np.zeros((len(images), CLIP_DIM), dtype=np.float32)
@@ -925,7 +925,6 @@ def main():
     )
     parser.add_argument('input', help='Directory containing images')
     parser.add_argument('--output', '-o', required=True, help='Output directory')
-    parser.add_argument('--gpu', action='store_true', help='Enable GPU acceleration')
     parser.add_argument('--min-cluster-size', type=int, default=50, help='HDBSCAN min_cluster_size')
     parser.add_argument('--thumb-size', type=int, default=THUMB_SIZE, help='Thumbnail size in pixels')
     parser.add_argument('--atlas-size', type=int, default=ATLAS_SIZE, help='Atlas texture size (default 4096)')
@@ -987,8 +986,8 @@ def main():
         embeddings = np.load(emb_cache)
         print(f"  Loaded {embeddings.shape[0]} × {embeddings.shape[1]} embeddings")
     else:
-        print(f"\n[3/8] Extracting embeddings {'(GPU)' if args.gpu else '(CPU)'}...")
-        embeddings = extract_embeddings(images, use_gpu=args.gpu)
+        print(f"\n[3/8] Extracting embeddings (auto-detecting hardware)...")
+        embeddings = extract_embeddings(images)
         # Save to cache
         np.save(emb_cache, embeddings)
         print(f"  Cached embeddings to {emb_cache}")
