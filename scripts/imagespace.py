@@ -73,7 +73,7 @@ def discover_images(input_dir):
 
 
 # ── Stage 2: Thumbnail Generation + Atlas Packing ────────────
-def generate_atlases(images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS_SIZE, quality=80):
+def generate_atlases(images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS_SIZE, quality=60):
     """Create WebP atlas textures from image thumbnails. Returns atlas metadata per image."""
     images_per_row = atlas_size // thumb_size
     images_per_atlas = images_per_row * images_per_row
@@ -925,7 +925,7 @@ def main():
     parser.add_argument('--min-cluster-size', type=int, default=50, help='HDBSCAN min_cluster_size')
     parser.add_argument('--thumb-size', type=int, default=THUMB_SIZE, help='Thumbnail size in pixels')
     parser.add_argument('--atlas-size', type=int, default=ATLAS_SIZE, help='Atlas texture size (default 4096)')
-    parser.add_argument('--quality', type=int, default=80, help='WebP quality 1-100 (default 80)')
+    parser.add_argument('--quality', type=int, default=60, help='WebP quality 1-100 (default 60)')
     parser.add_argument('--metadata', help='External metadata CSV to merge')
     parser.add_argument('--tsne-perplexity', type=int, default=TSNE_PERPLEXITY, help='t-SNE perplexity')
     parser.add_argument('--cache-dir', help='Directory to cache embeddings (skip re-extraction if cached)')
