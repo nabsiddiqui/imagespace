@@ -708,15 +708,7 @@ export default function App() {
         extractClusterThumbs(clusters, pointsRef.current, atlasTextures, currentThumbSize);
         setHotspots(clusters);
 
-        /* Defer average color computation — don't block initial render */
-        setStatusMsg('Ready — computing colors in background...');
-        // Fire-and-forget: colors compute asynchronously after UI is interactive
-        (async () => {
-          await new Promise(r => setTimeout(r, 100)); // let UI paint first
-          await computeAvgColors(pointsRef.current, atlasTextures, currentThumbSize, () => {});
-          setColorsReady(true);
-
-          /* Build minimap data (uses t-SNE coords + average colors) */
+        /* Build minimap immediately with neutral dots (no color computation needed) */
         {
           const pts = pointsRef.current;
           let mMinX = Infinity, mMinY = Infinity, mMaxX = -Infinity, mMaxY = -Infinity;
@@ -728,18 +720,24 @@ export default function App() {
           }
           const rangeX = mMaxX - mMinX || 1;
           const rangeY = mMaxY - mMinY || 1;
-          // Sample every Nth point to keep dot count manageable (max ~5000 dots)
           const step = Math.max(1, Math.floor(pts.length / 5000));
           const dots = [];
           for (let i = 0; i < pts.length; i += step) {
             const p = pts[i];
             const nx = (p.tsneX - mMinX) / rangeX;
             const ny = (p.tsneY - mMinY) / rangeY;
-            dots.push({ nx, ny, r: p.avgR ?? 150, g: p.avgG ?? 150, b: p.avgB ?? 150 });
+            dots.push({ nx, ny });
           }
           minimapDataRef.current = { minX: mMinX, minY: mMinY, rangeX, rangeY, dots };
         }
-        })(); // end deferred color + minimap computation
+
+        /* Defer average color computation — only needed for Color view, not initial render */
+        setStatusMsg('Ready — computing colors in background...');
+        (async () => {
+          await new Promise(r => setTimeout(r, 500)); // let UI settle first
+          await computeAvgColors(pointsRef.current, atlasTextures, currentThumbSize, () => {});
+          setColorsReady(true);
+        })();
 
         /* Load metadata CSV (optional) */
         try {
@@ -954,8 +952,8 @@ export default function App() {
                 oc.width = W; oc.height = H;
                 const octx = oc.getContext('2d');
                 octx.clearRect(0, 0, W, H);
+                octx.fillStyle = 'rgba(40, 105, 131, 0.5)';
                 for (const d of md.dots) {
-                  octx.fillStyle = `rgb(${d.r},${d.g},${d.b})`;
                   octx.fillRect(d.nx * (W - 4) + 2, d.ny * (H - 4) + 2, 2, 2);
                 }
                 md._cachedDots = md.dots;
