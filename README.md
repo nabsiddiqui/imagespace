@@ -23,6 +23,8 @@ An interactive browser-based tool for exploring large image collections. Point i
 
 ### Process your own images
 
+**Google Colab** — If you'd rather skip local setup, open the included [Colab notebook](ImageSpace_Colab.ipynb), upload a ZIP of your images, run all cells, and download a ready-to-host output folder.
+
 **1a. Install dependencies (Apple Silicon or CPU only)**
 
 ```bash
