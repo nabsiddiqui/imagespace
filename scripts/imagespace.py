@@ -770,26 +770,23 @@ def compute_outlier_scores(knn_distances):
 
 # ── Stage 6: Extract Timestamps ──────────────────────────────
 def extract_timestamps(images):
-    """Extract timestamps from EXIF or filename year patterns."""
+    """Extract years from EXIF or filename year patterns. Returns plain year integers."""
     import re
     timestamps = []
-    year_pattern = re.compile(r'(\d{4})')
+    year_pattern = re.compile(r'(1[4-9]\d{2}|20[0-2]\d)')
 
     for img_path in images:
-        ts = _get_exif_timestamp(img_path)
-        if ts is None:
+        year = _get_exif_year(img_path)
+        if year is None:
             match = year_pattern.search(img_path.stem)
             if match:
                 year = int(match.group(1))
-                if 1400 <= year <= 2030:
-                    from datetime import datetime
-                    ts = int(datetime(year, 6, 15).timestamp())
-        timestamps.append(ts if ts is not None else 0)
+        timestamps.append(year if year is not None else 0)
     return timestamps
 
 
-def _get_exif_timestamp(img_path):
-    """Extract POSIX timestamp from EXIF DateTimeOriginal."""
+def _get_exif_year(img_path):
+    """Extract year from EXIF DateTimeOriginal."""
     try:
         img = Image.open(img_path)
         exif_data = img._getexif()
@@ -799,7 +796,7 @@ def _get_exif_timestamp(img_path):
                 if tag == 'DateTimeOriginal':
                     from datetime import datetime
                     dt = datetime.strptime(value, '%Y:%m:%d %H:%M:%S')
-                    return int(dt.timestamp())
+                    return dt.year
     except Exception:
         pass
     return None

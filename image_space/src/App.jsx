@@ -342,6 +342,7 @@ export default function App() {
   const clusterCentroidsRef = useRef([]); // world positions of cluster group centers
   const clipLabelsRef = useRef(null); // CLIP-generated cluster labels from cluster_labels.json
   const thumbSizeRef = useRef(THUMB_SIZE); // actual thumb size from manifest
+  const [hasTimestamps, setHasTimestamps] = useState(false); // whether dataset has time data
   const [timeRange, setTimeRange] = useState(null); // { min, max, current }
   const [timeFilter, setTimeFilter] = useState([0, 1000]); // dual range: [lo, hi] out of 1000
   const timeFilterRef = useRef([0, 1000]);
@@ -357,7 +358,45 @@ export default function App() {
   const atlasSizeRef = useRef(ATLAS_SIZE);            // atlas pixel dimensions
   const neighborsRef = useRef(null);                  // k-NN data: { k, indices: Uint32Array[], distances: Float32Array[] }
   const minimapRef = useRef(null);                    // minimap canvas element
-  const minimapDataRef = useRef(null);                // { minX, minY, rangeX, rangeY, dots: [{nx, ny, color}] }
+  const minimapDataRef = useRef(null);                // { minX, minY, rangeX, rangeY, dots: [{nx, ny}] }
+  const [minimapReady, setMinimapReady] = useState(false); // triggers minimap draw
+
+  /* Standalone minimap renderer — runs independently of PixiJS ticker */
+  useEffect(() => {
+    if (!minimapReady || loading) return;
+    const interval = setInterval(() => {
+      const mc = minimapRef.current;
+      const md = minimapDataRef.current;
+      const viewport = viewportRef.current;
+      if (!mc || !md || !md.dots || md.dots.length === 0) return;
+      if (viewModeRef.current !== 'tsne') return;
+      const ctx = mc.getContext('2d');
+      if (!ctx) return;
+      const W = mc.width, H = mc.height;
+      ctx.clearRect(0, 0, W, H);
+      // Draw dots directly (no offscreen canvas)
+      ctx.fillStyle = 'rgba(180, 40, 40, 0.55)';
+      const dots = md.dots;
+      for (let i = 0; i < dots.length; i++) {
+        ctx.fillRect(dots[i].nx * (W - 4) + 2, dots[i].ny * (H - 4) + 2, 2, 2);
+      }
+      // Viewport rectangle
+      if (viewport && viewport.screenWidth) {
+        try {
+          const topLeft = viewport.toWorld(0, 0);
+          const botRight = viewport.toWorld(viewport.screenWidth, viewport.screenHeight);
+          const rx = ((topLeft.x - md.minX) / md.rangeX) * (W - 4) + 2;
+          const ry = ((topLeft.y - md.minY) / md.rangeY) * (H - 4) + 2;
+          const rw = ((botRight.x - topLeft.x) / md.rangeX) * (W - 4);
+          const rh = ((botRight.y - topLeft.y) / md.rangeY) * (H - 4);
+          ctx.strokeStyle = 'rgba(180, 40, 40, 0.9)';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(rx, ry, rw, rh);
+        } catch (_) { /* viewport may not be ready */ }
+      }
+    }, 200);
+    return () => clearInterval(interval);
+  }, [minimapReady, loading]);
 
   /* ── Compute visible set from hotspot + csvFilters + rangeFilters ── */
   const computeVisibleSet = useCallback((hotspotId, filters, hotspotsData, meta, ranges = {}) => {
@@ -542,6 +581,7 @@ export default function App() {
         const [PIXI, { Viewport }] = await Promise.all([
           import('pixi.js'), import('pixi-viewport')
         ]);
+        if (isCancelled) return;
 
         setStatusMsg('Initialising WebGL...');
         app = new PIXI.Application();
@@ -549,13 +589,12 @@ export default function App() {
           canvas: canvasRef.current,
           antialias: false,
           backgroundColor: 0xfaf4ed,
-          width: window.innerWidth,
-          height: window.innerHeight,
+          resizeTo: window,
           resolution: window.devicePixelRatio || 1,
           autoDensity: true,
           preference: 'webgl',
         });
-        if (isCancelled) { app.destroy(true, { children: true, texture: true }); return; }
+        if (isCancelled) { app.destroy(false, { children: true, texture: true }); return; }
         appRef.current = app;
 
         const viewport = new Viewport({
@@ -585,7 +624,6 @@ export default function App() {
         const buffer = await dRes.arrayBuffer();
         const dataView = new DataView(buffer);
 
-        setStats(s => ({ ...s, count: manifest.count, atlasCount: manifest.atlasCount }));
         setStatusMsg(`Loading ${manifest.atlasCount} atlas textures...`);
 
         const fmt = manifest.atlasFormat || 'jpg';
@@ -660,6 +698,45 @@ export default function App() {
           }
         }
 
+        /* Compute hotspots early — only needs binary point data, not atlas textures */
+        const clusters = computeClusters(allPointData);
+
+        /* Load CLIP cluster labels early so hotspot names show immediately */
+        try {
+          const clRes = await fetch(`${BASE}data/cluster_labels.json`);
+          if (clRes.ok) {
+            clipLabelsRef.current = await clRes.json();
+          }
+        } catch (_) { /* cluster_labels.json is optional */ }
+
+        setHotspots(clusters);
+        setStats(s => ({ ...s, count: manifest.count, atlasCount: manifest.atlasCount }));
+
+        /* Build minimap early — only needs binary point data, not atlas textures */
+        {
+          const pts = allPointData;
+          let mMinX = Infinity, mMinY = Infinity, mMaxX = -Infinity, mMaxY = -Infinity;
+          for (const p of pts) {
+            if (p.tsneX < mMinX) mMinX = p.tsneX;
+            if (p.tsneY < mMinY) mMinY = p.tsneY;
+            if (p.tsneX > mMaxX) mMaxX = p.tsneX;
+            if (p.tsneY > mMaxY) mMaxY = p.tsneY;
+          }
+          const rangeX = mMaxX - mMinX || 1;
+          const rangeY = mMaxY - mMinY || 1;
+          const step = Math.max(1, Math.floor(pts.length / 5000));
+          const dots = [];
+          for (let i = 0; i < pts.length; i += step) {
+            const p = pts[i];
+            const nx = (p.tsneX - mMinX) / rangeX;
+            const ny = (p.tsneY - mMinY) / rangeY;
+            dots.push({ nx, ny });
+          }
+          minimapDataRef.current = { minX: mMinX, minY: mMinY, rangeX, rangeY, dots };
+          console.log('[minimap] built data:', dots.length, 'dots from', pts.length, 'points');
+          setMinimapReady(true);
+        }
+
         /* Progressive atlas loading — load atlases with limited concurrency,
            create sprites for each atlas as soon as it arrives so the user
            sees images appearing within seconds instead of waiting for all ~200MB. */
@@ -730,35 +807,9 @@ export default function App() {
         if (isCancelled) return;
         setLoadingAtlases(false); // dismiss compact progress bar
 
-        /* Compute hotspots */
-        setStatusMsg('Analysing clusters...');
-        await new Promise(r => setTimeout(r, 0));
-        const clusters = computeClusters(pointsRef.current);
+        /* Now extract cluster thumbnails from loaded atlases */
         extractClusterThumbs(clusters, pointsRef.current, atlasTextures, currentThumbSize);
-        setHotspots(clusters);
-
-        /* Build minimap immediately with neutral dots (no color computation needed) */
-        {
-          const pts = pointsRef.current;
-          let mMinX = Infinity, mMinY = Infinity, mMaxX = -Infinity, mMaxY = -Infinity;
-          for (const p of pts) {
-            if (p.tsneX < mMinX) mMinX = p.tsneX;
-            if (p.tsneY < mMinY) mMinY = p.tsneY;
-            if (p.tsneX > mMaxX) mMaxX = p.tsneX;
-            if (p.tsneY > mMaxY) mMaxY = p.tsneY;
-          }
-          const rangeX = mMaxX - mMinX || 1;
-          const rangeY = mMaxY - mMinY || 1;
-          const step = Math.max(1, Math.floor(pts.length / 5000));
-          const dots = [];
-          for (let i = 0; i < pts.length; i += step) {
-            const p = pts[i];
-            const nx = (p.tsneX - mMinX) / rangeX;
-            const ny = (p.tsneY - mMinY) / rangeY;
-            dots.push({ nx, ny });
-          }
-          minimapDataRef.current = { minX: mMinX, minY: mMinY, rangeX, rangeY, dots };
-        }
+        setHotspots(prev => [...prev]); // trigger re-render to show thumbnails
 
         /* Defer average color computation — only needed for Color view, not initial render */
         setStatusMsg('Ready — computing colors in background...');
@@ -826,10 +877,13 @@ export default function App() {
               // Attach timestamp to points if available
               const tsCol = columns.indexOf('timestamp');
               if (tsCol >= 0) {
+                let tsCount = 0;
                 for (let i = 0; i < rows.length && i < pointsRef.current.length; i++) {
                   const ts = parseInt(rows[i].timestamp);
                   pointsRef.current[i].timestamp = isNaN(ts) ? 0 : ts;
+                  if (!isNaN(ts) && ts > 0) tsCount++;
                 }
+                if (tsCount > 0) setHasTimestamps(true);
               }
               // Exclude 'id' and 'timestamp' from filter columns
               const filterCols = catCols.filter(c => c !== 'timestamp');
@@ -877,15 +931,6 @@ export default function App() {
             console.log(`Loaded k-NN: ${nnCount} × ${nnK}`);
           }
         } catch (_) { /* neighbors.bin is optional */ }
-
-        /* Load CLIP cluster labels (optional) */
-        try {
-          const clRes = await fetch(`${BASE}data/cluster_labels.json`);
-          if (clRes.ok) {
-            clipLabelsRef.current = await clRes.json();
-            console.log(`Loaded CLIP cluster labels: ${Object.keys(clipLabelsRef.current).length} clusters`);
-          }
-        } catch (_) { /* cluster_labels.json is optional */ }
 
         /* Ticker — animation + FPS */
         const movingSet = new Set(); // Track only sprites currently animating
@@ -939,39 +984,6 @@ export default function App() {
             app._lastUiUpdate = now;
             setZoomLevel(viewport.scale.x);
             setStats(s => ({ ...s, fps: Math.round(app.ticker.FPS) }));
-
-            // Draw minimap — use cached offscreen canvas for static dots
-            const mc = minimapRef.current;
-            const md = minimapDataRef.current;
-            if (mc && md && viewModeRef.current === 'tsne') {
-              const ctx = mc.getContext('2d');
-              const W = mc.width, H = mc.height;
-              // Cache dot layer to offscreen canvas (only rebuild when md reference changes)
-              if (md._cachedDots !== md.dots) {
-                const oc = md._offscreen || (md._offscreen = document.createElement('canvas'));
-                oc.width = W; oc.height = H;
-                const octx = oc.getContext('2d');
-                octx.clearRect(0, 0, W, H);
-                octx.fillStyle = 'rgba(40, 105, 131, 0.5)';
-                for (const d of md.dots) {
-                  octx.fillRect(d.nx * (W - 4) + 2, d.ny * (H - 4) + 2, 2, 2);
-                }
-                md._cachedDots = md.dots;
-              }
-              // Blit cached dots + draw viewport rectangle
-              ctx.clearRect(0, 0, W, H);
-              ctx.drawImage(md._offscreen, 0, 0);
-              // Draw viewport rectangle
-              const topLeft = viewport.toWorld(0, 0);
-              const botRight = viewport.toWorld(viewport.screenWidth, viewport.screenHeight);
-              const rx = ((topLeft.x - md.minX) / md.rangeX) * (W - 4) + 2;
-              const ry = ((topLeft.y - md.minY) / md.rangeY) * (H - 4) + 2;
-              const rw = ((botRight.x - topLeft.x) / md.rangeX) * (W - 4);
-              const rh = ((botRight.y - topLeft.y) / md.rangeY) * (H - 4);
-              ctx.strokeStyle = '#286983';
-              ctx.lineWidth = 1.5;
-              ctx.strokeRect(rx, ry, rw, rh);
-            }
           }
 
           // Update cluster label screen positions (throttled separately)
@@ -1071,9 +1083,8 @@ export default function App() {
           }
         });
 
-        // Resize
+        // Resize — PixiJS resizeTo:window handles renderer; update pixi-viewport
         window.addEventListener('resize', () => {
-          app.renderer.resize(window.innerWidth, window.innerHeight);
           viewport.resize(window.innerWidth, window.innerHeight);
         });
 
@@ -1100,7 +1111,9 @@ export default function App() {
     start();
     return () => {
       isCancelled = true;
-      if (app) app.destroy(true, { children: true, texture: true });
+      if (app) {
+        try { app.destroy(false, { children: true, texture: true }); } catch (_) {}
+      }
       pointsRef.current = [];
       spatialHashRef.current = {};
     };
@@ -1316,16 +1329,16 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen bg-rp-base font-sans select-none overflow-hidden">
-      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+      <canvas ref={canvasRef} id="pixi-canvas" className="absolute inset-0 w-full h-full" />
 
       {/* ── Minimap ───────────────────────────── */}
-      {!loading && !loadingAtlases && viewMode === 'tsne' && (
+      {!loading && viewMode === 'tsne' && (
         <canvas
           ref={minimapRef}
           width={160}
           height={160}
-          className="hidden md:block absolute bottom-[72px] right-4 z-[40] rounded-lg border border-rp-hlMed shadow-rp-lg cursor-crosshair opacity-80 hover:opacity-100 transition-opacity"
-          style={{ background: 'rgba(250,244,237,0.9)', width: 160, height: 160 }}
+          className="absolute bottom-[72px] right-4 z-[40] rounded-lg border border-rp-hlMed shadow-rp-lg cursor-crosshair opacity-90 hover:opacity-100 transition-opacity w-[100px] h-[100px] md:w-[160px] md:h-[160px]"
+          style={{ background: 'rgba(250,244,237,0.9)' }}
           onClick={(e) => {
             const md = minimapDataRef.current;
             const vp = viewportRef.current;
@@ -1377,7 +1390,7 @@ export default function App() {
 
             {/* Hotspots (larger cards) */}
             {!loading && hotspots.length > 0 && showHotspots && (
-              <div className="pointer-events-auto hidden md:flex flex-col gap-2 max-w-[240px] max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin">
+              <div className="pointer-events-auto flex flex-col gap-1.5 md:gap-2 max-w-[180px] md:max-w-[240px] max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin">
                 {hotspots.map((h, i) => {
                   const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
                   return (
@@ -1415,7 +1428,7 @@ export default function App() {
           <div className="flex flex-col items-end gap-2">
             {/* View tabs */}
             <div className="pointer-events-auto rp-card flex items-center gap-0.5 md:gap-1 px-1.5 md:px-2 py-1.5">
-              {Object.entries(VIEW_MODES).map(([key, { label }]) => (
+              {Object.entries(VIEW_MODES).filter(([key]) => key !== 'timeline' || hasTimestamps).map(([key, { label }]) => (
                 <button
                   key={key}
                   onClick={() => switchView(key)}
@@ -1645,9 +1658,9 @@ export default function App() {
             const loTs = timeRange.min + (timeFilter[0] / 1000) * range;
             const hiTs = timeRange.min + (timeFilter[1] / 1000) * range;
             const isSliderMoved = timeFilter[0] > 0 || timeFilter[1] < 1000;
-            const fmtDate = (ts) => new Date(ts * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+            const fmtDate = (ts) => String(Math.round(ts));
             return (
-            <div className="pointer-events-auto rp-card px-4 py-3" style={{ marginLeft: showHotspots && hotspots.length > 0 ? '260px' : 0 }}>
+            <div className="pointer-events-auto rp-card px-4 py-3 hidden md:block" style={{ marginLeft: showHotspots && hotspots.length > 0 ? '260px' : 0 }}>
               <div className="flex items-center gap-3 mb-2">
                 <Clock size={14} className="text-rp-iris shrink-0" />
                 <span className="text-xs font-bold text-rp-text">
@@ -1706,10 +1719,10 @@ export default function App() {
               </div>
               <div className="flex justify-between mt-1">
                 <span className="text-[9px] text-rp-muted font-semibold">
-                  {new Date(timeRange.min * 1000).getFullYear()}
+                  {Math.round(timeRange.min)}
                 </span>
                 <span className="text-[9px] text-rp-muted font-semibold">
-                  {new Date(timeRange.max * 1000).getFullYear()}
+                  {Math.round(timeRange.max)}
                 </span>
               </div>
             </div>
@@ -1746,8 +1759,8 @@ export default function App() {
       {!loading && hotspots.length > 0 && (
         <button
           onClick={() => setShowHotspots(p => !p)}
-          className={`hidden md:flex absolute z-[90] top-1/2 -translate-y-1/2 pointer-events-auto transition-all duration-300 ${
-            showHotspots ? 'left-[260px]' : 'left-0'
+          className={`flex absolute z-[90] top-1/2 -translate-y-1/2 pointer-events-auto transition-all duration-300 ${
+            showHotspots ? 'left-[180px] md:left-[260px]' : 'left-0'
           } bg-rp-surface border border-l-0 border-rp-hlHigh rounded-r-lg shadow-rp px-1.5 py-6 hover:bg-rp-hlLow flex-col items-center gap-2`}
           title="Toggle hotspots"
         >
