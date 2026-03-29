@@ -588,23 +588,8 @@ export default function App() {
         setStatusMsg(`Loading ${manifest.atlasCount} atlas textures...`);
 
         const fmt = manifest.atlasFormat || 'jpg';
-        // Load all atlases in parallel for faster startup
-        let atlasLoaded = 0;
-        const atlasPromises = [];
-        for (let i = 0; i < manifest.atlasCount; i++) {
-          atlasPromises.push(
-            PIXI.Assets.load(`${BASE}data/atlas_${i}.${fmt}`).then(tex => {
-              atlasLoaded++;
-              setLoadProgress(Math.round((atlasLoaded / manifest.atlasCount) * 40));
-              return tex;
-            })
-          );
-        }
-        const atlasTextures = await Promise.all(atlasPromises);
-        setLoadProgress(40);
 
-        /* Create sprites */
-        setStatusMsg('Building image field...');
+        /* Create the sprite container upfront */
         const container = new PIXI.Container();
         container.interactiveChildren = false;
         container.eventMode = 'none';
@@ -614,23 +599,14 @@ export default function App() {
         viewport.addChild(container);
 
         const currentThumbSize = manifest.thumbSize || THUMB_SIZE;
-        const batchSize = 5000;
-
-        // Detect binary format: v2 (24 bytes) has both UMAP + t-SNE coords; v1 (16 bytes) has one set
         const bytesPerImage = manifest.bytesPerImage || 16;
         const isV2 = bytesPerImage === 24;
 
+        /* Pre-parse all point data from the binary layout */
+        const allPointData = new Array(manifest.count);
         for (let i = 0; i < manifest.count; i++) {
-          if (i > 0 && i % batchSize === 0) {
-            setStatusMsg(`Placing images ${Math.round((i / manifest.count) * 100)}%...`);
-            setLoadProgress(40 + Math.round((i / manifest.count) * 55));
-            await new Promise(r => setTimeout(r, 0));
-            if (isCancelled) return;
-          }
-
           let x, y, tsneX, tsneY, ai, u, v, cluster;
           if (isV2) {
-            // 24-byte format: float32 umapX, umapY, tsneX, tsneY, uint16 atlas, u, v, cluster
             const offset = i * 24;
             x      = dataView.getFloat32(offset, true);
             y      = dataView.getFloat32(offset + 4, true);
@@ -641,51 +617,94 @@ export default function App() {
             v      = dataView.getUint16(offset + 20, true);
             cluster = dataView.getUint16(offset + 22, true);
           } else {
-            // 16-byte format: float32 x, y, uint16 atlas, u, v, padding
             const offset = i * 16;
             x  = dataView.getFloat32(offset, true);
             y  = dataView.getFloat32(offset + 4, true);
             ai = dataView.getUint16(offset + 8, true);
             u  = dataView.getUint16(offset + 10, true);
             v  = dataView.getUint16(offset + 12, true);
-            tsneX = x; tsneY = y; // Same coords for both modes
+            tsneX = x; tsneY = y;
             cluster = undefined;
           }
-
-          const frame = new PIXI.Rectangle(u, v, currentThumbSize, currentThumbSize);
-          const tex = new PIXI.Texture({ source: atlasTextures[ai].source, frame });
-          const sprite = new PIXI.Sprite(tex);
-          sprite.anchor.set(0.5);
-          // Position at t-SNE coordinates (default view)
-          const initX = tsneX ?? x;
-          const initY = tsneY ?? y;
-          sprite.position.set(initX, initY);
-          sprite.eventMode = 'none';
-          container.addChild(sprite);
-
-          const pObj = {
-            id: i, x: initX, y: initY,
-            originalX: x, originalY: y,       // Legacy/UMAP coordinates
-            tsneX, tsneY,                      // t-SNE coordinates
-            targetX: initX, targetY: initY,
-            ai, u, v, sprite,
-            ...(cluster !== undefined && { cluster }),
-          };
-          pointsRef.current.push(pObj);
-
-          const gx = Math.floor(initX / SPATIAL_CELL_SIZE);
-          const gy = Math.floor(initY / SPATIAL_CELL_SIZE);
-          const key = `${gx},${gy}`;
-          if (!spatialHashRef.current[key]) spatialHashRef.current[key] = [];
-          spatialHashRef.current[key].push(pObj);
+          allPointData[i] = { id: i, x, y, tsneX, tsneY, ai, u, v, cluster };
         }
+
+        /* Group point indices by atlas */
+        const pointsByAtlas = new Array(manifest.atlasCount);
+        for (let a = 0; a < manifest.atlasCount; a++) pointsByAtlas[a] = [];
+        for (let i = 0; i < manifest.count; i++) pointsByAtlas[allPointData[i].ai].push(i);
+
+        /* Progressive atlas loading — load atlases with limited concurrency,
+           create sprites for each atlas as soon as it arrives so the user
+           sees images appearing within seconds instead of waiting for all ~200MB. */
+        const CONCURRENCY = 4;
+        const atlasTextures = new Array(manifest.atlasCount);
+        let atlasLoaded = 0;
+
+        async function loadAtlasAndCreateSprites(atlasIdx) {
+          const tex = await PIXI.Assets.load(`${BASE}data/atlas_${atlasIdx}.${fmt}`);
+          if (isCancelled) return;
+          atlasTextures[atlasIdx] = tex;
+
+          /* Create sprites for all points belonging to this atlas */
+          for (const i of pointsByAtlas[atlasIdx]) {
+            const pd = allPointData[i];
+            const frame = new PIXI.Rectangle(pd.u, pd.v, currentThumbSize, currentThumbSize);
+            const spriteTex = new PIXI.Texture({ source: tex.source, frame });
+            const sprite = new PIXI.Sprite(spriteTex);
+            sprite.anchor.set(0.5);
+            const initX = pd.tsneX ?? pd.x;
+            const initY = pd.tsneY ?? pd.y;
+            sprite.position.set(initX, initY);
+            sprite.eventMode = 'none';
+            container.addChild(sprite);
+
+            const pObj = {
+              id: pd.id, x: initX, y: initY,
+              originalX: pd.x, originalY: pd.y,
+              tsneX: pd.tsneX, tsneY: pd.tsneY,
+              targetX: initX, targetY: initY,
+              ai: pd.ai, u: pd.u, v: pd.v, sprite,
+              ...(pd.cluster !== undefined && { cluster: pd.cluster }),
+            };
+            pointsRef.current[pd.id] = pObj;
+
+            const gx = Math.floor(initX / SPATIAL_CELL_SIZE);
+            const gy = Math.floor(initY / SPATIAL_CELL_SIZE);
+            const key = `${gx},${gy}`;
+            if (!spatialHashRef.current[key]) spatialHashRef.current[key] = [];
+            spatialHashRef.current[key].push(pObj);
+          }
+
+          atlasLoaded++;
+          setLoadProgress(Math.round((atlasLoaded / manifest.atlasCount) * 85));
+          setStatusMsg(`Loading atlas textures... ${atlasLoaded}/${manifest.atlasCount}`);
+        }
+
+        /* Run with limited concurrency */
+        {
+          let nextIdx = 0;
+          async function worker() {
+            while (nextIdx < manifest.atlasCount && !isCancelled) {
+              const idx = nextIdx++;
+              await loadAtlasAndCreateSprites(idx);
+            }
+          }
+          const workers = [];
+          for (let w = 0; w < Math.min(CONCURRENCY, manifest.atlasCount); w++) {
+            workers.push(worker());
+          }
+          await Promise.all(workers);
+        }
+        if (isCancelled) return;
+        setLoadProgress(85);
 
         /* Compute hotspots */
         setStatusMsg('Analysing clusters...');
-        setLoadProgress(96);
+        setLoadProgress(90);
         await new Promise(r => setTimeout(r, 0));
         const clusters = computeClusters(pointsRef.current);
-        setLoadProgress(98);
+        setLoadProgress(95);
         extractClusterThumbs(clusters, pointsRef.current, atlasTextures, currentThumbSize);
         setHotspots(clusters);
 
