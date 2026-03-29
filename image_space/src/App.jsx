@@ -322,7 +322,8 @@ export default function App() {
   const pointsRef = useRef([]);
   const viewModeRef = useRef('tsne');
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);       // full overlay
+  const [loadingAtlases, setLoadingAtlases] = useState(false); // compact bar during atlas loading
   const [loadProgress, setLoadProgress] = useState(0);
   const [stats, setStats] = useState({ count: 0, fps: 0 });
   const [selectedItem, setSelectedItem] = useState(null);
@@ -634,12 +635,42 @@ export default function App() {
         for (let a = 0; a < manifest.atlasCount; a++) pointsByAtlas[a] = [];
         for (let i = 0; i < manifest.count; i++) pointsByAtlas[allPointData[i].ai].push(i);
 
+        /* Early viewport fit — position camera before atlas streaming starts */
+        {
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+          for (let i = 0; i < manifest.count; i++) {
+            const p = allPointData[i];
+            if (p.tsneX < minX) minX = p.tsneX;
+            if (p.tsneX > maxX) maxX = p.tsneX;
+            if (p.tsneY < minY) minY = p.tsneY;
+            if (p.tsneY > maxY) maxY = p.tsneY;
+          }
+          if (minX < Infinity) {
+            const pad = currentThumbSize * 2;
+            container.boundsArea = new PIXI.Rectangle(
+              minX - pad, minY - pad,
+              maxX - minX + pad * 2, maxY - minY + pad * 2
+            );
+            const w = maxX - minX + pad;
+            const h = maxY - minY + pad;
+            const scaleX = viewport.screenWidth / w;
+            const scaleY = viewport.screenHeight / h;
+            viewport.setZoom(Math.min(scaleX, scaleY), true);
+            viewport.moveCenter((minX + maxX) / 2, (minY + maxY) / 2);
+          }
+        }
+
         /* Progressive atlas loading — load atlases with limited concurrency,
            create sprites for each atlas as soon as it arrives so the user
            sees images appearing within seconds instead of waiting for all ~200MB. */
         const CONCURRENCY = 4;
         const atlasTextures = new Array(manifest.atlasCount);
         let atlasLoaded = 0;
+
+        /* Dismiss full-screen overlay; show compact progress bar while atlases stream in */
+        setLoading(false);
+        setLoadingAtlases(true);
+        setLoadProgress(0);
 
         async function loadAtlasAndCreateSprites(atlasIdx) {
           const tex = await PIXI.Assets.load(`${BASE}data/atlas_${atlasIdx}.${fmt}`);
@@ -677,7 +708,7 @@ export default function App() {
           }
 
           atlasLoaded++;
-          setLoadProgress(Math.round((atlasLoaded / manifest.atlasCount) * 85));
+          setLoadProgress(Math.round((atlasLoaded / manifest.atlasCount) * 100));
           setStatusMsg(`Loading atlas textures... ${atlasLoaded}/${manifest.atlasCount}`);
         }
 
@@ -697,14 +728,12 @@ export default function App() {
           await Promise.all(workers);
         }
         if (isCancelled) return;
-        setLoadProgress(85);
+        setLoadingAtlases(false); // dismiss compact progress bar
 
         /* Compute hotspots */
         setStatusMsg('Analysing clusters...');
-        setLoadProgress(90);
         await new Promise(r => setTimeout(r, 0));
         const clusters = computeClusters(pointsRef.current);
-        setLoadProgress(95);
         extractClusterThumbs(clusters, pointsRef.current, atlasTextures, currentThumbSize);
         setHotspots(clusters);
 
@@ -857,35 +886,6 @@ export default function App() {
             console.log(`Loaded CLIP cluster labels: ${Object.keys(clipLabelsRef.current).length} clusters`);
           }
         } catch (_) { /* cluster_labels.json is optional */ }
-
-        // Fit to actual content bounds
-        {
-          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-          for (const p of pointsRef.current) {
-            minX = Math.min(minX, p.originalX);
-            maxX = Math.max(maxX, p.originalX);
-            minY = Math.min(minY, p.originalY);
-            maxY = Math.max(maxY, p.originalY);
-          }
-          if (minX < Infinity) {
-            const pad = THUMB_SIZE * 2;
-            // Set container bounds to avoid O(n) bounds recalculation
-            container.boundsArea = new PIXI.Rectangle(
-              minX - pad, minY - pad,
-              maxX - minX + pad * 2, maxY - minY + pad * 2
-            );
-            const w = maxX - minX + pad;
-            const h = maxY - minY + pad;
-            const scaleX = viewport.screenWidth / w;
-            const scaleY = viewport.screenHeight / h;
-            const scale = Math.min(scaleX, scaleY);
-            viewport.setZoom(scale, true);
-            viewport.moveCenter((minX + maxX) / 2, (minY + maxY) / 2);
-          } else {
-            viewport.fit();
-            viewport.moveCenter(0, 0);
-          }
-        }
 
         /* Ticker — animation + FPS */
         const movingSet = new Set(); // Track only sprites currently animating
@@ -1090,9 +1090,6 @@ export default function App() {
             }
           }, { passive: false });
         }
-
-        setLoadProgress(100);
-        setLoading(false);
 
       } catch (err) {
         console.error('Boot failure:', err);
@@ -1322,12 +1319,12 @@ export default function App() {
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
       {/* ── Minimap ───────────────────────────── */}
-      {!loading && viewMode === 'tsne' && (
+      {!loading && !loadingAtlases && viewMode === 'tsne' && (
         <canvas
           ref={minimapRef}
           width={160}
           height={160}
-          className="absolute bottom-[72px] right-4 z-[40] rounded-lg border border-rp-hlMed shadow-rp-lg cursor-crosshair opacity-80 hover:opacity-100 transition-opacity"
+          className="hidden md:block absolute bottom-[72px] right-4 z-[40] rounded-lg border border-rp-hlMed shadow-rp-lg cursor-crosshair opacity-80 hover:opacity-100 transition-opacity"
           style={{ background: 'rgba(250,244,237,0.9)', width: 160, height: 160 }}
           onClick={(e) => {
             const md = minimapDataRef.current;
@@ -1371,16 +1368,16 @@ export default function App() {
           {/* Logo + Hotspots column */}
           <div className="flex flex-col gap-2">
             {/* Logo */}
-            <div className="pointer-events-auto rp-card flex items-center gap-3">
-              <ImageSpaceLogo size={36} />
-              <h1 className="text-lg font-extrabold tracking-tight text-rp-text leading-none">
+            <div className="pointer-events-auto rp-card flex items-center gap-2 md:gap-3">
+              <ImageSpaceLogo size={32} />
+              <h1 className="hidden md:block text-lg font-extrabold tracking-tight text-rp-text leading-none">
                 ImageSpace
               </h1>
             </div>
 
             {/* Hotspots (larger cards) */}
             {!loading && hotspots.length > 0 && showHotspots && (
-              <div className="pointer-events-auto flex flex-col gap-2 max-w-[240px] max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin">
+              <div className="pointer-events-auto hidden md:flex flex-col gap-2 max-w-[240px] max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin">
                 {hotspots.map((h, i) => {
                   const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
                   return (
@@ -1417,19 +1414,20 @@ export default function App() {
           {/* View Mode Tabs + Filters */}
           <div className="flex flex-col items-end gap-2">
             {/* View tabs */}
-            <div className="pointer-events-auto rp-card flex items-center gap-1 px-2 py-1.5">
+            <div className="pointer-events-auto rp-card flex items-center gap-0.5 md:gap-1 px-1.5 md:px-2 py-1.5">
               {Object.entries(VIEW_MODES).map(([key, { label }]) => (
                 <button
                   key={key}
                   onClick={() => switchView(key)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  className={`flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
                     viewMode === key
                       ? 'bg-rp-pine text-white shadow-sm'
                       : 'text-rp-subtle hover:bg-rp-hlLow hover:text-rp-text'
                   }`}
+                  title={label}
                 >
                   {modeIcon(key)}
-                  {label}
+                  <span className="hidden md:inline">{label}</span>
                 </button>
               ))}
               <div className="w-px h-4 bg-rp-hlHigh mx-0.5" />
@@ -1444,7 +1442,7 @@ export default function App() {
 
             {/* Checkbox filter bar */}
             {Object.keys(filterOptions).length > 0 && (
-              <div className="pointer-events-auto rp-card flex items-center gap-2 px-3 py-1.5 flex-wrap">
+              <div className="pointer-events-auto rp-card hidden md:flex items-center gap-2 px-3 py-1.5 flex-wrap">
                 <Filter size={11} className="text-rp-muted shrink-0" />
                 {Object.keys(filterOptions).map(col => {
                   const selected = csvFilters[col] || new Set();
@@ -1748,9 +1746,9 @@ export default function App() {
       {!loading && hotspots.length > 0 && (
         <button
           onClick={() => setShowHotspots(p => !p)}
-          className={`absolute z-[90] top-1/2 -translate-y-1/2 pointer-events-auto transition-all duration-300 ${
+          className={`hidden md:flex absolute z-[90] top-1/2 -translate-y-1/2 pointer-events-auto transition-all duration-300 ${
             showHotspots ? 'left-[260px]' : 'left-0'
-          } bg-rp-surface border border-l-0 border-rp-hlHigh rounded-r-lg shadow-rp px-1.5 py-6 hover:bg-rp-hlLow flex flex-col items-center gap-2`}
+          } bg-rp-surface border border-l-0 border-rp-hlHigh rounded-r-lg shadow-rp px-1.5 py-6 hover:bg-rp-hlLow flex-col items-center gap-2`}
           title="Toggle hotspots"
         >
           {showHotspots ? (
@@ -1765,9 +1763,9 @@ export default function App() {
       {/* ── Right-edge Tab Toggle ─────────────── */}
       <button
         onClick={() => setShowDetailPanel(p => !p)}
-        className={`absolute z-[90] top-1/2 -translate-y-1/2 pointer-events-auto transition-all duration-300 ${
+        className={`hidden md:flex absolute z-[90] top-1/2 -translate-y-1/2 pointer-events-auto transition-all duration-300 ${
           showDetailPanel ? 'right-[340px]' : 'right-0'
-        } bg-rp-surface border border-r-0 border-rp-hlHigh rounded-l-lg shadow-rp px-1.5 py-6 hover:bg-rp-hlLow flex flex-col items-center gap-2`}
+        } bg-rp-surface border border-r-0 border-rp-hlHigh rounded-l-lg shadow-rp px-1.5 py-6 hover:bg-rp-hlLow flex-col items-center gap-2`}
         title="Toggle detail panel"
       >
         {showDetailPanel ? (
@@ -1780,7 +1778,7 @@ export default function App() {
 
       {/* ── Detail Panel ─────────────────────── */}
       {showDetailPanel && (
-        <div className="absolute inset-y-0 right-0 w-[340px] z-[100] bg-rp-surface border-l border-rp-hlHigh p-8 flex flex-col gap-5 shadow-[-12px_0_40px_-10px_rgba(87,82,121,0.1)] overflow-y-auto">
+        <div className="absolute inset-y-0 right-0 w-full md:w-[340px] z-[100] bg-rp-surface border-l border-rp-hlHigh p-6 md:p-8 flex flex-col gap-5 shadow-[-12px_0_40px_-10px_rgba(87,82,121,0.1)] overflow-y-auto">
           <button
             onClick={() => setShowDetailPanel(false)}
             className="absolute top-4 right-4 p-1.5 rounded-lg border border-rp-hlHigh hover:bg-rp-love hover:text-white hover:border-rp-love transition-all text-rp-muted"
@@ -1916,7 +1914,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Loading ──────────────────────────── */}
+      {/* ── Loading (full overlay — initial boot only) ──── */}
       {loading && !error && (
         <div className="absolute inset-0 z-[1000] bg-rp-base flex flex-col items-center justify-center">
           <div className="flex flex-col items-center gap-6 max-w-sm w-full px-8">
@@ -1929,14 +1927,26 @@ export default function App() {
               <div className="w-full h-2.5 bg-rp-hlMed rounded-full overflow-hidden shadow-inner">
                 <div
                   className="h-full bg-gradient-to-r from-rp-pine to-rp-foam rounded-full transition-all duration-500 ease-out"
-                  style={{ width: `${Math.max(loadProgress, 3)}%` }}
+                  style={{ width: '30%' }}
                 />
               </div>
-              <div className="flex justify-between">
-                <p className="text-xs text-rp-subtle font-medium">{statusMsg}</p>
-                <p className="text-xs font-bold text-rp-pine tabular-nums">{loadProgress}%</p>
-              </div>
+              <p className="text-xs text-rp-subtle font-medium text-center">{statusMsg}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Compact progress bar (atlas streaming) ──── */}
+      {loadingAtlases && !error && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
+          <div className="bg-rp-surface/90 backdrop-blur-md border border-rp-hlMed rounded-full shadow-rp-lg px-5 py-2 flex items-center gap-3 pointer-events-auto">
+            <div className="w-40 h-2 bg-rp-hlMed rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-rp-pine to-rp-foam rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${loadProgress}%` }}
+              />
+            </div>
+            <span className="text-xs font-bold text-rp-pine tabular-nums whitespace-nowrap">{statusMsg}</span>
           </div>
         </div>
       )}
