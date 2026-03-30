@@ -15,6 +15,13 @@ const SPATIAL_CELL_SIZE = 120;
 // BASE_URL is './' (relative) — built dist/ works at any URL without configuration.
 const BASE = import.meta.env.BASE_URL;
 
+/* ── Mobile / low-memory detection ────────────── */
+const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+const MOBILE_MAX_DPR = 1;          // cap pixel ratio on mobile
+const MOBILE_ATLAS_SCALE = 0.5;    // downscale 4096→2048 on mobile (4× GPU mem savings)
+const MOBILE_CONCURRENCY = 2;      // fewer parallel loads on mobile
+
 /* ── ImageSpace Logo (Rose Pine Dawn) ─────────── */
 const ImageSpaceLogo = ({ size = 40 }) => (
   <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -574,6 +581,10 @@ export default function App() {
   useEffect(() => {
     let app = null;
     let isCancelled = false;
+    let handleResize = null;
+    let handleContextLost = null;
+    let handleContextRestored = null;
+    let handleWheel = null;
 
     async function start() {
       try {
@@ -590,7 +601,7 @@ export default function App() {
           antialias: false,
           backgroundColor: 0xfaf4ed,
           resizeTo: window,
-          resolution: window.devicePixelRatio || 1,
+          resolution: isMobile ? MOBILE_MAX_DPR : (window.devicePixelRatio || 1),
           autoDensity: true,
           preference: 'webgl',
         });
@@ -740,9 +751,10 @@ export default function App() {
         /* Progressive atlas loading — load atlases with limited concurrency,
            create sprites for each atlas as soon as it arrives so the user
            sees images appearing within seconds instead of waiting for all ~200MB. */
-        const CONCURRENCY = 4;
+        const CONCURRENCY = isMobile ? MOBILE_CONCURRENCY : 4;
         const atlasTextures = new Array(manifest.atlasCount);
         let atlasLoaded = 0;
+        const atlasScale = isMobile ? MOBILE_ATLAS_SCALE : 1;
 
         /* Dismiss full-screen overlay; show compact progress bar while atlases stream in */
         setLoading(false);
@@ -750,14 +762,33 @@ export default function App() {
         setLoadProgress(0);
 
         async function loadAtlasAndCreateSprites(atlasIdx) {
-          const tex = await PIXI.Assets.load(`${BASE}data/atlas_${atlasIdx}.${fmt}`);
+          let tex = await PIXI.Assets.load(`${BASE}data/atlas_${atlasIdx}.${fmt}`);
           if (isCancelled) return;
+
+          /* On mobile, downscale atlas texture to halve GPU memory per atlas (4096→2048).
+             This reduces total GPU usage from ~3.2GB to ~800MB. */
+          if (atlasScale < 1) {
+            const src = tex.source;
+            const sw = src.width, sh = src.height;
+            const dw = Math.round(sw * atlasScale), dh = Math.round(sh * atlasScale);
+            const offscreen = document.createElement('canvas');
+            offscreen.width = dw;
+            offscreen.height = dh;
+            const ctx2d = offscreen.getContext('2d');
+            ctx2d.drawImage(src.resource, 0, 0, dw, dh);
+            // Destroy original full-size texture to free GPU memory immediately
+            tex.destroy(true);
+            tex = PIXI.Texture.from(offscreen);
+          }
           atlasTextures[atlasIdx] = tex;
 
           /* Create sprites for all points belonging to this atlas */
           for (const i of pointsByAtlas[atlasIdx]) {
             const pd = allPointData[i];
-            const frame = new PIXI.Rectangle(pd.u, pd.v, currentThumbSize, currentThumbSize);
+            const frame = new PIXI.Rectangle(
+              pd.u * atlasScale, pd.v * atlasScale,
+              currentThumbSize * atlasScale, currentThumbSize * atlasScale
+            );
             const spriteTex = new PIXI.Texture({ source: tex.source, frame });
             const sprite = new PIXI.Sprite(spriteTex);
             sprite.anchor.set(0.5);
@@ -772,7 +803,7 @@ export default function App() {
               originalX: pd.x, originalY: pd.y,
               tsneX: pd.tsneX, tsneY: pd.tsneY,
               targetX: initX, targetY: initY,
-              ai: pd.ai, u: pd.u, v: pd.v, sprite,
+              ai: pd.ai, u: pd.u * atlasScale, v: pd.v * atlasScale, sprite,
               ...(pd.cluster !== undefined && { cluster: pd.cluster }),
             };
             pointsRef.current[pd.id] = pObj;
@@ -808,14 +839,15 @@ export default function App() {
         setLoadingAtlases(false); // dismiss compact progress bar
 
         /* Now extract cluster thumbnails from loaded atlases */
-        extractClusterThumbs(clusters, pointsRef.current, atlasTextures, currentThumbSize);
+        const scaledThumbSize = currentThumbSize * atlasScale;
+        extractClusterThumbs(clusters, pointsRef.current, atlasTextures, scaledThumbSize);
         setHotspots(prev => [...prev]); // trigger re-render to show thumbnails
 
         /* Defer average color computation — only needed for Color view, not initial render */
         setStatusMsg('Ready — computing colors in background...');
         (async () => {
           await new Promise(r => setTimeout(r, 500)); // let UI settle first
-          await computeAvgColors(pointsRef.current, atlasTextures, currentThumbSize, () => {});
+          await computeAvgColors(pointsRef.current, atlasTextures, scaledThumbSize, () => {});
           setColorsReady(true);
         })();
 
@@ -1084,22 +1116,37 @@ export default function App() {
         });
 
         // Resize — PixiJS resizeTo:window handles renderer; update pixi-viewport
-        window.addEventListener('resize', () => {
+        handleResize = () => {
           viewport.resize(window.innerWidth, window.innerHeight);
-        });
+        };
+        window.addEventListener('resize', handleResize);
+
+        /* WebGL context loss recovery — mobile browsers drop the context
+           when backgrounded, on low memory, or after sleep. */
+        const canvas = canvasRef.current;
+        handleContextLost = (e) => {
+          e.preventDefault(); // allow context restoration
+          console.warn('[ImageSpace] WebGL context lost — waiting for restore');
+        };
+        handleContextRestored = () => {
+          console.log('[ImageSpace] WebGL context restored — reloading');
+          window.location.reload();
+        };
+        if (canvas) {
+          canvas.addEventListener('webglcontextlost', handleContextLost);
+          canvas.addEventListener('webglcontextrestored', handleContextRestored);
+        }
 
         /* Timeline: horizontal trackpad swipe → horizontal pan */
-        const canvas = canvasRef.current;
+        handleWheel = (e) => {
+          if (viewModeRef.current === 'timeline' && Math.abs(e.deltaX) > 5 && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            viewport.x -= e.deltaX * 2;
+            viewport.dirty = true;
+          }
+        };
         if (canvas) {
-          canvas.addEventListener('wheel', (e) => {
-            if (viewModeRef.current === 'timeline' && Math.abs(e.deltaX) > 5 && !e.ctrlKey && !e.metaKey) {
-              // Only intercept horizontal swipes (trackpad horizontal two-finger swipe)
-              // Vertical scroll passes through to viewport's built-in zoom-to-cursor
-              e.preventDefault();
-              viewport.x -= e.deltaX * 2;
-              viewport.dirty = true;
-            }
-          }, { passive: false });
+          canvas.addEventListener('wheel', handleWheel, { passive: false });
         }
 
       } catch (err) {
@@ -1111,6 +1158,13 @@ export default function App() {
     start();
     return () => {
       isCancelled = true;
+      const canvas = canvasRef.current;
+      if (canvas) {
+        canvas.removeEventListener('webglcontextlost', handleContextLost);
+        canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+        canvas.removeEventListener('wheel', handleWheel);
+      }
+      window.removeEventListener('resize', handleResize);
       if (app) {
         try { app.destroy(false, { children: true, texture: true }); } catch (_) {}
       }
