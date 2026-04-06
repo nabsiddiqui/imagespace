@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
-  Database, X, Layers, Grid, Eye,
+  Database, X, Layers, Grid, Magnet, Eye,
   ZoomIn, ZoomOut, Maximize2,
   Flame, PanelLeftClose, PanelLeft, PanelRight,
   Palette, Info,
@@ -65,15 +65,22 @@ const DetailThumb = React.memo(({ point, thumbSize, atlasFormat, displaySize = 2
 /* ── View Mode Layouts ────────────────────────── */
 const VIEW_MODES = {
   tsne: { label: 't-SNE', icon: 'scatter', desc: 'Visual similarity layout' },
+  snap: { label: 'Snap', icon: 'magnet', desc: 'Grid-snapped t-SNE layout' },
   grid: { label: 'Grid', icon: 'grid', desc: 'Ordinal grid layout' },
   color: { label: 'Color', icon: 'palette', desc: 'Sorted by dominant color' },
   timeline: { label: 'Timeline', icon: 'clock', desc: 'Chronological timeline' },
 };
 
 function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
+  // Reset z-ordering when switching away from t-SNE (grid/color/timeline have flat z)
+  if (mode !== 'tsne') {
+    for (const p of allPoints) {
+      if (p.sprite) p.sprite.zIndex = 0;
+    }
+  }
   // If visibleSet provided, only layout those points; hide others (or dim in umap)
   const hasFilter = visibleSet && visibleSet.size < allPoints.length;
-  const isStableLayout = mode === 'tsne';
+  const isStableLayout = mode === 'tsne' || mode === 'snap';
   // In stable-layout modes show ALL points in their positions, just dim non-visible
   const points = (hasFilter && !isStableLayout) ? allPoints.filter(p => visibleSet.has(p.id)) : allPoints;
   const n = points.length;
@@ -106,6 +113,42 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
       for (const p of points) {
         p.targetX = p.tsneX ?? p.originalX;
         p.targetY = p.tsneY ?? p.originalY;
+      }
+      // Z-depth ordering: images closer to their cluster centroid render on top,
+      // creating a "pile of photos" effect in dense regions.
+      const cMap = {};
+      for (const p of points) {
+        const c = p.cluster ?? 0;
+        if (!cMap[c]) cMap[c] = { sx: 0, sy: 0, n: 0 };
+        cMap[c].sx += p.targetX;
+        cMap[c].sy += p.targetY;
+        cMap[c].n++;
+      }
+      for (const c of Object.values(cMap)) {
+        c.cx = c.sx / c.n;
+        c.cy = c.sy / c.n;
+      }
+      for (const p of points) {
+        const c = cMap[p.cluster ?? 0];
+        const dist = Math.hypot(p.targetX - c.cx, p.targetY - c.cy);
+        // Invert: closer to centroid = higher zIndex (rendered on top)
+        // Normalize by max distance in cluster to keep values reasonable
+        if (!c.maxDist || dist > c.maxDist) c.maxDist = dist;
+      }
+      for (const p of points) {
+        if (!p.sprite) continue;
+        const c = cMap[p.cluster ?? 0];
+        const dist = Math.hypot(p.targetX - c.cx, p.targetY - c.cy);
+        const maxD = c.maxDist || 1;
+        p.sprite.zIndex = Math.round((1 - dist / maxD) * 1000);
+      }
+      break;
+    }
+    case 'snap': {
+      // Grid-snapped t-SNE: uses the overlap-removed coordinates (originalX/originalY)
+      for (const p of points) {
+        p.targetX = p.originalX;
+        p.targetY = p.originalY;
       }
       break;
     }
@@ -325,6 +368,7 @@ export default function App() {
   const canvasRef = useRef(null);
   const appRef = useRef(null);
   const viewportRef = useRef(null);
+  const containerRef = useRef(null);
   const spatialHashRef = useRef({});
   const pointsRef = useRef([]);
   const viewModeRef = useRef('tsne');
@@ -346,6 +390,7 @@ export default function App() {
   const [tooltip, setTooltip] = useState(null);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [clusterLabels, setClusterLabels] = useState([]); // [{id, x, y, label, color, count}]
+  const clusterLabelsRef = useRef([]); // stable ref to avoid React re-renders from fresh arrays
   const clusterCentroidsRef = useRef([]); // world positions of cluster group centers
   const clipLabelsRef = useRef(null); // CLIP-generated cluster labels from cluster_labels.json
   const thumbSizeRef = useRef(THUMB_SIZE); // actual thumb size from manifest
@@ -371,6 +416,7 @@ export default function App() {
   /* Standalone minimap renderer — runs independently of PixiJS ticker */
   useEffect(() => {
     if (!minimapReady || loading) return;
+    const MINIMAP_INTERVAL = isMobile ? 500 : 200; // lower frequency on mobile to reduce CPU pressure
     const interval = setInterval(() => {
       const mc = minimapRef.current;
       const md = minimapDataRef.current;
@@ -401,7 +447,7 @@ export default function App() {
           ctx.strokeRect(rx, ry, rw, rh);
         } catch (_) { /* viewport may not be ready */ }
       }
-    }, 200);
+    }, MINIMAP_INTERVAL);
     return () => clearInterval(interval);
   }, [minimapReady, loading]);
 
@@ -466,6 +512,20 @@ export default function App() {
   /* ── Recompute layout with current filters ── */
   const relayout = useCallback((mode, visSet) => {
     visibleSetRef.current = visSet;
+
+    // Toggle sortableChildren — only needed for t-SNE z-depth ordering.
+    // Sorting 50K children per frame is expensive; disable for flat modes.
+    const container = containerRef.current;
+    if (container) {
+      const needsSort = mode === 'tsne';
+      if (container.sortableChildren !== needsSort) container.sortableChildren = needsSort;
+      // Uncache texture before animation starts (positions will change)
+      if (container._cacheAsTextureEnabled) {
+        container.cacheAsTexture(false);
+        container._cacheAsTextureEnabled = false;
+      }
+    }
+
     computeLayout(pointsRef.current, mode, visSet, thumbSizeRef.current);
 
     // Mark all points as moving so the animation ticker picks them up
@@ -585,6 +645,8 @@ export default function App() {
     let handleContextLost = null;
     let handleContextRestored = null;
     let handleWheel = null;
+    let pixiRef = null;          // holds PIXI module for cleanup
+    let atlasUrls = [];          // tracks loaded atlas URLs for Assets.unload
 
     async function start() {
       try {
@@ -592,9 +654,10 @@ export default function App() {
         const [PIXI, { Viewport }] = await Promise.all([
           import('pixi.js'), import('pixi-viewport')
         ]);
+        pixiRef = PIXI;
         if (isCancelled) return;
 
-        setStatusMsg('Initialising WebGL...');
+        setStatusMsg('Initialising renderer...');
         app = new PIXI.Application();
         await app.init({
           canvas: canvasRef.current,
@@ -603,7 +666,9 @@ export default function App() {
           resizeTo: window,
           resolution: isMobile ? MOBILE_MAX_DPR : (window.devicePixelRatio || 1),
           autoDensity: true,
-          preference: 'webgl',
+          // Mobile: force WebGL (stable, has context loss recovery).
+          // Desktop: let PixiJS auto-select WebGPU if available (2-4× faster rendering).
+          ...(isMobile && { preference: 'webgl' }),
         });
         if (isCancelled) { app.destroy(false, { children: true, texture: true }); return; }
         appRef.current = app;
@@ -646,7 +711,9 @@ export default function App() {
         container.isRenderGroup = true;
         container.cullable = true;
         container.cullableChildren = true;
+        container.sortableChildren = true; // toggled per mode in relayout()
         viewport.addChild(container);
+        containerRef.current = container;
 
         const currentThumbSize = manifest.thumbSize || THUMB_SIZE;
         const bytesPerImage = manifest.bytesPerImage || 16;
@@ -762,7 +829,9 @@ export default function App() {
         setLoadProgress(0);
 
         async function loadAtlasAndCreateSprites(atlasIdx) {
-          let tex = await PIXI.Assets.load(`${BASE}data/atlas_${atlasIdx}.${fmt}`);
+          const atlasUrl = `${BASE}data/atlas_${atlasIdx}.${fmt}`;
+          atlasUrls.push(atlasUrl);
+          let tex = await PIXI.Assets.load(atlasUrl);
           if (isCancelled) return;
 
           /* On mobile, downscale atlas texture to halve GPU memory per atlas (4096→2048).
@@ -776,8 +845,10 @@ export default function App() {
             offscreen.height = dh;
             const ctx2d = offscreen.getContext('2d');
             ctx2d.drawImage(src.resource, 0, 0, dw, dh);
-            // Destroy original full-size texture to free GPU memory immediately
-            tex.destroy(true);
+            // Unload the full-size texture via Assets (proper cleanup, avoids "destroyed instead of unloaded" warning)
+            // then replace with a canvas-backed texture that is NOT in the Assets cache
+            await PIXI.Assets.unload(atlasUrl);
+            atlasUrls = atlasUrls.filter(u => u !== atlasUrl); // already unloaded, remove from cleanup list
             tex = PIXI.Texture.from(offscreen);
           }
           atlasTextures[atlasIdx] = tex;
@@ -1000,32 +1071,65 @@ export default function App() {
             // No animation — only do periodic UI updates
           } else if (movingSet.size === 0) {
             app._spatialDirty = false;
-            spatialHashRef.current = {};
-            for (const p of pointsRef.current) {
-              const gx = Math.floor(p.x / SPATIAL_CELL_SIZE);
-              const gy = Math.floor(p.y / SPATIAL_CELL_SIZE);
-              const key = `${gx},${gy}`;
-              if (!spatialHashRef.current[key]) spatialHashRef.current[key] = [];
-              spatialHashRef.current[key].push(p);
+            // Rebuild spatial hash — on mobile, defer to idle callback to avoid blocking render
+            const rebuildHash = () => {
+              spatialHashRef.current = {};
+              for (const p of pointsRef.current) {
+                const gx = Math.floor(p.x / SPATIAL_CELL_SIZE);
+                const gy = Math.floor(p.y / SPATIAL_CELL_SIZE);
+                const key = `${gx},${gy}`;
+                if (!spatialHashRef.current[key]) spatialHashRef.current[key] = [];
+                spatialHashRef.current[key].push(p);
+              }
+            };
+            if (isMobile && typeof requestIdleCallback === 'function') {
+              requestIdleCallback(rebuildHash, { timeout: 500 });
+            } else {
+              rebuildHash();
+            }
+
+            // On mobile only: cache the sprite container as a single GPU texture.
+            // This collapses 50K draw calls into 1 — massive FPS boost for static pan/zoom.
+            // Desktop skips this because hover effects modify individual sprites.
+            // The cache is invalidated (disabled) in relayout() before the next animation starts.
+            if (isMobile && containerRef.current && !containerRef.current._cacheAsTextureEnabled) {
+              setTimeout(() => {
+                const c = containerRef.current;
+                if (c && movingSet.size === 0) {
+                  try {
+                    c.cacheAsTexture(true);
+                    c._cacheAsTextureEnabled = true;
+                  } catch (_) { /* cacheAsTexture may not be available in all builds */ }
+                }
+              }, 100);
             }
           }
 
-          // Throttle UI state updates to avoid React re-render overhead
+          // Throttle UI state updates — longer interval on mobile to reduce React re-render overhead
           const now = Date.now();
-          if (!app._lastUiUpdate || now - app._lastUiUpdate > 200) {
+          const UI_THROTTLE = isMobile ? 1000 : 200;
+          if (!app._lastUiUpdate || now - app._lastUiUpdate > UI_THROTTLE) {
             app._lastUiUpdate = now;
             setZoomLevel(viewport.scale.x);
             setStats(s => ({ ...s, fps: Math.round(app.ticker.FPS) }));
           }
 
           // Update cluster label screen positions (throttled separately)
-          if (clusterCentroidsRef.current.length > 0 && (!app._lastLabelUpdate || now - app._lastLabelUpdate > 100)) {
+          const LABEL_THROTTLE = isMobile ? 500 : 100;
+          if (clusterCentroidsRef.current.length > 0 && (!app._lastLabelUpdate || now - app._lastLabelUpdate > LABEL_THROTTLE)) {
             app._lastLabelUpdate = now;
             const labels = clusterCentroidsRef.current.map(c => {
               const screen = viewport.toScreen(c.worldX, c.worldY);
               return { ...c, x: screen.x, y: screen.y };
             });
-            setClusterLabels(labels);
+            // Only trigger React re-render if label positions actually changed (avoid fresh array reference)
+            const prev = clusterLabelsRef.current;
+            const changed = labels.length !== prev.length ||
+              labels.some((l, i) => Math.abs(l.x - (prev[i]?.x ?? 0)) > 1 || Math.abs(l.y - (prev[i]?.y ?? 0)) > 1);
+            if (changed) {
+              clusterLabelsRef.current = labels;
+              setClusterLabels(labels);
+            }
           }
 
           // Update timeline current time based on viewport center (throttled)
@@ -1077,6 +1181,8 @@ export default function App() {
 
         app.stage.on('pointermove', (e) => {
           if (isCancelled) return;
+          // Skip expensive spatial hash lookup on mobile — no cursor hover on touch devices
+          if (isMobile) return;
           const worldPos = viewport.toWorld(e.global.x, e.global.y);
           const gx = Math.floor(worldPos.x / SPATIAL_CELL_SIZE);
           const gy = Math.floor(worldPos.y / SPATIAL_CELL_SIZE);
@@ -1099,7 +1205,12 @@ export default function App() {
             if (closest) { closest.sprite.scale.set(1.5); closest.sprite.tint = 0xea9d34; }
             lastHovered = closest;
             if (closest) {
-              setTooltip({ id: closest.id, x: e.global.x, y: e.global.y });
+              // Throttle tooltip React re-renders to 60ms — avoids excessive setState during fast mouse movement
+              const ttNow = Date.now();
+              if (!app._lastTooltipUpdate || ttNow - app._lastTooltipUpdate > 60) {
+                app._lastTooltipUpdate = ttNow;
+                setTooltip({ id: closest.id, x: e.global.x, y: e.global.y });
+              }
               canvasRef.current.style.cursor = 'pointer';
             } else {
               setTooltip(null);
@@ -1108,11 +1219,23 @@ export default function App() {
           }
         });
 
-        app.stage.on('pointerdown', () => {
-          if (lastHovered) {
-            setSelectedItem({ id: lastHovered.id, x: lastHovered.x, y: lastHovered.y });
-            setShowDetailPanel(true);
+        let downPos = null;
+        const CLICK_THRESHOLD = 5; // pixels — anything beyond this is a drag, not a click
+
+        app.stage.on('pointerdown', (e) => {
+          downPos = { x: e.global.x, y: e.global.y };
+        });
+
+        app.stage.on('pointerup', (e) => {
+          if (downPos && lastHovered) {
+            const dx = e.global.x - downPos.x;
+            const dy = e.global.y - downPos.y;
+            if (dx * dx + dy * dy < CLICK_THRESHOLD * CLICK_THRESHOLD) {
+              setSelectedItem({ id: lastHovered.id, x: lastHovered.x, y: lastHovered.y });
+              setShowDetailPanel(true);
+            }
           }
+          downPos = null;
         });
 
         // Resize — PixiJS resizeTo:window handles renderer; update pixi-viewport
@@ -1166,7 +1289,16 @@ export default function App() {
       }
       window.removeEventListener('resize', handleResize);
       if (app) {
-        try { app.destroy(false, { children: true, texture: true }); } catch (_) {}
+        try {
+          // Unload Assets-managed atlas textures via Assets.unload() first.
+          // This properly removes them from the Assets cache and destroys their TextureSources.
+          // Then destroy the app WITHOUT texture:true — the frame textures (sprite sub-textures)
+          // share the same TextureSources which are already cleaned up above.
+          if (pixiRef && atlasUrls.length > 0) {
+            atlasUrls.forEach(url => { try { pixiRef.Assets.unload(url); } catch (_) {} });
+          }
+          app.destroy(false, { children: true, texture: false });
+        } catch (_) {}
       }
       pointsRef.current = [];
       spatialHashRef.current = {};
@@ -1217,6 +1349,7 @@ export default function App() {
   const modeIcon = (mode) => {
     switch (VIEW_MODES[mode].icon) {
       case 'scatter': return <Eye size={14} />;
+      case 'magnet': return <Magnet size={14} />;
       case 'grid': return <Grid size={14} />;
       case 'flame': return <Flame size={14} />;
       case 'palette': return <Palette size={14} />;

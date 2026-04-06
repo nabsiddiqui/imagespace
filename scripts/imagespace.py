@@ -396,6 +396,9 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
 
     tsne_coords = scale_coords(tsne_coords, target_side)
 
+    # Preserve raw t-SNE coords (with natural overlap) for the viewer's t-SNE mode
+    raw_tsne_coords = tsne_coords.copy()
+
     # Remove overlaps by snapping to nearest unoccupied grid cell
     print(f"  Removing overlaps (cell={cell_size:.0f}px, grid≈{int(target_side/cell_size)}²)...")
     start = time.time()
@@ -480,7 +483,7 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
         cluster_probs = (1 - dists / max_d).astype(np.float32)
         print(f"  MiniBatchKMeans: {time.time() - start:.1f}s")
 
-    return tsne_coords.astype(np.float32), cluster_ids.astype(np.int32), embeddings_pca, cluster_probs
+    return tsne_coords.astype(np.float32), raw_tsne_coords.astype(np.float32), cluster_ids.astype(np.int32), embeddings_pca, cluster_probs
 
 
 # ── Stage 4b: k-Nearest Neighbors ────────────────────────────
@@ -803,15 +806,17 @@ def _get_exif_year(img_path):
 
 
 # ── Stage 7: Output Generation ────────────────────────────────
-def write_binary_data(output_dir, tsne_coords, atlas_data, cluster_ids):
-    """Write binary layout data. 24 bytes per image."""
-    binary_data = bytearray(len(tsne_coords) * 24)
-    for i in range(len(tsne_coords)):
+def write_binary_data(output_dir, snapped_coords, raw_tsne_coords, atlas_data, cluster_ids):
+    """Write binary layout data. 24 bytes per image.
+    x/y = snapped (grid) coords, tsneX/tsneY = raw t-SNE coords (with natural overlap)."""
+    binary_data = bytearray(len(snapped_coords) * 24)
+    for i in range(len(snapped_coords)):
         ai, u, v = atlas_data[i]
         cid = int(cluster_ids[i])
-        tx, ty = float(tsne_coords[i][0]), float(tsne_coords[i][1])
+        sx, sy = float(snapped_coords[i][0]), float(snapped_coords[i][1])
+        rx, ry = float(raw_tsne_coords[i][0]), float(raw_tsne_coords[i][1])
         struct.pack_into('<ffffHHHH', binary_data, i * 24,
-            tx, ty, tx, ty, ai, u, v, cid)
+            sx, sy, rx, ry, ai, u, v, cid)
 
     output_path = os.path.join(output_dir, 'data.bin')
     with open(output_path, 'wb') as f:
@@ -991,7 +996,7 @@ def main():
 
     # Stage 4
     print(f"\n[4/9] PCA → openTSNE → HDBSCAN...")
-    tsne_coords, cluster_ids, embeddings_pca, cluster_probs = reduce_dimensions(embeddings, args.min_cluster_size, args.tsne_perplexity, args.thumb_size)
+    tsne_coords, raw_tsne_coords, cluster_ids, embeddings_pca, cluster_probs = reduce_dimensions(embeddings, args.min_cluster_size, args.tsne_perplexity, args.thumb_size)
 
     # Stage 4b: k-NN
     print(f"\n[5/9] k-Nearest Neighbors...")
@@ -1033,7 +1038,7 @@ def main():
 
     # Stage 6
     print(f"\n[9/9] Writing output files...")
-    write_binary_data(str(output_dir), tsne_coords, atlas_data, cluster_ids)
+    write_binary_data(str(output_dir), tsne_coords, raw_tsne_coords, atlas_data, cluster_ids)
     write_manifest(str(output_dir), len(images), atlas_count, args.thumb_size, args.atlas_size)
     # Normalize cluster confidence to 0-100 scale
     cluster_confidence = (cluster_probs * 100).round(1) if cluster_probs is not None else None

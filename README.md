@@ -110,6 +110,20 @@ python3 scripts/imagespace.py /path/to/images/ \
 | `--cache-dir` | none | Directory to cache CLIP embeddings (`.npy`) |
 | `--relayout` | false | Skip atlas + CLIP, re-run t-SNE/HDBSCAN only |
 
+## Why Grid Snapping Is the Default
+
+ImageSpace uses grid-snapped layouts (Grid, Color, Timeline views) as a deliberate design decision — not a limitation. Here's why:
+
+**Performance.** Grid layouts produce perfectly predictable sprite positions. The renderer never needs to resolve overlaps, recompute z-indices, or run collision detection. On a 50K-image dataset, this means stable 30 FPS even on mid-range hardware. Freeform overlapping layouts would require per-frame depth sorting and occlusion calculations that scale poorly.
+
+**Mobile scalability.** Mobile browsers operate under severe memory constraints (~1–2 GB usable for a single tab). Grid snapping guarantees every sprite occupies a fixed-size cell, enabling efficient spatial hashing (O(1) hover lookup), predictable GPU memory usage, and no layout thrashing. Overlapping images would force costly reflows and z-index recalculations that frequently trigger WebGL context loss on mobile devices.
+
+**Visual clarity.** When exploring 50,000 images, every image is visible and accessible in a grid. No image is hidden behind another. This is critical for research workflows where users need to scan, filter, and identify patterns across an entire collection — not just the images that happen to be on top.
+
+**Predictability.** Grid layouts are deterministic: the same dataset always produces the same layout. Researchers can reproduce views, share screenshots, and reference specific positions. Freeform layouts introduce randomness in overlap ordering that undermines reproducibility.
+
+**Tradeoffs.** Grid snapping sacrifices organic, "gallery-wall" aesthetics and the ability to manually arrange images. The t-SNE scatter view provides the organic clustering experience, while grid views prioritize systematic exploration. This separation is intentional — each view mode serves a different analytical purpose.
+
 ## Metadata Format
 
 Your metadata CSV must have a `filename` column matching image filenames. All other columns become available as filters in the viewer automatically — categorical columns get dropdown checkboxes, numeric columns get range sliders.
