@@ -718,12 +718,25 @@ export default function App() {
         const currentThumbSize = manifest.thumbSize || THUMB_SIZE;
         const bytesPerImage = manifest.bytesPerImage || 16;
         const isV2 = bytesPerImage === 24;
+        const isV3 = bytesPerImage === 28;
 
         /* Pre-parse all point data from the binary layout */
         const allPointData = new Array(manifest.count);
         for (let i = 0; i < manifest.count; i++) {
-          let x, y, tsneX, tsneY, ai, u, v, cluster;
-          if (isV2) {
+          let x, y, tsneX, tsneY, ai, u, v, cluster, u_preview, v_preview;
+          if (isV3) {
+            const offset = i * 28;
+            x      = dataView.getFloat32(offset, true);
+            y      = dataView.getFloat32(offset + 4, true);
+            tsneX  = dataView.getFloat32(offset + 8, true);
+            tsneY  = dataView.getFloat32(offset + 12, true);
+            ai     = dataView.getUint16(offset + 16, true);
+            u      = dataView.getUint16(offset + 18, true);
+            v      = dataView.getUint16(offset + 20, true);
+            cluster = dataView.getUint16(offset + 22, true);
+            u_preview = dataView.getUint16(offset + 24, true);
+            v_preview = dataView.getUint16(offset + 26, true);
+          } else if (isV2) {
             const offset = i * 24;
             x      = dataView.getFloat32(offset, true);
             y      = dataView.getFloat32(offset + 4, true);
@@ -743,7 +756,7 @@ export default function App() {
             tsneX = x; tsneY = y;
             cluster = undefined;
           }
-          allPointData[i] = { id: i, x, y, tsneX, tsneY, ai, u, v, cluster };
+          allPointData[i] = { id: i, x, y, tsneX, tsneY, ai, u, v, cluster, u_preview, v_preview };
         }
 
         /* Group point indices by atlas */
