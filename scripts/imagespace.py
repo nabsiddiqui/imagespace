@@ -43,17 +43,17 @@ import numpy as np
 from PIL import Image, ExifTags
 
 # ── Configuration ─────────────────────────────────────────────
-THUMB_SIZE = 64          # Thumbnail size in pixels (square)
-ATLAS_SIZE = 4096        # Atlas texture size (4096x4096 = 64x64 grid of 64px thumbs)
-SUPPORTED_FORMATS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif'}
-CLIP_IMAGE_SIZE = 224    # CLIP input resolution
-CLIP_DIM = 512           # CLIP ViT-B/32 embedding dimension
+THUMB_SIZE = 64  # Thumbnail size in pixels (square)
+ATLAS_SIZE = 4096  # Atlas texture size (4096x4096 = 64x64 grid of 64px thumbs)
+SUPPORTED_FORMATS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif"}
+CLIP_IMAGE_SIZE = 224  # CLIP input resolution
+CLIP_DIM = 512  # CLIP ViT-B/32 embedding dimension
 CLIP_MEAN = np.array([0.48145466, 0.4578275, 0.40821073], dtype=np.float32)
-CLIP_STD  = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
-NUM_CLUSTERS = 15        # Fallback KMeans clusters
-TSNE_PERPLEXITY = 30     # openTSNE perplexity
-BATCH_SIZE = 64          # Embedding batch size (larger = faster with ONNX)
-PCA_DIMS = 50            # PCA reduction before t-SNE
+CLIP_STD = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
+NUM_CLUSTERS = 15  # Fallback KMeans clusters
+TSNE_PERPLEXITY = 30  # openTSNE perplexity
+BATCH_SIZE = 64  # Embedding batch size (larger = faster with ONNX)
+PCA_DIMS = 50  # PCA reduction before t-SNE
 
 
 # ── Stage 1: Image Discovery ─────────────────────────────────
@@ -62,9 +62,14 @@ def discover_images(input_dir):
     images = []
     input_path = Path(input_dir).resolve()
     for root, dirs, files in os.walk(input_path):
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('__pycache__', 'node_modules', '.git')]
+        dirs[:] = [
+            d
+            for d in dirs
+            if not d.startswith(".")
+            and d not in ("__pycache__", "node_modules", ".git")
+        ]
         for f in sorted(files):
-            if f.startswith('.'):
+            if f.startswith("."):
                 continue
             ext = Path(f).suffix.lower()
             if ext in SUPPORTED_FORMATS:
@@ -73,7 +78,9 @@ def discover_images(input_dir):
 
 
 # ── Stage 2: Thumbnail Generation + Atlas Packing ────────────
-def generate_atlases(images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS_SIZE, quality=60):
+def generate_atlases(
+    images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS_SIZE, quality=60
+):
     """Create WebP atlas textures from image thumbnails. Returns atlas metadata per image."""
     images_per_row = atlas_size // thumb_size
     images_per_atlas = images_per_row * images_per_row
@@ -81,7 +88,7 @@ def generate_atlases(images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS
     atlas_data = []  # (atlas_idx, u, v) per image
     current_atlas_idx = 0
     current_img_in_atlas = 0
-    atlas_img = Image.new('RGB', (atlas_size, atlas_size), (255, 255, 255))
+    atlas_img = Image.new("RGB", (atlas_size, atlas_size), (255, 255, 255))
 
     start = time.time()
     for idx, img_path in enumerate(images):
@@ -89,10 +96,13 @@ def generate_atlases(images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS
             elapsed = time.time() - start
             rate = idx / elapsed if elapsed > 0 else 0
             eta = (len(images) - idx) / rate if rate > 0 else 0
-            print(f"  Thumbnailing {idx}/{len(images)} ({rate:.0f} img/s, ETA {eta:.0f}s)", end='\r')
+            print(
+                f"  Thumbnailing {idx}/{len(images)} ({rate:.0f} img/s, ETA {eta:.0f}s)",
+                end="\r",
+            )
 
         try:
-            img = Image.open(img_path).convert('RGB')
+            img = Image.open(img_path).convert("RGB")
             w, h = img.size
             side = min(w, h)
             left = (w - side) // 2
@@ -100,7 +110,7 @@ def generate_atlases(images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS
             img = img.crop((left, top, left + side, top + side))
             img = img.resize((thumb_size, thumb_size), Image.BILINEAR)
         except Exception as e:
-            img = Image.new('RGB', (thumb_size, thumb_size), (128, 128, 128))
+            img = Image.new("RGB", (thumb_size, thumb_size), (128, 128, 128))
 
         col = current_img_in_atlas % images_per_row
         row = current_img_in_atlas // images_per_row
@@ -110,16 +120,77 @@ def generate_atlases(images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS
 
         current_img_in_atlas += 1
         if current_img_in_atlas >= images_per_atlas or idx == len(images) - 1:
-            atlas_path = os.path.join(output_dir, f'atlas_{current_atlas_idx}.webp')
-            atlas_img.save(atlas_path, 'WEBP', quality=quality, method=2)
-            print(f"\n  Saved atlas_{current_atlas_idx}.webp ({current_img_in_atlas} images)")
+            atlas_path = os.path.join(output_dir, f"atlas_{current_atlas_idx}.webp")
+            atlas_img.save(atlas_path, "WEBP", quality=quality, method=2)
+            print(
+                f"\n  Saved atlas_{current_atlas_idx}.webp ({current_img_in_atlas} images)"
+            )
             current_atlas_idx += 1
             current_img_in_atlas = 0
-            atlas_img = Image.new('RGB', (atlas_size, atlas_size), (255, 255, 255))
+            atlas_img = Image.new("RGB", (atlas_size, atlas_size), (255, 255, 255))
 
     total = time.time() - start
     print(f"  Atlas generation: {total:.1f}s")
     return atlas_data, current_atlas_idx
+
+
+def generate_preview_atlases(
+    images,
+    output_dir,
+    atlas_count_full,
+    images_per_full_atlas,
+    thumb_size=64,
+    atlas_size=ATLAS_SIZE,
+    quality=40,
+):
+    """Generate 64px preview atlas textures mirroring the same image-to-atlas mapping as full atlases."""
+    images_per_row = atlas_size // thumb_size
+    preview_data = []
+
+    start = time.time()
+    for atlas_idx in range(atlas_count_full):
+        start_img = atlas_idx * images_per_full_atlas
+        end_img = min(start_img + images_per_full_atlas, len(images))
+
+        atlas_img = Image.new("RGB", (atlas_size, atlas_size), (255, 255, 255))
+        count_in_atlas = 0
+
+        for img_idx in range(start_img, end_img):
+            if img_idx % 2000 == 0:
+                elapsed = time.time() - start
+                rate = img_idx / elapsed if elapsed > 0 else 0
+                print(
+                    f"  Preview thumb {img_idx}/{len(images)} ({rate:.0f} img/s)",
+                    end="\r",
+                )
+
+            try:
+                img = Image.open(images[img_idx]).convert("RGB")
+                w, h = img.size
+                side = min(w, h)
+                left = (w - side) // 2
+                top = (h - side) // 2
+                img = img.crop((left, top, left + side, top + side))
+                img = img.resize((thumb_size, thumb_size), Image.BILINEAR)
+            except Exception:
+                img = Image.new("RGB", (thumb_size, thumb_size), (128, 128, 128))
+
+            local_idx = img_idx - start_img
+            col = local_idx % images_per_row
+            row = local_idx // images_per_row
+            u, v = col * thumb_size, row * thumb_size
+            atlas_img.paste(img, (u, v))
+
+            preview_data.append((atlas_idx, u, v))
+            count_in_atlas += 1
+
+        atlas_path = os.path.join(output_dir, f"atlas_{atlas_idx}_preview.webp")
+        atlas_img.save(atlas_path, "WEBP", quality=quality, method=2)
+        print(f"\n  Saved atlas_{atlas_idx}_preview.webp ({count_in_atlas} images)")
+
+    total = time.time() - start
+    print(f"  Preview atlas generation: {total:.1f}s")
+    return preview_data, atlas_count_full
 
 
 # ── Stage 3: Embedding Extraction ────────────────────────────
@@ -144,13 +215,14 @@ def extract_embeddings(images):
 
 def _get_onnx_model_path():
     """Download or locate CLIP ONNX vision model."""
-    cache_dir = Path.home() / '.cache' / 'imagespace'
-    model_path = cache_dir / 'clip-vit-b32-visual.onnx'
+    cache_dir = Path.home() / ".cache" / "imagespace"
+    model_path = cache_dir / "clip-vit-b32-visual.onnx"
     if model_path.exists():
         return str(model_path)
 
     try:
         from huggingface_hub import hf_hub_download
+
         print("  Downloading CLIP ONNX vision model (first time only)...")
         downloaded = hf_hub_download(
             repo_id="Xenova/clip-vit-base-patch32",
@@ -165,7 +237,9 @@ def _get_onnx_model_path():
 
 def _preprocess_clip_batch(images_pil):
     """Preprocess a batch of PIL images for CLIP (resize, center-crop, normalize)."""
-    batch = np.zeros((len(images_pil), 3, CLIP_IMAGE_SIZE, CLIP_IMAGE_SIZE), dtype=np.float32)
+    batch = np.zeros(
+        (len(images_pil), 3, CLIP_IMAGE_SIZE, CLIP_IMAGE_SIZE), dtype=np.float32
+    )
     for i, img in enumerate(images_pil):
         w, h = img.size
         scale = CLIP_IMAGE_SIZE / min(w, h)
@@ -196,19 +270,21 @@ def _extract_clip_onnx(images):
     sess_opts.enable_mem_reuse = True
     sess_opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 
-    providers = ['CPUExecutionProvider']
+    providers = ["CPUExecutionProvider"]
     available = ort.get_available_providers()
-    if 'CUDAExecutionProvider' in available:
-        providers.insert(0, 'CUDAExecutionProvider')
+    if "CUDAExecutionProvider" in available:
+        providers.insert(0, "CUDAExecutionProvider")
         print("  Using NVIDIA CUDA")
-    elif 'CoreMLExecutionProvider' in available:
-        providers.insert(0, 'CoreMLExecutionProvider')
+    elif "CoreMLExecutionProvider" in available:
+        providers.insert(0, "CoreMLExecutionProvider")
         print("  Using Apple Neural Engine (CoreML)")
     else:
         print("  Using CPU")
 
     print(f"  Loading CLIP ONNX model...")
-    session = ort.InferenceSession(model_path, sess_options=sess_opts, providers=providers)
+    session = ort.InferenceSession(
+        model_path, sess_options=sess_opts, providers=providers
+    )
 
     input_name = session.get_inputs()[0].name
     output_names = [o.name for o in session.get_outputs()]
@@ -221,9 +297,11 @@ def _extract_clip_onnx(images):
         batch_images = []
         for img_path in images[batch_start:batch_end]:
             try:
-                img = Image.open(img_path).convert('RGB')
+                img = Image.open(img_path).convert("RGB")
             except Exception:
-                img = Image.new('RGB', (CLIP_IMAGE_SIZE, CLIP_IMAGE_SIZE), (128, 128, 128))
+                img = Image.new(
+                    "RGB", (CLIP_IMAGE_SIZE, CLIP_IMAGE_SIZE), (128, 128, 128)
+                )
             batch_images.append(img)
 
         pixel_values = _preprocess_clip_batch(batch_images)
@@ -237,12 +315,17 @@ def _extract_clip_onnx(images):
         if out_normalized.shape[1] >= CLIP_DIM:
             embeddings[batch_start:batch_end] = out_normalized[:, :CLIP_DIM]
         else:
-            embeddings[batch_start:batch_end, :out_normalized.shape[1]] = out_normalized
+            embeddings[batch_start:batch_end, : out_normalized.shape[1]] = (
+                out_normalized
+            )
 
         elapsed = time.time() - start
         rate = batch_end / elapsed if elapsed > 0 else 0
         eta = (len(images) - batch_end) / rate if rate > 0 else 0
-        print(f"  Embedding {batch_end}/{len(images)} ({rate:.1f} img/s, ETA {eta:.0f}s)", end='\r')
+        print(
+            f"  Embedding {batch_end}/{len(images)} ({rate:.1f} img/s, ETA {eta:.0f}s)",
+            end="\r",
+        )
 
     print(f"\n  CLIP ONNX embeddings: {time.time() - start:.1f}s")
     return embeddings
@@ -257,12 +340,12 @@ def _extract_clip_torch(images):
     model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
-    device = 'cpu'
+    device = "cpu"
     if torch.cuda.is_available():
-        device = 'cuda'
+        device = "cuda"
         print("  Using CUDA GPU")
-    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        device = 'mps'
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = "mps"
         print("  Using Apple Silicon GPU (MPS)")
     else:
         print("  Using CPU")
@@ -276,9 +359,11 @@ def _extract_clip_torch(images):
         batch_images = []
         for img_path in images[batch_start:batch_end]:
             try:
-                img = Image.open(img_path).convert('RGB')
+                img = Image.open(img_path).convert("RGB")
             except Exception:
-                img = Image.new('RGB', (CLIP_IMAGE_SIZE, CLIP_IMAGE_SIZE), (128, 128, 128))
+                img = Image.new(
+                    "RGB", (CLIP_IMAGE_SIZE, CLIP_IMAGE_SIZE), (128, 128, 128)
+                )
             batch_images.append(img)
 
         inputs = processor(images=batch_images, return_tensors="pt", padding=True)
@@ -286,9 +371,9 @@ def _extract_clip_torch(images):
 
         with torch.no_grad():
             outputs = model.get_image_features(**inputs)
-            if hasattr(outputs, 'pooler_output'):
+            if hasattr(outputs, "pooler_output"):
                 outputs = outputs.pooler_output
-            elif hasattr(outputs, 'last_hidden_state'):
+            elif hasattr(outputs, "last_hidden_state"):
                 outputs = outputs.last_hidden_state[:, 0]
             outputs = outputs / outputs.norm(dim=-1, keepdim=True)
             embeddings[batch_start:batch_end] = outputs.cpu().numpy()
@@ -296,7 +381,10 @@ def _extract_clip_torch(images):
         elapsed = time.time() - start
         rate = batch_end / elapsed if elapsed > 0 else 0
         eta = (len(images) - batch_end) / rate if rate > 0 else 0
-        print(f"  Embedding {batch_end}/{len(images)} ({rate:.1f} img/s, ETA {eta:.0f}s)", end='\r')
+        print(
+            f"  Embedding {batch_end}/{len(images)} ({rate:.1f} img/s, ETA {eta:.0f}s)",
+            end="\r",
+        )
 
     print(f"\n  CLIP PyTorch embeddings: {time.time() - start:.1f}s")
     return embeddings
@@ -310,9 +398,9 @@ def _extract_color_histograms(images, dim=CLIP_DIM):
 
     for idx, img_path in enumerate(images):
         if idx % 1000 == 0:
-            print(f"  Histogram {idx}/{len(images)}", end='\r')
+            print(f"  Histogram {idx}/{len(images)}", end="\r")
         try:
-            img = Image.open(img_path).convert('RGB').resize((64, 64))
+            img = Image.open(img_path).convert("RGB").resize((64, 64))
             arr = np.array(img, dtype=np.float32) / 255.0
             features = []
             for c in range(3):
@@ -320,7 +408,7 @@ def _extract_color_histograms(images, dim=CLIP_DIM):
                 features.append(h.astype(np.float32))
             # 3x3 spatial color grid (trim to divisible-by-3)
             bh, bw = arr.shape[0] // 3, arr.shape[1] // 3
-            grid = arr[:bh*3, :bw*3].reshape(3, bh, 3, bw, 3).mean(axis=(1, 3))
+            grid = arr[: bh * 3, : bw * 3].reshape(3, bh, 3, bw, 3).mean(axis=(1, 3))
             features.append(grid.flatten().astype(np.float32))
             vec = np.concatenate(features)
             if len(vec) < dim:
@@ -339,7 +427,9 @@ def _extract_color_histograms(images, dim=CLIP_DIM):
 
 
 # ── Stage 4: Dimensionality Reduction + Clustering ───────────
-def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXITY, thumb_size=THUMB_SIZE):
+def reduce_dimensions(
+    embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXITY, thumb_size=THUMB_SIZE
+):
     """Run PCA → openTSNE → HDBSCAN. Returns (tsne_coords, cluster_ids)."""
     from sklearn.decomposition import PCA
 
@@ -351,20 +441,23 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
     start = time.time()
     pca = PCA(n_components=pca_dims, random_state=42)
     embeddings_pca = pca.fit_transform(embeddings)
-    print(f"  PCA: {time.time() - start:.1f}s ({pca.explained_variance_ratio_.sum():.1%} variance)")
+    print(
+        f"  PCA: {time.time() - start:.1f}s ({pca.explained_variance_ratio_.sum():.1%} variance)"
+    )
 
     # openTSNE (FFT-accelerated, ~10-20x faster than sklearn)
     print(f"\n  Running openTSNE (n={n}, perplexity={perplexity})...")
     start = time.time()
     try:
         from openTSNE import TSNE
+
         tsne = TSNE(
             n_components=2,
             perplexity=min(perplexity, n // 3),
             exaggeration=4,
-            initialization='pca',
-            metric='euclidean',
-            neighbors='approx',
+            initialization="pca",
+            metric="euclidean",
+            neighbors="approx",
             n_jobs=-1,
             random_state=42,
             verbose=True,
@@ -373,12 +466,13 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
     except ImportError:
         print("  openTSNE not found, falling back to sklearn (much slower)...")
         from sklearn.manifold import TSNE as skTSNE
+
         tsne = skTSNE(
             n_components=2,
             perplexity=min(perplexity, n - 1),
             random_state=42,
-            init='pca' if n > 50 else 'random',
-            learning_rate='auto',
+            init="pca" if n > 50 else "random",
+            learning_rate="auto",
         )
         tsne_coords = tsne.fit_transform(embeddings_pca)
     print(f"  t-SNE completed in {time.time() - start:.1f}s")
@@ -387,6 +481,7 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
     n = len(tsne_coords)
     cell_size = thumb_size * 1.15  # slight gap between thumbnails
     target_side = int(np.ceil(np.sqrt(n * 1.8))) * cell_size  # 1.8x overallocation
+
     def scale_coords(coords, target_range):
         mins = coords.min(axis=0)
         maxs = coords.max(axis=0)
@@ -400,7 +495,9 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
     raw_tsne_coords = tsne_coords.copy()
 
     # Remove overlaps by snapping to nearest unoccupied grid cell
-    print(f"  Removing overlaps (cell={cell_size:.0f}px, grid≈{int(target_side/cell_size)}²)...")
+    print(
+        f"  Removing overlaps (cell={cell_size:.0f}px, grid≈{int(target_side / cell_size)}²)..."
+    )
     start = time.time()
     occupied = set()
     result = np.zeros_like(tsne_coords)
@@ -423,17 +520,23 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
                     if (gx + dx, gy + dy) not in occupied:
                         occupied.add((gx + dx, gy + dy))
                         result[idx] = [(gx + dx) * cell_size, (gy + dy) * cell_size]
-                        placed = True; break
-                if placed: break
-            if placed: break
+                        placed = True
+                        break
+                if placed:
+                    break
+            if placed:
+                break
             for dy in range(-r + 1, r):
                 for dx in (-r, r):
                     if (gx + dx, gy + dy) not in occupied:
                         occupied.add((gx + dx, gy + dy))
                         result[idx] = [(gx + dx) * cell_size, (gy + dy) * cell_size]
-                        placed = True; break
-                if placed: break
-            if placed: break
+                        placed = True
+                        break
+                if placed:
+                    break
+            if placed:
+                break
     tsne_coords = result
     print(f"  Overlap removal: {time.time() - start:.1f}s")
 
@@ -442,13 +545,16 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
     # The 50-d PCA space preserves natural cluster structure for HDBSCAN.
     try:
         import hdbscan as hdb
-        print(f"\n  Running HDBSCAN on PCA embeddings (min_cluster_size={min_cluster_size})...")
+
+        print(
+            f"\n  Running HDBSCAN on PCA embeddings (min_cluster_size={min_cluster_size})..."
+        )
         start = time.time()
         clusterer = hdb.HDBSCAN(
             min_cluster_size=min_cluster_size,
             min_samples=5,
-            metric='euclidean',
-            cluster_selection_method='leaf',
+            metric="euclidean",
+            cluster_selection_method="leaf",
             core_dist_n_jobs=-1,
         )
         cluster_ids = clusterer.fit_predict(embeddings_pca)
@@ -458,6 +564,7 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
 
         if n_noise > 0 and n_clusters > 0:
             from scipy.spatial import cKDTree
+
             valid_mask = cluster_ids >= 0
             tree = cKDTree(embeddings_pca[valid_mask])
             valid_labels = cluster_ids[valid_mask]
@@ -466,15 +573,20 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
             cluster_ids[cluster_ids == -1] = valid_labels[nearest]
             # Give reassigned noise points low confidence
             cluster_probs[cluster_probs == 0] = 0.1
-        print(f"  HDBSCAN: {n_clusters} clusters, {n_noise} noise reassigned ({time.time() - start:.1f}s)")
+        print(
+            f"  HDBSCAN: {n_clusters} clusters, {n_noise} noise reassigned ({time.time() - start:.1f}s)"
+        )
     except ImportError:
         from sklearn.cluster import MiniBatchKMeans
+
         n_clusters = min(NUM_CLUSTERS, n)
         print(f"\n  Using MiniBatchKMeans (k={n_clusters})...")
         start = time.time()
         kmeans = MiniBatchKMeans(
-            n_clusters=n_clusters, batch_size=max(1024, n // 10),
-            random_state=42, n_init=3
+            n_clusters=n_clusters,
+            batch_size=max(1024, n // 10),
+            random_state=42,
+            n_init=3,
         )
         cluster_ids = kmeans.fit_predict(embeddings_pca)
         # Distance-based confidence for KMeans (inverse of distance to centroid, normalized)
@@ -483,7 +595,13 @@ def reduce_dimensions(embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXIT
         cluster_probs = (1 - dists / max_d).astype(np.float32)
         print(f"  MiniBatchKMeans: {time.time() - start:.1f}s")
 
-    return tsne_coords.astype(np.float32), raw_tsne_coords.astype(np.float32), cluster_ids.astype(np.int32), embeddings_pca, cluster_probs
+    return (
+        tsne_coords.astype(np.float32),
+        raw_tsne_coords.astype(np.float32),
+        cluster_ids.astype(np.int32),
+        embeddings_pca,
+        cluster_probs,
+    )
 
 
 # ── Stage 4b: k-Nearest Neighbors ────────────────────────────
@@ -491,9 +609,14 @@ def compute_knn(embeddings_pca, k=10):
     """Compute k-nearest neighbors for each image in PCA space.
     Returns (indices, distances) each of shape (n, k)."""
     from sklearn.neighbors import NearestNeighbors
-    print(f"\n  Computing {k}-nearest neighbors on {embeddings_pca.shape[0]} points ({embeddings_pca.shape[1]}-d)...")
+
+    print(
+        f"\n  Computing {k}-nearest neighbors on {embeddings_pca.shape[0]} points ({embeddings_pca.shape[1]}-d)..."
+    )
     start = time.time()
-    nn = NearestNeighbors(n_neighbors=k + 1, algorithm='ball_tree', metric='euclidean', n_jobs=-1)
+    nn = NearestNeighbors(
+        n_neighbors=k + 1, algorithm="ball_tree", metric="euclidean", n_jobs=-1
+    )
     nn.fit(embeddings_pca)
     distances, indices = nn.kneighbors(embeddings_pca)
     # Remove self (index 0 is always self)
@@ -507,13 +630,13 @@ def write_neighbors_bin(output_dir, knn_indices, knn_distances):
     """Write neighbors.bin: for each image, k neighbor indices (uint32) + k distances (float32).
     Header: uint32 count, uint32 k. Then count * k * (uint32 + float32) = count * k * 8 bytes."""
     n, k = knn_indices.shape
-    path = os.path.join(output_dir, 'neighbors.bin')
-    with open(path, 'wb') as f:
-        f.write(struct.pack('<II', n, k))
+    path = os.path.join(output_dir, "neighbors.bin")
+    with open(path, "wb") as f:
+        f.write(struct.pack("<II", n, k))
         for i in range(n):
             for j in range(k):
-                f.write(struct.pack('<I', int(knn_indices[i, j])))
-                f.write(struct.pack('<f', float(knn_distances[i, j])))
+                f.write(struct.pack("<I", int(knn_indices[i, j])))
+                f.write(struct.pack("<f", float(knn_distances[i, j])))
     print(f"  neighbors.bin: {n} × {k} ({os.path.getsize(path) / 1024 / 1024:.1f} MB)")
 
 
@@ -534,29 +657,49 @@ def generate_cluster_labels(embeddings, cluster_ids):
     # Candidate labels — broad art/visual concepts
     candidates = [
         # Subject matter
-        "portrait painting of a person", "landscape with mountains and sky",
-        "seascape with ocean and boats", "still life with flowers and fruit",
-        "religious painting with saints", "mythological scene with gods",
-        "battle scene with soldiers", "cityscape with buildings and streets",
-        "interior scene of a room", "animals in nature",
-        "nude figure painting", "group of people gathering",
-        "abstract geometric shapes", "abstract expressionist painting",
+        "portrait painting of a person",
+        "landscape with mountains and sky",
+        "seascape with ocean and boats",
+        "still life with flowers and fruit",
+        "religious painting with saints",
+        "mythological scene with gods",
+        "battle scene with soldiers",
+        "cityscape with buildings and streets",
+        "interior scene of a room",
+        "animals in nature",
+        "nude figure painting",
+        "group of people gathering",
+        "abstract geometric shapes",
+        "abstract expressionist painting",
         # Style/color
-        "dark moody painting with shadows", "bright colorful painting",
-        "golden warm-toned painting", "cool blue and green painting",
-        "monochrome black and white artwork", "pastel soft colored painting",
-        "red and orange warm painting", "rich earth-toned painting",
+        "dark moody painting with shadows",
+        "bright colorful painting",
+        "golden warm-toned painting",
+        "cool blue and green painting",
+        "monochrome black and white artwork",
+        "pastel soft colored painting",
+        "red and orange warm painting",
+        "rich earth-toned painting",
         # Technique/period
-        "impressionist brushstrokes painting", "realistic detailed painting",
-        "medieval religious artwork", "renaissance classical painting",
-        "baroque dramatic painting", "modern minimalist artwork",
-        "romantic era landscape", "expressionist distorted painting",
-        "surrealist dreamlike scene", "art nouveau decorative design",
+        "impressionist brushstrokes painting",
+        "realistic detailed painting",
+        "medieval religious artwork",
+        "renaissance classical painting",
+        "baroque dramatic painting",
+        "modern minimalist artwork",
+        "romantic era landscape",
+        "expressionist distorted painting",
+        "surrealist dreamlike scene",
+        "art nouveau decorative design",
         # Composition
-        "close-up face portrait", "wide panoramic view",
-        "small figures in vast landscape", "ornate decorative pattern",
-        "simple composition with few elements", "complex busy scene with many figures",
-        "architectural drawing of a building", "sketch or drawing on paper",
+        "close-up face portrait",
+        "wide panoramic view",
+        "small figures in vast landscape",
+        "ornate decorative pattern",
+        "simple composition with few elements",
+        "complex busy scene with many figures",
+        "architectural drawing of a building",
+        "sketch or drawing on paper",
     ]
 
     # Load CLIP model + tokenizer (not processor, to avoid image processor issues)
@@ -566,10 +709,12 @@ def generate_cluster_labels(embeddings, cluster_ids):
 
     # Encode candidate texts
     with torch.no_grad():
-        text_inputs = tokenizer(candidates, return_tensors="pt", padding=True, truncation=True)
+        text_inputs = tokenizer(
+            candidates, return_tensors="pt", padding=True, truncation=True
+        )
         text_features = model.get_text_features(**text_inputs)
         # Handle both tensor and BaseModelOutput return types
-        if hasattr(text_features, 'pooler_output'):
+        if hasattr(text_features, "pooler_output"):
             text_features = text_features.pooler_output
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         text_np = text_features.numpy()
@@ -587,7 +732,10 @@ def generate_cluster_labels(embeddings, cluster_ids):
         sims = text_np @ centroid
         top_idx = np.argsort(-sims)[:5]
         raw_labels[int(cid)] = {
-            'top': [{'text': candidates[i], 'score': float(sims[i]), 'idx': int(i)} for i in top_idx],
+            "top": [
+                {"text": candidates[i], "score": float(sims[i]), "idx": int(i)}
+                for i in top_idx
+            ],
         }
 
     # Short display names for candidate labels
@@ -637,10 +785,11 @@ def generate_cluster_labels(embeddings, cluster_ids):
     # First pass: assign top label to each cluster
     label_map = {}  # cid -> primary candidate text
     for cid, data in raw_labels.items():
-        label_map[cid] = data['top'][0]['text']
+        label_map[cid] = data["top"][0]["text"]
 
     # Find duplicates
     from collections import Counter
+
     label_counts = Counter(label_map.values())
     duplicates = {label for label, count in label_counts.items() if count > 1}
 
@@ -648,14 +797,14 @@ def generate_cluster_labels(embeddings, cluster_ids):
     labels = {}
     used_labels = set()
     for cid, data in raw_labels.items():
-        primary = data['top'][0]['text']
+        primary = data["top"][0]["text"]
         primary_short = short_names.get(primary, primary)
 
         if primary in duplicates:
             # Try successive qualifiers until we find a unique combined label
             label = primary_short
-            for rank in range(1, len(data['top'])):
-                secondary = data['top'][rank]['text']
+            for rank in range(1, len(data["top"])):
+                secondary = data["top"][rank]["text"]
                 if secondary != primary:
                     qualifier = short_names.get(secondary, secondary)
                     candidate = f"{primary_short} — {qualifier}"
@@ -671,20 +820,23 @@ def generate_cluster_labels(embeddings, cluster_ids):
         used_labels.add(label)
 
         labels[int(cid)] = {
-            'label': label,
-            'top3': [{'text': t['text'], 'score': t['score']} for t in data['top'][:3]],
+            "label": label,
+            "top3": [{"text": t["text"], "score": t["score"]} for t in data["top"][:3]],
         }
         print(f"    Cluster {cid}: {label} ({data['top'][0]['score']:.3f})")
 
-    print(f"  Cluster labels: {len(labels)} clusters labeled ({time.time() - start:.1f}s)")
+    print(
+        f"  Cluster labels: {len(labels)} clusters labeled ({time.time() - start:.1f}s)"
+    )
     return labels
 
 
 def write_cluster_labels(output_dir, labels):
     """Write cluster_labels.json."""
     import json
-    path = os.path.join(output_dir, 'cluster_labels.json')
-    with open(path, 'w') as f:
+
+    path = os.path.join(output_dir, "cluster_labels.json")
+    with open(path, "w") as f:
         json.dump(labels, f, indent=2)
     print(f"  cluster_labels.json: {len(labels)} labels")
 
@@ -696,7 +848,11 @@ def extract_dominant_colors(images, thumb_size=32):
     start = time.time()
     for idx, img_path in enumerate(images):
         try:
-            img = Image.open(img_path).convert('RGB').resize((thumb_size, thumb_size), Image.BILINEAR)
+            img = (
+                Image.open(img_path)
+                .convert("RGB")
+                .resize((thumb_size, thumb_size), Image.BILINEAR)
+            )
             arr = np.array(img).reshape(-1, 3).mean(axis=0) / 255.0
             h, l, s = colorsys.rgb_to_hls(arr[0], arr[1], arr[2])
             colors.append((h, s, l))
@@ -711,6 +867,7 @@ def compute_image_features(images, thumb_size=32):
     """Compute brightness, complexity (Shannon entropy), and edge density for each image.
     Returns dict with 'brightness', 'complexity', 'edge_density' arrays (0-100 scale)."""
     from scipy.ndimage import sobel
+
     n = len(images)
     brightness = np.zeros(n, dtype=np.float32)
     complexity = np.zeros(n, dtype=np.float32)
@@ -719,7 +876,11 @@ def compute_image_features(images, thumb_size=32):
     start = time.time()
     for idx, img_path in enumerate(images):
         try:
-            img = Image.open(img_path).convert('RGB').resize((thumb_size, thumb_size), Image.BILINEAR)
+            img = (
+                Image.open(img_path)
+                .convert("RGB")
+                .resize((thumb_size, thumb_size), Image.BILINEAR)
+            )
             arr = np.array(img, dtype=np.float32) / 255.0
 
             # Brightness: mean luminance (BT.601 weights)
@@ -741,7 +902,7 @@ def compute_image_features(images, thumb_size=32):
             pass
 
         if idx > 0 and idx % 5000 == 0:
-            print(f"    Features: {idx}/{n} ({idx/n*100:.0f}%)")
+            print(f"    Features: {idx}/{n} ({idx / n * 100:.0f}%)")
 
     # Normalize to 0-100 scale
     def norm100(arr):
@@ -756,9 +917,9 @@ def compute_image_features(images, thumb_size=32):
 
     print(f"  Features computed in {time.time() - start:.1f}s")
     return {
-        'brightness': brightness,
-        'complexity': complexity,
-        'edge_density': edge_density,
+        "brightness": brightness,
+        "complexity": complexity,
+        "edge_density": edge_density,
     }
 
 
@@ -775,8 +936,9 @@ def compute_outlier_scores(knn_distances):
 def extract_timestamps(images):
     """Extract years from EXIF or filename year patterns. Returns plain year integers."""
     import re
+
     timestamps = []
-    year_pattern = re.compile(r'(1[4-9]\d{2}|20[0-2]\d)')
+    year_pattern = re.compile(r"(1[4-9]\d{2}|20[0-2]\d)")
 
     for img_path in images:
         year = _get_exif_year(img_path)
@@ -796,9 +958,10 @@ def _get_exif_year(img_path):
         if exif_data:
             for tag_id, value in exif_data.items():
                 tag = ExifTags.TAGS.get(tag_id, tag_id)
-                if tag == 'DateTimeOriginal':
+                if tag == "DateTimeOriginal":
                     from datetime import datetime
-                    dt = datetime.strptime(value, '%Y:%m:%d %H:%M:%S')
+
+                    dt = datetime.strptime(value, "%Y:%m:%d %H:%M:%S")
                     return dt.year
     except Exception:
         pass
@@ -806,98 +969,179 @@ def _get_exif_year(img_path):
 
 
 # ── Stage 7: Output Generation ────────────────────────────────
-def write_binary_data(output_dir, snapped_coords, raw_tsne_coords, atlas_data, cluster_ids):
-    """Write binary layout data. 24 bytes per image.
-    x/y = snapped (grid) coords, tsneX/tsneY = raw t-SNE coords (with natural overlap)."""
-    binary_data = bytearray(len(snapped_coords) * 24)
-    for i in range(len(snapped_coords)):
-        ai, u, v = atlas_data[i]
-        cid = int(cluster_ids[i])
-        sx, sy = float(snapped_coords[i][0]), float(snapped_coords[i][1])
-        rx, ry = float(raw_tsne_coords[i][0]), float(raw_tsne_coords[i][1])
-        struct.pack_into('<ffffHHHH', binary_data, i * 24,
-            sx, sy, rx, ry, ai, u, v, cid)
+def write_binary_data(
+    output_dir,
+    snapped_coords,
+    raw_tsne_coords,
+    atlas_data,
+    cluster_ids,
+    preview_atlas_data=None,
+):
+    """Write binary layout data. v2=24 bytes, v3=28 bytes (with preview UVs)."""
+    if preview_atlas_data is not None:
+        bytes_per_image = 28
+        binary_data = bytearray(len(snapped_coords) * bytes_per_image)
+        for i in range(len(snapped_coords)):
+            ai, u, v = atlas_data[i]
+            _, u_preview, v_preview = preview_atlas_data[i]
+            cid = int(cluster_ids[i])
+            sx, sy = float(snapped_coords[i][0]), float(snapped_coords[i][1])
+            rx, ry = float(raw_tsne_coords[i][0]), float(raw_tsne_coords[i][1])
+            struct.pack_into(
+                "<ffffHHHHHH",
+                binary_data,
+                i * bytes_per_image,
+                sx,
+                sy,
+                rx,
+                ry,
+                ai,
+                u,
+                v,
+                cid,
+                u_preview,
+                v_preview,
+            )
+    else:
+        bytes_per_image = 24
+        binary_data = bytearray(len(snapped_coords) * bytes_per_image)
+        for i in range(len(snapped_coords)):
+            ai, u, v = atlas_data[i]
+            cid = int(cluster_ids[i])
+            sx, sy = float(snapped_coords[i][0]), float(snapped_coords[i][1])
+            rx, ry = float(raw_tsne_coords[i][0]), float(raw_tsne_coords[i][1])
+            struct.pack_into(
+                "<ffffHHHH",
+                binary_data,
+                i * bytes_per_image,
+                sx,
+                sy,
+                rx,
+                ry,
+                ai,
+                u,
+                v,
+                cid,
+            )
 
-    output_path = os.path.join(output_dir, 'data.bin')
-    with open(output_path, 'wb') as f:
+    output_path = os.path.join(output_dir, "data.bin")
+    with open(output_path, "wb") as f:
         f.write(binary_data)
-    print(f"  Binary data: {len(binary_data) / 1024:.1f} KB")
+    print(
+        f"  Binary data (v{'3' if preview_atlas_data else '2'}): {len(binary_data) / 1024:.1f} KB"
+    )
     return output_path
 
 
-def write_manifest(output_dir, count, atlas_count, thumb_size=THUMB_SIZE, atlas_size=ATLAS_SIZE):
+def write_manifest(
+    output_dir,
+    count,
+    atlas_count,
+    thumb_size=THUMB_SIZE,
+    atlas_size=ATLAS_SIZE,
+    preview_atlas_count=None,
+    preview_thumb_size=64,
+):
     """Write manifest.json for the viewer."""
+    is_hd = preview_atlas_count is not None
     manifest = {
-        'count': count,
-        'atlasCount': atlas_count,
-        'thumbSize': thumb_size,
-        'atlasSize': atlas_size,
-        'bytesPerImage': 24,
-        'version': 2,
-        'atlasFormat': 'webp',
+        "count": count,
+        "atlasCount": atlas_count,
+        "thumbSize": thumb_size,
+        "atlasSize": atlas_size,
+        "bytesPerImage": 28 if is_hd else 24,
+        "version": 3 if is_hd else 2,
+        "atlasFormat": "webp",
     }
-    output_path = os.path.join(output_dir, 'manifest.json')
-    with open(output_path, 'w') as f:
+    if is_hd:
+        manifest["hasPreviewAtlases"] = True
+        manifest["previewThumbSize"] = preview_thumb_size
+        manifest["previewAtlasCount"] = preview_atlas_count
+    output_path = os.path.join(output_dir, "manifest.json")
+    with open(output_path, "w") as f:
         json.dump(manifest, f, indent=2)
-    print(f"  Manifest: {output_path}")
+    print(f"  Manifest (v{'3' if is_hd else '2'}): {output_path}")
 
 
-def write_metadata_csv(output_dir, images, cluster_ids, timestamps, colors,
-                       external_metadata=None, image_features=None,
-                       outlier_scores=None, cluster_confidence=None):
+def write_metadata_csv(
+    output_dir,
+    images,
+    cluster_ids,
+    timestamps,
+    colors,
+    external_metadata=None,
+    image_features=None,
+    outlier_scores=None,
+    cluster_confidence=None,
+):
     """Write metadata.csv with image info, merging with external metadata if provided."""
-    output_path = os.path.join(output_dir, 'metadata.csv')
+    output_path = os.path.join(output_dir, "metadata.csv")
 
     def hue_to_name(h):
         names = [
-            (0.0, 'red'), (0.05, 'orange'), (0.12, 'yellow'), (0.2, 'yellow-green'),
-            (0.33, 'green'), (0.45, 'teal'), (0.5, 'cyan'), (0.58, 'blue'),
-            (0.7, 'indigo'), (0.8, 'purple'), (0.9, 'magenta'), (1.0, 'red'),
+            (0.0, "red"),
+            (0.05, "orange"),
+            (0.12, "yellow"),
+            (0.2, "yellow-green"),
+            (0.33, "green"),
+            (0.45, "teal"),
+            (0.5, "cyan"),
+            (0.58, "blue"),
+            (0.7, "indigo"),
+            (0.8, "purple"),
+            (0.9, "magenta"),
+            (1.0, "red"),
         ]
         for threshold, name in names:
             if h <= threshold:
                 return name
-        return 'red'
+        return "red"
 
     extra_cols = []
     if external_metadata:
         for fname, row in external_metadata.items():
-            extra_cols = [c for c in row.keys() if c.lower() != 'filename']
+            extra_cols = [c for c in row.keys() if c.lower() != "filename"]
             break
 
-    base_cols = ['id', 'filename', 'cluster', 'timestamp', 'dominant_color']
+    base_cols = ["id", "filename", "cluster", "timestamp", "dominant_color"]
     feature_cols = []
     if image_features:
-        feature_cols.extend(['brightness', 'complexity', 'edge_density'])
+        feature_cols.extend(["brightness", "complexity", "edge_density"])
     if outlier_scores is not None:
-        feature_cols.append('outlier_score')
+        feature_cols.append("outlier_score")
     if cluster_confidence is not None:
-        feature_cols.append('cluster_confidence')
+        feature_cols.append("cluster_confidence")
     all_cols = base_cols + feature_cols + extra_cols
 
-    with open(output_path, 'w', newline='') as f:
+    with open(output_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(all_cols)
         matched = 0
         for i, img_path in enumerate(images):
             h, s, l = colors[i] if i < len(colors) else (0, 0, 0)
-            color_name = hue_to_name(h) if s > 0.1 else 'gray'
-            row = [i, img_path.name, int(cluster_ids[i]),
-                   timestamps[i] if timestamps[i] > 0 else '', color_name]
+            color_name = hue_to_name(h) if s > 0.1 else "gray"
+            row = [
+                i,
+                img_path.name,
+                int(cluster_ids[i]),
+                timestamps[i] if timestamps[i] > 0 else "",
+                color_name,
+            ]
             # Append computed features
             if image_features:
-                row.append(image_features['brightness'][i])
-                row.append(image_features['complexity'][i])
-                row.append(image_features['edge_density'][i])
+                row.append(image_features["brightness"][i])
+                row.append(image_features["complexity"][i])
+                row.append(image_features["edge_density"][i])
             if outlier_scores is not None:
                 row.append(outlier_scores[i])
             if cluster_confidence is not None:
                 row.append(cluster_confidence[i])
             if external_metadata:
                 ext = external_metadata.get(img_path.name, {})
-                if ext: matched += 1
+                if ext:
+                    matched += 1
                 for col in extra_cols:
-                    row.append(ext.get(col, ''))
+                    row.append(ext.get(col, ""))
             writer.writerow(row)
 
     if external_metadata:
@@ -909,12 +1153,12 @@ def write_metadata_csv(output_dir, images, cluster_ids, timestamps, colors,
 def read_external_metadata(metadata_path):
     """Read external metadata CSV as dict: filename -> {col: val}."""
     lookup = {}
-    with open(metadata_path, 'r', newline='') as f:
+    with open(metadata_path, "r", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            fname = row.get('filename', '')
+            fname = row.get("filename", "")
             if fname:
-                lookup[fname] = {k: v for k, v in row.items() if k != 'filename'}
+                lookup[fname] = {k: v for k, v in row.items() if k != "filename"}
     print(f"  Read {len(lookup)} entries from external metadata")
     return lookup
 
@@ -922,67 +1166,124 @@ def read_external_metadata(metadata_path):
 # ── Main Pipeline ─────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(
-        description='ImageSpace — Transform images into an interactive visualization',
+        description="ImageSpace — Transform images into an interactive visualization",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument('input', help='Directory containing images')
-    parser.add_argument('--output', '-o', required=True, help='Output directory')
-    parser.add_argument('--min-cluster-size', type=int, default=50, help='HDBSCAN min_cluster_size')
-    parser.add_argument('--thumb-size', type=int, default=THUMB_SIZE, help='Thumbnail size in pixels')
-    parser.add_argument('--atlas-size', type=int, default=ATLAS_SIZE, help='Atlas texture size (default 4096)')
-    parser.add_argument('--quality', type=int, default=60, help='WebP quality 1-100 (default 60)')
-    parser.add_argument('--metadata', help='External metadata CSV to merge')
-    parser.add_argument('--tsne-perplexity', type=int, default=TSNE_PERPLEXITY, help='t-SNE perplexity')
-    parser.add_argument('--cache-dir', help='Directory to cache embeddings (skip re-extraction if cached)')
-    parser.add_argument('--relayout', action='store_true', help='Skip atlas generation + embedding extraction, only re-run t-SNE/HDBSCAN')
+    parser.add_argument("input", help="Directory containing images")
+    parser.add_argument("--output", "-o", required=True, help="Output directory")
+    parser.add_argument(
+        "--min-cluster-size", type=int, default=50, help="HDBSCAN min_cluster_size"
+    )
+    parser.add_argument(
+        "--thumb-size", type=int, default=THUMB_SIZE, help="Thumbnail size in pixels"
+    )
+    parser.add_argument(
+        "--atlas-size",
+        type=int,
+        default=ATLAS_SIZE,
+        help="Atlas texture size (default 4096)",
+    )
+    parser.add_argument(
+        "--quality", type=int, default=60, help="WebP quality 1-100 (default 60)"
+    )
+    parser.add_argument("--metadata", help="External metadata CSV to merge")
+    parser.add_argument(
+        "--tsne-perplexity", type=int, default=TSNE_PERPLEXITY, help="t-SNE perplexity"
+    )
+    parser.add_argument(
+        "--cache-dir",
+        help="Directory to cache embeddings (skip re-extraction if cached)",
+    )
+    parser.add_argument(
+        "--relayout",
+        action="store_true",
+        help="Skip atlas generation + embedding extraction, only re-run t-SNE/HDBSCAN",
+    )
+    parser.add_argument(
+        "--hd",
+        action="store_true",
+        help="Generate both 64px preview and 128px full atlases for progressive loading",
+    )
+    parser.add_argument(
+        "--preview-quality",
+        type=int,
+        default=40,
+        help="WebP quality for preview atlases (default 40)",
+    )
 
     args = parser.parse_args()
     input_dir = Path(args.input).resolve()
     output_dir = Path(args.output).resolve()
 
     if not input_dir.is_dir():
-        print(f"Error: {input_dir} is not a directory"); sys.exit(1)
+        print(f"Error: {input_dir} is not a directory")
+        sys.exit(1)
 
     os.makedirs(output_dir, exist_ok=True)
     cache_dir = Path(args.cache_dir).resolve() if args.cache_dir else output_dir
     os.makedirs(cache_dir, exist_ok=True)
     total_start = time.time()
 
-    print(f"\n{'='*60}")
-    print(f"  ImageSpace Pipeline {'(Relayout Mode)' if args.relayout else '(Fast Mode)'}")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print(
+        f"  ImageSpace Pipeline {'(Relayout Mode)' if args.relayout else '(Fast Mode)'}"
+    )
+    print(f"{'=' * 60}")
 
     # Stage 1
     print(f"\n[1/8] Discovering images...")
     images = discover_images(input_dir)
     if not images:
-        print("  No images found!"); sys.exit(1)
+        print("  No images found!")
+        sys.exit(1)
     print(f"  Found {len(images)} images")
 
     # Stage 2
     if args.relayout:
         print(f"\n[2/8] Skipping atlas generation (relayout mode)")
         # Reconstruct atlas_data from existing data.bin
-        bin_path = os.path.join(str(output_dir), 'data.bin')
+        bin_path = os.path.join(str(output_dir), "data.bin")
         if os.path.exists(bin_path):
-            raw = open(bin_path, 'rb').read()
+            raw = open(bin_path, "rb").read()
             atlas_data = []
             for i in range(len(images)):
                 off = i * 24
-                ai = struct.unpack_from('<H', raw, off + 16)[0]
-                u = struct.unpack_from('<H', raw, off + 18)[0]
-                v = struct.unpack_from('<H', raw, off + 20)[0]
+                ai = struct.unpack_from("<H", raw, off + 16)[0]
+                u = struct.unpack_from("<H", raw, off + 18)[0]
+                v = struct.unpack_from("<H", raw, off + 20)[0]
                 atlas_data.append((ai, u, v))
             atlas_count = max(a[0] for a in atlas_data) + 1
-            print(f"  Loaded atlas data for {len(atlas_data)} images from existing data.bin")
+            print(
+                f"  Loaded atlas data for {len(atlas_data)} images from existing data.bin"
+            )
         else:
-            print("  Error: data.bin not found for relayout mode!"); sys.exit(1)
+            print("  Error: data.bin not found for relayout mode!")
+            sys.exit(1)
     else:
         print(f"\n[2/8] Generating WebP atlas textures (quality={args.quality})...")
-        atlas_data, atlas_count = generate_atlases(images, str(output_dir), args.thumb_size, args.atlas_size, args.quality)
+        atlas_data, atlas_count = generate_atlases(
+            images, str(output_dir), args.thumb_size, args.atlas_size, args.quality
+        )
+
+    preview_atlas_data = None
+    preview_atlas_count = None
+    if args.hd and not args.relayout:
+        print(
+            f"\n[2b/8] Generating preview atlases (64px, quality={args.preview_quality})..."
+        )
+        images_per_full_atlas = (args.atlas_size // args.thumb_size) ** 2
+        preview_atlas_data, preview_atlas_count = generate_preview_atlases(
+            images,
+            str(output_dir),
+            atlas_count,
+            images_per_full_atlas,
+            thumb_size=64,
+            atlas_size=args.atlas_size,
+            quality=args.preview_quality,
+        )
 
     # Stage 3 — with caching
-    emb_cache = os.path.join(str(cache_dir), 'embeddings.npy')
+    emb_cache = os.path.join(str(cache_dir), "embeddings.npy")
     if os.path.exists(emb_cache) and (args.relayout or args.cache_dir):
         print(f"\n[3/8] Loading cached embeddings from {emb_cache}...")
         embeddings = np.load(emb_cache)
@@ -996,7 +1297,11 @@ def main():
 
     # Stage 4
     print(f"\n[4/9] PCA → openTSNE → HDBSCAN...")
-    tsne_coords, raw_tsne_coords, cluster_ids, embeddings_pca, cluster_probs = reduce_dimensions(embeddings, args.min_cluster_size, args.tsne_perplexity, args.thumb_size)
+    tsne_coords, raw_tsne_coords, cluster_ids, embeddings_pca, cluster_probs = (
+        reduce_dimensions(
+            embeddings, args.min_cluster_size, args.tsne_perplexity, args.thumb_size
+        )
+    )
 
     # Stage 4b: k-NN
     print(f"\n[5/9] k-Nearest Neighbors...")
@@ -1011,8 +1316,10 @@ def main():
         write_cluster_labels(str(output_dir), cluster_labels)
 
     # Stage 5
-    meta_csv_path = os.path.join(str(output_dir), 'metadata.csv')
-    skip_metadata = args.relayout and os.path.exists(meta_csv_path) and not args.metadata
+    meta_csv_path = os.path.join(str(output_dir), "metadata.csv")
+    skip_metadata = (
+        args.relayout and os.path.exists(meta_csv_path) and not args.metadata
+    )
     if skip_metadata:
         print(f"\n[7/9] Skipping metadata (relayout mode, no external metadata)")
         timestamps = None
@@ -1025,7 +1332,9 @@ def main():
         colors = extract_dominant_colors(images)
         print(f"  Timestamps: {sum(1 for t in timestamps if t > 0)}/{len(images)}")
 
-        print(f"\n[8/9] Computing image features (brightness, complexity, edge density)...")
+        print(
+            f"\n[8/9] Computing image features (brightness, complexity, edge density)..."
+        )
         image_features = compute_image_features(images)
 
         external_metadata = None
@@ -1038,21 +1347,47 @@ def main():
 
     # Stage 6
     print(f"\n[9/9] Writing output files...")
-    write_binary_data(str(output_dir), tsne_coords, raw_tsne_coords, atlas_data, cluster_ids)
-    write_manifest(str(output_dir), len(images), atlas_count, args.thumb_size, args.atlas_size)
+    write_binary_data(
+        str(output_dir),
+        tsne_coords,
+        raw_tsne_coords,
+        atlas_data,
+        cluster_ids,
+        preview_atlas_data,
+    )
+    write_manifest(
+        str(output_dir),
+        len(images),
+        atlas_count,
+        args.thumb_size,
+        args.atlas_size,
+        preview_atlas_count=preview_atlas_count,
+        preview_thumb_size=64,
+    )
     # Normalize cluster confidence to 0-100 scale
-    cluster_confidence = (cluster_probs * 100).round(1) if cluster_probs is not None else None
+    cluster_confidence = (
+        (cluster_probs * 100).round(1) if cluster_probs is not None else None
+    )
     if timestamps is not None:
-        write_metadata_csv(str(output_dir), images, cluster_ids, timestamps, colors,
-                           external_metadata, image_features, outlier_scores, cluster_confidence)
+        write_metadata_csv(
+            str(output_dir),
+            images,
+            cluster_ids,
+            timestamps,
+            colors,
+            external_metadata,
+            image_features,
+            outlier_scores,
+            cluster_confidence,
+        )
 
     elapsed = time.time() - total_start
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  ✓ {len(images)} images → {output_dir}")
     print(f"  ✓ {atlas_count} atlas textures (WebP)")
-    print(f"  ✓ Total time: {elapsed:.1f}s ({elapsed/60:.1f} min)")
-    print(f"{'='*60}\n")
+    print(f"  ✓ Total time: {elapsed:.1f}s ({elapsed / 60:.1f} min)")
+    print(f"{'=' * 60}\n")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
