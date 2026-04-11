@@ -21,6 +21,7 @@ const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/
 const MOBILE_MAX_DPR = 1;          // cap pixel ratio on mobile
 const MOBILE_ATLAS_SCALE = 0.5;    // downscale 4096→2048 on mobile (4× GPU mem savings)
 const MOBILE_CONCURRENCY = 2;      // fewer parallel loads on mobile
+const MOBILE_PREVIEW_SCALE = 0.25;
 
 /* ── ImageSpace Logo (Rose Pine Dawn) ─────────── */
 const ImageSpaceLogo = ({ size = 40 }) => (
@@ -828,27 +829,31 @@ export default function App() {
           setMinimapReady(true);
         }
 
-        /* Progressive atlas loading — load atlases with limited concurrency,
-           create sprites for each atlas as soon as it arrives so the user
-           sees images appearing within seconds instead of waiting for all ~200MB. */
+        const usePreview = isV3 && manifest.hasPreviewAtlases;
+        const previewThumbSize = manifest.previewThumbSize || 64;
+        const previewAtlasCount = manifest.previewAtlasCount || manifest.atlasCount;
+        const previewAtlasScale = isMobile ? MOBILE_PREVIEW_SCALE : 1;
+
         const CONCURRENCY = isMobile ? MOBILE_CONCURRENCY : 4;
         const atlasTextures = new Array(manifest.atlasCount);
         let atlasLoaded = 0;
-        const atlasScale = isMobile ? MOBILE_ATLAS_SCALE : 1;
+        const atlasScale = usePreview ? previewAtlasScale : (isMobile ? MOBILE_ATLAS_SCALE : 1);
 
-        /* Dismiss full-screen overlay; show compact progress bar while atlases stream in */
         setLoading(false);
         setLoadingAtlases(true);
         setLoadProgress(0);
 
         async function loadAtlasAndCreateSprites(atlasIdx) {
-          const atlasUrl = `${BASE}data/atlas_${atlasIdx}.${fmt}`;
+          let atlasUrl;
+          if (usePreview) {
+            atlasUrl = `${BASE}data/atlas_${atlasIdx}_preview.webp`;
+          } else {
+            atlasUrl = `${BASE}data/atlas_${atlasIdx}.${fmt}`;
+          }
           atlasUrls.push(atlasUrl);
           let tex = await PIXI.Assets.load(atlasUrl);
           if (isCancelled) return;
 
-          /* On mobile, downscale atlas texture to halve GPU memory per atlas (4096→2048).
-             This reduces total GPU usage from ~3.2GB to ~800MB. */
           if (atlasScale < 1) {
             const src = tex.source;
             const sw = src.width, sh = src.height;
@@ -858,21 +863,25 @@ export default function App() {
             offscreen.height = dh;
             const ctx2d = offscreen.getContext('2d');
             ctx2d.drawImage(src.resource, 0, 0, dw, dh);
-            // Unload the full-size texture via Assets (proper cleanup, avoids "destroyed instead of unloaded" warning)
-            // then replace with a canvas-backed texture that is NOT in the Assets cache
             await PIXI.Assets.unload(atlasUrl);
-            atlasUrls = atlasUrls.filter(u => u !== atlasUrl); // already unloaded, remove from cleanup list
+            atlasUrls = atlasUrls.filter(u => u !== atlasUrl);
             tex = PIXI.Texture.from(offscreen);
           }
           atlasTextures[atlasIdx] = tex;
 
-          /* Create sprites for all points belonging to this atlas */
           for (const i of pointsByAtlas[atlasIdx]) {
             const pd = allPointData[i];
-            const frame = new PIXI.Rectangle(
-              pd.u * atlasScale, pd.v * atlasScale,
-              currentThumbSize * atlasScale, currentThumbSize * atlasScale
-            );
+            let frameU, frameV, frameSize;
+            if (usePreview) {
+              frameU = (pd.u_preview ?? pd.u) * atlasScale;
+              frameV = (pd.v_preview ?? pd.v) * atlasScale;
+              frameSize = previewThumbSize * atlasScale;
+            } else {
+              frameU = pd.u * atlasScale;
+              frameV = pd.v * atlasScale;
+              frameSize = currentThumbSize * atlasScale;
+            }
+            const frame = new PIXI.Rectangle(frameU, frameV, frameSize, frameSize);
             const spriteTex = new PIXI.Texture({ source: tex.source, frame });
             const sprite = new PIXI.Sprite(spriteTex);
             sprite.anchor.set(0.5);
@@ -880,7 +889,15 @@ export default function App() {
             const initY = pd.tsneY ?? pd.y;
             sprite.position.set(initX, initY);
             sprite.eventMode = 'none';
+            if (usePreview) {
+              sprite.width = currentThumbSize;
+              sprite.height = currentThumbSize;
+            }
             container.addChild(sprite);
+
+            const drawU = usePreview ? (pd.u_preview ?? pd.u) : pd.u;
+            const drawV = usePreview ? (pd.v_preview ?? pd.v) : pd.v;
+            const drawSize = usePreview ? previewThumbSize : currentThumbSize;
 
             const pObj = {
               id: pd.id, x: initX, y: initY,
@@ -888,6 +905,7 @@ export default function App() {
               tsneX: pd.tsneX, tsneY: pd.tsneY,
               targetX: initX, targetY: initY,
               ai: pd.ai, u: pd.u * atlasScale, v: pd.v * atlasScale, sprite,
+              drawU: drawU * atlasScale, drawV: drawV * atlasScale, drawSize: drawSize * atlasScale,
               ...(pd.cluster !== undefined && { cluster: pd.cluster }),
             };
             pointsRef.current[pd.id] = pObj;
@@ -900,30 +918,86 @@ export default function App() {
           }
 
           atlasLoaded++;
-          setLoadProgress(Math.round((atlasLoaded / manifest.atlasCount) * 100));
-          setStatusMsg(`Loading atlas textures... ${atlasLoaded}/${manifest.atlasCount}`);
+          const totalAtlases = usePreview ? previewAtlasCount : manifest.atlasCount;
+          setLoadProgress(Math.round((atlasLoaded / totalAtlases) * 100));
+          setStatusMsg(usePreview
+            ? `Loading preview atlases... ${atlasLoaded}/${totalAtlases}`
+            : `Loading atlas textures... ${atlasLoaded}/${totalAtlases}`);
         }
 
-        /* Run with limited concurrency */
         {
           let nextIdx = 0;
+          const totalCount = usePreview ? previewAtlasCount : manifest.atlasCount;
           async function worker() {
-            while (nextIdx < manifest.atlasCount && !isCancelled) {
+            while (nextIdx < totalCount && !isCancelled) {
               const idx = nextIdx++;
               await loadAtlasAndCreateSprites(idx);
             }
           }
           const workers = [];
-          for (let w = 0; w < Math.min(CONCURRENCY, manifest.atlasCount); w++) {
+          for (let w = 0; w < Math.min(CONCURRENCY, totalCount); w++) {
             workers.push(worker());
           }
           await Promise.all(workers);
         }
         if (isCancelled) return;
-        setLoadingAtlases(false); // dismiss compact progress bar
+        setLoadingAtlases(false);
 
-        /* Now extract cluster thumbnails from loaded atlases */
-        const scaledThumbSize = currentThumbSize * atlasScale;
+        if (usePreview && !isMobile) {
+          setStatusMsg('Upgrading to HD atlases...');
+          (async () => {
+            const HD_CONCURRENCY = 2;
+            let hdNextIdx = 0;
+            let hdLoaded = 0;
+
+            async function upgradeAtlasToFull(atlasIdx) {
+              const previewUrl = `${BASE}data/atlas_${atlasIdx}_preview.webp`;
+              const fullUrl = `${BASE}data/atlas_${atlasIdx}.${fmt}`;
+              const fullTex = await PIXI.Assets.load(fullUrl);
+              if (isCancelled) return;
+
+              for (const i of pointsByAtlas[atlasIdx]) {
+                const p = pointsRef.current[i];
+                if (!p) continue;
+                const frame = new PIXI.Rectangle(
+                  p.u, p.v,
+                  currentThumbSize, currentThumbSize
+                );
+                p.sprite.texture = new PIXI.Texture({ source: fullTex.source, frame });
+                p.sprite.width = currentThumbSize;
+                p.sprite.height = currentThumbSize;
+                p.drawU = p.u;
+                p.drawV = p.v;
+                p.drawSize = currentThumbSize;
+              }
+
+              atlasTextures[atlasIdx] = fullTex;
+              hdLoaded++;
+              if (hdLoaded % 5 === 0) {
+                setStatusMsg(`HD upgrade... ${hdLoaded}/${manifest.atlasCount}`);
+              }
+
+              requestAnimationFrame(() => {
+                PIXI.Assets.unload(previewUrl);
+              });
+            }
+
+            async function hdWorker() {
+              while (hdNextIdx < manifest.atlasCount && !isCancelled) {
+                const idx = hdNextIdx++;
+                await upgradeAtlasToFull(idx);
+              }
+            }
+            const hdWorkers = [];
+            for (let w = 0; w < Math.min(HD_CONCURRENCY, manifest.atlasCount); w++) {
+              hdWorkers.push(hdWorker());
+            }
+            await Promise.all(hdWorkers);
+            if (!isCancelled) setStatusMsg('HD ready');
+          })();
+        }
+
+        const scaledThumbSize = usePreview ? previewThumbSize * atlasScale : currentThumbSize * atlasScale;
         extractClusterThumbs(clusters, pointsRef.current, atlasTextures, scaledThumbSize);
         setHotspots(prev => [...prev]); // trigger re-render to show thumbnails
 
