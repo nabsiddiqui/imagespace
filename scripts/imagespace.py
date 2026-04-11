@@ -1219,6 +1219,9 @@ def main():
         print(f"Error: {input_dir} is not a directory")
         sys.exit(1)
 
+    if args.hd and args.thumb_size != 128:
+        args.thumb_size = 128
+
     os.makedirs(output_dir, exist_ok=True)
     cache_dir = Path(args.cache_dir).resolve() if args.cache_dir else output_dir
     os.makedirs(cache_dir, exist_ok=True)
