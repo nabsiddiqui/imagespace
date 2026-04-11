@@ -37,21 +37,20 @@ const ImageSpaceLogo = ({ size = 40 }) => (
 );
 
 /* ── Detail Panel Thumbnail (proper hooks instead of createRef+setTimeout) ── */
-const DetailThumb = React.memo(({ point, thumbSize, atlasFormat, displaySize = 256 }) => {
+const DetailThumb = React.memo(({ point, atlasTextures, displaySize = 256 }) => {
   const canvasRef = useRef(null);
   useEffect(() => {
     if (!point) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const img = new window.Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      ctx.clearRect(0, 0, displaySize, displaySize);
-      ctx.drawImage(img, point.u, point.v, thumbSize, thumbSize, 0, 0, displaySize, displaySize);
-    };
-    img.src = `${BASE}data/atlas_${point.ai}.${atlasFormat}`;
-  }, [point?.ai, point?.u, point?.v, thumbSize, atlasFormat, displaySize]);
+    const tex = atlasTextures[point.ai];
+    if (!tex) return;
+    const src = tex.source.resource;
+    if (!src) return;
+    ctx.clearRect(0, 0, displaySize, displaySize);
+    ctx.drawImage(src, point.drawU, point.drawV, point.drawSize, point.drawSize, 0, 0, displaySize, displaySize);
+  }, [point?.ai, point?.drawU, point?.drawV, point?.drawSize, displaySize]);
   return (
     <canvas
       ref={canvasRef}
@@ -409,6 +408,7 @@ export default function App() {
   const visibleSetRef = useRef(null);                // current Set<id> or null (all visible)
   const atlasFormatRef = useRef('jpg');               // atlas file extension
   const atlasSizeRef = useRef(ATLAS_SIZE);            // atlas pixel dimensions
+  const atlasTexturesRef = useRef(null);             // loaded atlas textures array
   const neighborsRef = useRef(null);                  // k-NN data: { k, indices: Uint32Array[], distances: Float32Array[] }
   const minimapRef = useRef(null);                    // minimap canvas element
   const minimapDataRef = useRef(null);                // { minX, minY, rangeX, rangeY, dots: [{nx, ny}] }
@@ -555,7 +555,7 @@ export default function App() {
         .map(([cid, data], idx) => ({
           id: parseInt(cid),
           worldX: data.sx / data.count,
-          worldY: data.minY - THUMB_SIZE * 2.5,
+          worldY: data.minY - thumbSizeRef.current * 2.5,
           label: clipLabelsRef.current?.[cid]?.label || `Cluster ${idx + 1}`,
           color: CLUSTER_COLORS[parseInt(cid) % CLUSTER_COLORS.length],
           count: data.count,
@@ -603,7 +603,7 @@ export default function App() {
           maxY = Math.max(maxY, p.targetY);
         }
         if (minX < Infinity) {
-          const pad = THUMB_SIZE * 2;
+          const pad = thumbSizeRef.current * 2;
           const w = maxX - minX + pad;
           const h = maxY - minY + pad;
           const cx = (minX + maxX) / 2;
@@ -868,6 +868,7 @@ export default function App() {
             tex = PIXI.Texture.from(offscreen);
           }
           atlasTextures[atlasIdx] = tex;
+          atlasTexturesRef.current = atlasTextures;
 
           for (const i of pointsByAtlas[atlasIdx]) {
             const pd = allPointData[i];
@@ -1274,7 +1275,7 @@ export default function App() {
           const gx = Math.floor(worldPos.x / SPATIAL_CELL_SIZE);
           const gy = Math.floor(worldPos.y / SPATIAL_CELL_SIZE);
           let closest = null;
-          let minDistSq = (50 / viewport.scale.x) ** 2;
+          let minDistSq = (thumbSizeRef.current * 0.4 / viewport.scale.x) ** 2;
           for (let ix = -1; ix <= 1; ix++) {
             for (let iy = -1; iy <= 1; iy++) {
               const cell = spatialHashRef.current[`${gx + ix},${gy + iy}`];
@@ -1420,7 +1421,7 @@ export default function App() {
       maxY = Math.max(maxY, p.targetY);
     }
     if (minX < Infinity) {
-      const pad = THUMB_SIZE * 2;
+      const pad = thumbSizeRef.current * 2;
       const w = maxX - minX + pad;
       const h = maxY - minY + pad;
       const scaleX = vp.screenWidth / w;
@@ -2085,8 +2086,7 @@ export default function App() {
               {pointsRef.current[selectedItem.id] && (
                 <DetailThumb
                   point={pointsRef.current[selectedItem.id]}
-                  thumbSize={thumbSizeRef.current}
-                  atlasFormat={atlasFormatRef.current}
+                  atlasTextures={atlasTexturesRef.current}
                 />
               )}
               {/* ── Similar Images ── */}
