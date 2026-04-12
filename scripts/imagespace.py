@@ -39,6 +39,12 @@ import time
 from pathlib import Path
 from multiprocessing import cpu_count
 
+try:
+    import hnswlib
+    HNSWLIB_AVAILABLE = True
+except ImportError:
+    HNSWLIB_AVAILABLE = False
+
 import numpy as np
 from PIL import Image, ExifTags
 
@@ -984,7 +990,9 @@ def write_binary_data(
         for i in range(len(snapped_coords)):
             ai, u, v = atlas_data[i]
             _, u_preview, v_preview = preview_atlas_data[i]
-            cid = int(cluster_ids[i])
+            # HDBSCAN uses -1 for noise; map to 65535 (max uint16)
+            cid_raw = int(cluster_ids[i])
+            cid = 65535 if cid_raw < 0 else min(cid_raw, 65534)
             sx, sy = float(snapped_coords[i][0]), float(snapped_coords[i][1])
             rx, ry = float(raw_tsne_coords[i][0]), float(raw_tsne_coords[i][1])
             struct.pack_into(
@@ -1007,7 +1015,9 @@ def write_binary_data(
         binary_data = bytearray(len(snapped_coords) * bytes_per_image)
         for i in range(len(snapped_coords)):
             ai, u, v = atlas_data[i]
-            cid = int(cluster_ids[i])
+            # HDBSCAN uses -1 for noise; map to 65535 (max uint16)
+            cid_raw = int(cluster_ids[i])
+            cid = 65535 if cid_raw < 0 else min(cid_raw, 65534)
             sx, sy = float(snapped_coords[i][0]), float(snapped_coords[i][1])
             rx, ry = float(raw_tsne_coords[i][0]), float(raw_tsne_coords[i][1])
             struct.pack_into(
@@ -1033,6 +1043,50 @@ def write_binary_data(
     return output_path
 
 
+def build_search_index(embeddings, output_dir):
+    """Build HNSW index for CLIP embeddings and save to binary file."""
+    if not HNSWLIB_AVAILABLE:
+        print("  WARNING: hnswlib not installed. Skipping search index generation.")
+        print("  Install with: pip install hnswlib")
+        return False
+    
+    print("\n  Building HNSW search index...")
+    dim = embeddings.shape[1]
+    num_elements = embeddings.shape[0]
+    
+    # Normalize embeddings for cosine similarity
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    norms[norms == 0] = 1  # avoid division by zero
+    normalized = embeddings / norms
+    
+    # Create index (cosine space, M=16, ef_construction=200)
+    index = hnswlib.Index(space='cosine', dim=dim)
+    index.init_index(max_elements=num_elements, ef_construction=200, M=16)
+    
+    # Add items
+    index.add_items(normalized)
+    
+    # Set ef for query time (higher = more accurate but slower)
+    index.set_ef(50)
+    
+    # Save index
+    index_path = os.path.join(output_dir, "search_index.bin")
+    index.save_index(index_path)
+    
+    # Save metadata
+    meta_path = os.path.join(output_dir, "search_index_meta.json")
+    with open(meta_path, 'w') as f:
+        json.dump({
+            "dim": int(dim),
+            "num_elements": int(num_elements),
+            "space": "cosine",
+            "ef": 50
+        }, f)
+    
+    print(f"  Saved search index: {index_path} ({os.path.getsize(index_path) / 1024 / 1024:.1f} MB)")
+    return True
+
+
 def write_manifest(
     output_dir,
     count,
@@ -1041,6 +1095,7 @@ def write_manifest(
     atlas_size=ATLAS_SIZE,
     preview_atlas_count=None,
     preview_thumb_size=64,
+    has_search_index=False,
 ):
     """Write manifest.json for the viewer."""
     is_hd = preview_atlas_count is not None
@@ -1057,6 +1112,8 @@ def write_manifest(
         manifest["hasPreviewAtlases"] = True
         manifest["previewThumbSize"] = preview_thumb_size
         manifest["previewAtlasCount"] = preview_atlas_count
+    if has_search_index:
+        manifest["hasSearchIndex"] = True
     output_path = os.path.join(output_dir, "manifest.json")
     with open(output_path, "w") as f:
         json.dump(manifest, f, indent=2)
@@ -1210,6 +1267,11 @@ def main():
         default=40,
         help="WebP quality for preview atlases (default 40)",
     )
+    parser.add_argument(
+        "--generate-search-index",
+        action="store_true",
+        help="Build CLIP search index for text-to-image search",
+    )
 
     args = parser.parse_args()
     input_dir = Path(args.input).resolve()
@@ -1297,6 +1359,11 @@ def main():
         # Save to cache
         np.save(emb_cache, embeddings)
         print(f"  Cached embeddings to {emb_cache}")
+    
+    # Stage 3b: Build search index (optional)
+    has_search_index = False
+    if args.generate_search_index and not args.relayout:
+        has_search_index = build_search_index(embeddings, str(output_dir))
 
     # Stage 4
     print(f"\n[4/9] PCA → openTSNE → HDBSCAN...")
@@ -1366,6 +1433,7 @@ def main():
         args.atlas_size,
         preview_atlas_count=preview_atlas_count,
         preview_thumb_size=64,
+        has_search_index=has_search_index,
     )
     # Normalize cluster confidence to 0-100 scale
     cluster_confidence = (

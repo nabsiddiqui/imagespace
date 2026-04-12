@@ -5,7 +5,7 @@ import {
   Flame, PanelLeftClose, PanelLeft, PanelRight,
   Palette, Info,
   ChevronLeft, ChevronRight, Filter, ChevronDown,
-  Clock, SlidersHorizontal
+  Clock, SlidersHorizontal, Search
 } from 'lucide-react';
 
 const THUMB_SIZE = 64;
@@ -416,6 +416,16 @@ export default function App() {
   const clusterCentroidsRef = useRef([]); // world positions of cluster group centers
   const clipLabelsRef = useRef(null); // CLIP-generated cluster labels from cluster_labels.json
   const thumbSizeRef = useRef(THUMB_SIZE); // actual thumb size from manifest
+  const workerRef = useRef(null); // WebWorker instance
+  const workerPromiseRef = useRef(null); // Promise-based worker API
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null); // Set of matching image IDs or null
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState(null); // Toast message for search errors
+  const searchDebounceRef = useRef(null);
+
   const [hasTimestamps, setHasTimestamps] = useState(false); // whether dataset has time data
   const [timeRange, setTimeRange] = useState(null); // { min, max, current }
   const [timeFilter, setTimeFilter] = useState([0, 1000]); // dual range: [lo, hi] out of 1000
@@ -475,13 +485,29 @@ export default function App() {
   }, [minimapReady, loading]);
 
   /* ── Compute visible set from hotspot + csvFilters + rangeFilters ── */
-  const computeVisibleSet = useCallback((hotspotId, filters, hotspotsData, meta, ranges = {}) => {
+  const computeVisibleSet = useCallback((hotspotId, filters, hotspotsData, meta, ranges = {}, searchIds = null) => {
     let ids = null;
+
+    // Search filter (intersect with other filters)
+    if (searchIds && searchIds.size > 0) {
+      ids = new Set(searchIds);
+    }
 
     // Hotspot filter
     if (hotspotId !== null && hotspotsData.length > 0) {
       const h = hotspotsData.find(h => h.id === hotspotId);
-      if (h) ids = new Set(h.indices);
+      if (h) {
+        const hotspotSet = new Set(h.indices);
+        if (ids === null) {
+          ids = hotspotSet;
+        } else {
+          const intersection = new Set();
+          for (const id of ids) {
+            if (hotspotSet.has(id)) intersection.add(id);
+          }
+          ids = intersection;
+        }
+      }
     }
 
     // CSV filters — additive (union across all selected values)
@@ -654,11 +680,11 @@ export default function App() {
     }
     // Recompute visible set with current filters (keep hotspot + csv filters active)
     setActiveHotspot(prev => {
-      const visSet = computeVisibleSet(prev, csvFilters, hotspots, metadata, rangeFilters);
+      const visSet = computeVisibleSet(prev, csvFilters, hotspots, metadata, rangeFilters, searchResults);
       relayout(mode, visSet);
       return prev;
     });
-  }, [csvFilters, rangeFilters, hotspots, metadata, computeVisibleSet, relayout]);
+  }, [csvFilters, rangeFilters, hotspots, metadata, computeVisibleSet, relayout, searchResults]);
 
   /* ── PixiJS boot ────────────────────────────── */
   useEffect(() => {
@@ -855,6 +881,51 @@ export default function App() {
         const previewThumbSize = manifest.previewThumbSize || 64;
         const previewAtlasCount = manifest.previewAtlasCount || manifest.atlasCount;
         const previewAtlasScale = isPhone ? MOBILE_PREVIEW_SCALE : 1;
+
+        /* Initialize WebWorker for spatial indexing and search */
+        if (manifest.hasSearchIndex) {
+          try {
+            workerRef.current = new Worker(new URL('./workers/imageWorker.js', import.meta.url), { type: 'module' });
+            
+            // Wrap worker communication in promise-based API
+            let messageId = 0;
+            const pending = new Map();
+            
+            workerRef.current.onmessage = (e) => {
+              const { id, data, error } = e.data;
+              if (pending.has(id)) {
+                const { resolve, reject } = pending.get(id);
+                pending.delete(id);
+                if (error) reject(new Error(error));
+                else resolve(data);
+              }
+            };
+            
+            workerPromiseRef.current = {
+              send: (type, data) => {
+                return new Promise((resolve, reject) => {
+                  const id = ++messageId;
+                  pending.set(id, { resolve, reject });
+                  workerRef.current.postMessage({ type, id, data });
+                });
+              }
+            };
+            
+            // Initialize worker with point data
+            const searchIndexUrl = manifest.hasSearchIndex ? `${BASE}data/search_index.bin` : null;
+            workerPromiseRef.current.send('init', { 
+              points: allPointData,
+              searchIndexUrl 
+            }).then(result => {
+              console.log('[Worker] Initialized:', result);
+            }).catch(err => {
+              console.error('[Worker] Init failed:', err);
+            });
+            
+          } catch (err) {
+            console.error('[Worker] Failed to create:', err);
+          }
+        }
 
         const CONCURRENCY = isMobile ? MOBILE_CONCURRENCY : 4; // tablets still benefit from fewer concurrent loads
         const atlasTextures = new Array(manifest.atlasCount);
@@ -1414,18 +1485,34 @@ export default function App() {
           app.destroy(false, { children: true, texture: false });
         } catch (_) {}
       }
+      // Terminate WebWorker
+      if (workerRef.current) {
+        try {
+          workerRef.current.terminate();
+          workerRef.current = null;
+          workerPromiseRef.current = null;
+        } catch (_) {}
+      }
       pointsRef.current = [];
       spatialHashRef.current = {};
     };
   }, []);
+  /* ── Auto-dismiss search error toast ────────────────── */
+  useEffect(() => {
+    if (!searchError) return;
+    const timeout = setTimeout(() => {
+      setSearchError(null);
+    }, 3000);
+    return () => clearTimeout(timeout);
+  }, [searchError]);
 
   const flyToHotspot = useCallback((h) => {
     const newActive = activeHotspot === h.id ? null : h.id;
     setActiveHotspot(newActive);
     // Recompute visible set with hotspot + csv filters
-    const visSet = computeVisibleSet(newActive, csvFilters, hotspots, metadata, rangeFilters);
+    const visSet = computeVisibleSet(newActive, csvFilters, hotspots, metadata, rangeFilters, searchResults);
     relayout(viewMode, visSet);
-  }, [activeHotspot, csvFilters, rangeFilters, hotspots, metadata, viewMode, computeVisibleSet, relayout]);
+  }, [activeHotspot, csvFilters, rangeFilters, hotspots, metadata, viewMode, computeVisibleSet, relayout, searchResults]);
 
   const handleZoom = (dir) => {
     const vp = viewportRef.current;
@@ -1581,14 +1668,14 @@ export default function App() {
       rangePendingRef.current = requestAnimationFrame(() => {
         rangePendingRef.current = null;
         setActiveHotspot(hotId => {
-          const visSet = computeVisibleSet(hotId, csvFilters, hotspots, metadata, captured);
+          const visSet = computeVisibleSet(hotId, csvFilters, hotspots, metadata, captured, searchResults);
           relayout(viewMode, visSet);
           return hotId;
         });
       });
       return next;
     });
-  }, [continuousFilterOptions, csvFilters, hotspots, metadata, viewMode, computeVisibleSet, relayout]);
+  }, [continuousFilterOptions, csvFilters, hotspots, metadata, viewMode, computeVisibleSet, relayout, searchResults]);
 
 
   const handleFilterChange = useCallback((col, val) => {
@@ -1606,13 +1693,13 @@ export default function App() {
         next[col] = existing;
       }
       setActiveHotspot(hotId => {
-        const visSet = computeVisibleSet(hotId, next, hotspots, metadata, rangeFilters);
+        const visSet = computeVisibleSet(hotId, next, hotspots, metadata, rangeFilters, searchResults);
         relayout(viewMode, visSet);
         return hotId;
       });
       return next;
     });
-  }, [hotspots, metadata, viewMode, computeVisibleSet, relayout, rangeFilters]);
+  }, [hotspots, metadata, viewMode, computeVisibleSet, relayout, rangeFilters, searchResults]);
 
   const clearAllFilters = useCallback(() => {
     setCsvFilters({});
@@ -1690,43 +1777,125 @@ export default function App() {
             </div>
 
             {/* Hotspots (larger cards) */}
-            {!loading && hotspots.length > 0 && showHotspots && (
-              <div className="pointer-events-auto flex flex-col gap-1.5 md:gap-2 max-w-[180px] md:max-w-[240px] max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin">
-                {hotspots.map((h, i) => {
-                  const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
-                  return (
-                    <button
-                      key={h.id}
-                      onClick={() => { if (viewMode !== 'data') flyToHotspot(h); }}
-                      className={`bg-rp-surface/90 backdrop-blur-md rounded-xl border border-rp-hlMed shadow-rp transition-all duration-200 ${viewMode !== 'data' ? 'cursor-pointer' : 'cursor-default'} ${
-                        activeHotspot === h.id
-                          ? 'ring-2 ring-rp-pine shadow-rp-lg'
-                          : 'hover:shadow-rp-lg hover:border-rp-pine/40'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 p-3">
-                        {h.thumbnails?.[0] ? (
-                          <img src={h.thumbnails[0]} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
-                        ) : (
-                          <div className="w-12 h-12 rounded-lg shrink-0" style={{ backgroundColor: h.color, opacity: 0.4 }} />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-rp-text leading-tight">Hotspot {i + 1}: {clipLabelsRef.current?.[h.id]?.label || `Cluster ${i + 1}`}</p>
-                          <p className="text-[10px] text-rp-muted mt-0.5">{h.count.toLocaleString()} images</p>
-                          <div className="mt-1 h-1.5 bg-rp-hlMed rounded-full overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: h.color }} />
+            {!loading && hotspots.length > 0 && (
+              <div className={`h-[calc(100vh-100px)] border-r border-rp-hlHigh pr-3 transition-all duration-300 overflow-hidden ${showHotspots ? 'w-[180px] md:w-[240px] opacity-100' : 'w-0 opacity-0'}`}>
+                <div className="pointer-events-auto flex flex-col gap-1.5 md:gap-2 max-w-[180px] md:max-w-[240px] h-full overflow-y-auto scrollbar-thin">
+                  {hotspots.map((h, i) => {
+                    const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
+                    return (
+                      <button
+                        key={h.id}
+                        onClick={() => { if (viewMode !== 'data') flyToHotspot(h); }}
+                        className={`bg-rp-surface/90 backdrop-blur-md rounded-xl border border-rp-hlMed shadow-rp transition-all duration-200 ${viewMode !== 'data' ? 'cursor-pointer' : 'cursor-default'} ${
+                          activeHotspot === h.id
+                            ? 'ring-2 ring-rp-pine shadow-rp-lg'
+                            : 'hover:shadow-rp-lg hover:border-rp-pine/40'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 p-3">
+                          {h.thumbnails?.[0] ? (
+                            <img src={h.thumbnails[0]} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg shrink-0" style={{ backgroundColor: h.color, opacity: 0.4 }} />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-rp-text leading-tight">Hotspot {i + 1}: {clipLabelsRef.current?.[h.id]?.label || `Cluster ${i + 1}`}</p>
+                            <p className="text-[10px] text-rp-muted mt-0.5">{h.count.toLocaleString()} images</p>
+                            <div className="mt-1 h-1.5 bg-rp-hlMed rounded-full overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: h.color }} />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
 
-          {/* View Mode Tabs + Filters */}
+          {/* View Mode Tabs + Filters + Search */}
           <div className="flex flex-col items-end gap-2">
+            {/* Search bar - shown when search index available */}
+            {workerRef.current && workerPromiseRef.current && (
+              <div className="pointer-events-auto rp-card flex items-center gap-2 px-3 py-2 w-full max-w-xs">
+                <Search size={14} className="text-rp-muted shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    const query = e.target.value;
+                    setSearchQuery(query);
+                    
+                    // Clear previous debounce
+                    if (searchDebounceRef.current) {
+                      clearTimeout(searchDebounceRef.current);
+                    }
+                    
+                    if (!query.trim()) {
+                      setSearchResults(null);
+                      setSearchError(null);
+                      return;
+                    }
+                    
+                    // Debounce search
+                    searchDebounceRef.current = setTimeout(async () => {
+                      if (!workerPromiseRef.current) return;
+                      
+                      setIsSearching(true);
+                      setSearchError(null);
+                      try {
+                        const { encodeSearchQuery } = await import('./utils/clipEncoder.js');
+                        const queryVector = await encodeSearchQuery(query);
+                        
+                        if (queryVector) {
+                          const result = await workerPromiseRef.current.send('search', { 
+                            queryVector: Array.from(queryVector), 
+                            k: 1000 
+                          });
+                          
+                          // Check for 0 results
+                          if (result.ids.length === 0) {
+                            setSearchError('No matches found');
+                          }
+                          
+                          setSearchResults(new Set(result.ids));
+                        }
+                      } catch (err) {
+                        console.error('Search failed:', err);
+                        setSearchError('Search failed: ' + (err.message || 'Unknown error'));
+                      } finally {
+                        setIsSearching(false);
+                      }
+                    }, 150);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setSearchQuery('');
+                      setSearchResults(null);
+                    }
+                  }}
+                  placeholder="Search images..."
+                  className="flex-1 bg-transparent text-xs text-rp-text placeholder:text-rp-muted focus:outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSearchResults(null);
+                      setSearchError(null);
+                    }}
+                    className="p-1 rounded-md text-rp-muted hover:bg-rp-hlLow hover:text-rp-text transition-all"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+                {isSearching && (
+                  <div className="animate-spin w-3 h-3 border-2 border-rp-pine border-t-transparent rounded-full" />
+                )}
+              </div>
+            )}
+
             {/* View tabs */}
             <div className="pointer-events-auto rp-card flex items-center gap-0.5 md:gap-1 px-1.5 md:px-2 py-1.5">
               {Object.entries(VIEW_MODES).filter(([key]) => key !== 'timeline' || hasTimestamps).map(([key, { label }]) => (
@@ -1802,7 +1971,7 @@ export default function App() {
                                   const next = { ...prev };
                                   delete next[col];
                                   setActiveHotspot(hotId => {
-                                    const visSet = computeVisibleSet(hotId, next, hotspots, metadata, rangeFilters);
+                                    const visSet = computeVisibleSet(hotId, next, hotspots, metadata, rangeFilters, searchResults);
                                     relayout(viewMode, visSet);
                                     return hotId;
                                   });
@@ -1878,7 +2047,7 @@ export default function App() {
                       onClick={() => {
                         setRangeFilters({});
                         setActiveHotspot(hotId => {
-                          const visSet = computeVisibleSet(hotId, csvFilters, hotspots, metadata, {});
+                          const visSet = computeVisibleSet(hotId, csvFilters, hotspots, metadata, {}, searchResults);
                           relayout(viewMode, visSet);
                           return hotId;
                         });
@@ -2294,6 +2463,27 @@ export default function App() {
           </div>
         </div>
       )}
+      {/* ── Search Error Toast ────────────────── */}
+      {searchError && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1500] pointer-events-none">
+          <div className="bg-rp-surface/95 backdrop-blur-md border border-rp-hlMed rounded-full shadow-rp-lg px-5 py-2 flex items-center gap-2">
+            <X size={14} className="text-rp-love shrink-0" />
+            <span className="text-sm text-rp-text">{searchError}</span>
+            <button 
+              onClick={() => setSearchError(null)}
+              className="ml-2 p-1 rounded-md text-rp-muted hover:bg-rp-hlLow hover:text-rp-text transition-all pointer-events-auto"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Accessibility Live Region ───────────────── */}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {searchResults ? `${searchResults.size} images match your search` : 'Search cleared'}
+      </div>
+
     </div>
   );
 }
