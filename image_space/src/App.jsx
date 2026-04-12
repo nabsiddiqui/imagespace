@@ -339,7 +339,11 @@ function extractClusterThumbs(clusters, points, atlasTextures, thumbSize) {
         if (!src) continue;
         const c = document.createElement('canvas');
         c.width = thumbSize; c.height = thumbSize;
-        c.getContext('2d').drawImage(src, p.u, p.v, thumbSize, thumbSize, 0, 0, thumbSize, thumbSize);
+        // Use drawU/drawV/drawSize which contain the correct coordinates for the loaded atlas
+        const sourceU = p.drawU ?? p.u;
+        const sourceV = p.drawV ?? p.v;
+        const sourceSize = p.drawSize ?? thumbSize;
+        c.getContext('2d').drawImage(src, sourceU, sourceV, sourceSize, sourceSize, 0, 0, thumbSize, thumbSize);
         cluster.thumbnails.push(c.toDataURL('image/jpeg', 0.7));
       } catch (_) { /* skip */ }
     }
@@ -854,7 +858,7 @@ export default function App() {
 
         const CONCURRENCY = isMobile ? MOBILE_CONCURRENCY : 4; // tablets still benefit from fewer concurrent loads
         const atlasTextures = new Array(manifest.atlasCount);
-        let atlasLoaded = 0;
+        const completedAtlases = new Set();
         const atlasScale = usePreview ? previewAtlasScale : (isPhone ? MOBILE_ATLAS_SCALE : 1);
 
         setLoading(false);
@@ -936,12 +940,13 @@ export default function App() {
             spatialHashRef.current[key].push(pObj);
           }
 
-          atlasLoaded++;
           const totalAtlases = usePreview ? previewAtlasCount : manifest.atlasCount;
-          setLoadProgress(Math.round((atlasLoaded / totalAtlases) * 100));
+          completedAtlases.add(atlasIdx);
+          const progress = Math.round((completedAtlases.size / totalAtlases) * 100);
+          setLoadProgress(progress);
           setStatusMsg(usePreview
-            ? `Loading low-res photos... ${atlasLoaded}/${totalAtlases}`
-            : `Loading atlas textures... ${atlasLoaded}/${totalAtlases}`);
+            ? `Loading Images ${completedAtlases.size}/${totalAtlases}`
+            : `Loading atlas textures... ${completedAtlases.size}/${totalAtlases}`);
         }
 
         {
@@ -967,7 +972,7 @@ export default function App() {
           (async () => {
             const HD_CONCURRENCY = 2;
             let hdNextIdx = 0;
-            let hdLoaded = 0;
+            const hdCompletedAtlases = new Set();
 
             async function upgradeAtlasToFull(atlasIdx) {
               const previewUrl = `${BASE}data/atlas_${atlasIdx}_preview.webp`;
@@ -991,9 +996,10 @@ export default function App() {
               }
 
               atlasTextures[atlasIdx] = fullTex;
-              hdLoaded++;
-              setLoadProgress(Math.round((hdLoaded / manifest.atlasCount) * 100));
-              setStatusMsg(`Loading high-res photos... ${hdLoaded}/${manifest.atlasCount}`);
+              hdCompletedAtlases.add(atlasIdx);
+              const hdProgress = Math.round((hdCompletedAtlases.size / manifest.atlasCount) * 100);
+              setLoadProgress(hdProgress);
+              setStatusMsg(`Upgrading Image Resolutions ${hdCompletedAtlases.size}/${manifest.atlasCount}`);
 
               requestAnimationFrame(() => {
                 PIXI.Assets.unload(previewUrl);
