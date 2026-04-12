@@ -2,6 +2,7 @@ node_modules/
 image_space/output/
 .DS_Store
 *.log
+.worktrees/
 
 # Private project notes — never publish
 memory-bank/
