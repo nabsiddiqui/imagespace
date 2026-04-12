@@ -104,7 +104,9 @@ python3 scripts/imagespace.py /path/to/images/ \
 | `--metadata` | none | External metadata CSV to merge (must have `filename` column) |
 | `--thumb-size` | 64 | Thumbnail size in pixels (64 or 128 recommended) |
 | `--atlas-size` | 4096 | Atlas texture dimensions |
-| `--quality` | 80 | WebP compression quality (1–100) |
+| `--quality` | 60 | WebP compression quality (1–100) |
+| `--hd` | false | Generate dual-resolution atlases (64px preview + 128px full). Auto-sets thumb-size=128 |
+| `--preview-quality` | 40 | WebP quality for preview atlases (only used with --hd) |
 | `--min-cluster-size` | 50 | HDBSCAN minimum cluster size |
 | `--tsne-perplexity` | 30 | t-SNE perplexity |
 | `--cache-dir` | none | Directory to cache CLIP embeddings (`.npy`) |
@@ -123,6 +125,25 @@ ImageSpace uses grid-snapped layouts (Grid, Color, Timeline views) as a delibera
 **Predictability.** Grid layouts are deterministic: the same dataset always produces the same layout. Researchers can reproduce views, share screenshots, and reference specific positions. Freeform layouts introduce randomness in overlap ordering that undermines reproducibility.
 
 **Tradeoffs.** Grid snapping sacrifices organic, "gallery-wall" aesthetics and the ability to manually arrange images. The t-SNE scatter view provides the organic clustering experience, while grid views prioritize systematic exploration. This separation is intentional — each view mode serves a different analytical purpose.
+
+## Dual-Resolution Loading
+
+ImageSpace supports progressive atlas loading for fast initial display:
+
+**Desktop / tablet:** 64px preview atlases load first (fast), then 128px HD atlases swap in progressively. A loading bar shows "Loading low-res photos" → "Loading high-res photos."
+
+**Phone:** Only 64px preview atlases are loaded (at 0.25 scale = ~196MB GPU). No HD upgrade — keeps mobile memory low.
+
+The distinction is device-based, not viewport-based: iPads and Android tablets get HD, regardless of window size. iPhones and Android phones stay on preview.
+
+To generate dual-resolution data, run the pipeline with `--hd`:
+
+```bash
+python3 scripts/imagespace.py /path/to/images/ \
+  -o image_space/public/data/ \
+  --metadata /path/to/metadata.csv \
+  --thumb-size 128 --quality 60 --hd
+```
 
 ## Metadata Format
 

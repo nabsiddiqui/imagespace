@@ -15,8 +15,26 @@ const SPATIAL_CELL_SIZE = 120;
 // BASE_URL is './' (relative) — built dist/ works at any URL without configuration.
 const BASE = import.meta.env.BASE_URL;
 
-/* ── Mobile / low-memory detection ────────────── */
-const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+/* ── Device detection ─────────────────────────── */
+
+// isPhone: actual phones — used for GPU memory / load strategy decisions.
+// Only phones skip HD and use MOBILE_PREVIEW_SCALE.
+// Tablets (iPad, Android tablets) are NOT phones — they have enough GPU for HD.
+const isPhone = (() => {
+  // Known phone UA strings (exclude Android tablets)
+  if (/iPhone|iPod/i.test(navigator.userAgent)) return true;
+  if (/Android(?!.*Tablet|.*Silk)/i.test(navigator.userAgent)) return true;
+  // iPadOS 13+ reports as Mac desktop — detect via touch + Mac platform
+  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return false;
+  // Fallback: small physical screen + touch (not tablet)
+  if (screen.width < 768 && navigator.maxTouchPoints > 1) return true;
+  return false;
+})();
+
+// isMobile: phones + tablets — used for CPU/throttle/rendering optimizations.
+// Covers all touch-first devices regardless of GPU capability.
+const isMobile = isPhone
+  || /iPad|Android.*Tablet|Silk/i.test(navigator.userAgent)
   || (navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
 const MOBILE_MAX_DPR = 1;          // cap pixel ratio on mobile
 const MOBILE_ATLAS_SCALE = 0.5;    // downscale 4096→2048 on mobile (4× GPU mem savings)
@@ -373,9 +391,9 @@ export default function App() {
   const pointsRef = useRef([]);
   const viewModeRef = useRef('tsne');
 
-  const [loading, setLoading] = useState(true);       // full overlay
-  const [loadingAtlases, setLoadingAtlases] = useState(false); // compact bar during atlas loading
-  const [loadProgress, setLoadProgress] = useState(0);
+  const [loading, setLoading] = useState(true);       // full overlay during boot
+  const [loadProgress, setLoadProgress] = useState(0); // 0-100 for current loading phase
+  const [loadPhase, setLoadPhase] = useState('boot');  // 'boot' | 'preview' | 'hd' | 'done'
   const [stats, setStats] = useState({ count: 0, fps: 0 });
   const [selectedItem, setSelectedItem] = useState(null);
   const [error, setError] = useState(null);
@@ -832,15 +850,15 @@ export default function App() {
         const usePreview = isV3 && manifest.hasPreviewAtlases;
         const previewThumbSize = manifest.previewThumbSize || 64;
         const previewAtlasCount = manifest.previewAtlasCount || manifest.atlasCount;
-        const previewAtlasScale = isMobile ? MOBILE_PREVIEW_SCALE : 1;
+        const previewAtlasScale = isPhone ? MOBILE_PREVIEW_SCALE : 1;
 
-        const CONCURRENCY = isMobile ? MOBILE_CONCURRENCY : 4;
+        const CONCURRENCY = isMobile ? MOBILE_CONCURRENCY : 4; // tablets still benefit from fewer concurrent loads
         const atlasTextures = new Array(manifest.atlasCount);
         let atlasLoaded = 0;
-        const atlasScale = usePreview ? previewAtlasScale : (isMobile ? MOBILE_ATLAS_SCALE : 1);
+        const atlasScale = usePreview ? previewAtlasScale : (isPhone ? MOBILE_ATLAS_SCALE : 1);
 
         setLoading(false);
-        setLoadingAtlases(true);
+        setLoadPhase('preview');
         setLoadProgress(0);
 
         async function loadAtlasAndCreateSprites(atlasIdx) {
@@ -922,7 +940,7 @@ export default function App() {
           const totalAtlases = usePreview ? previewAtlasCount : manifest.atlasCount;
           setLoadProgress(Math.round((atlasLoaded / totalAtlases) * 100));
           setStatusMsg(usePreview
-            ? `Loading preview atlases... ${atlasLoaded}/${totalAtlases}`
+            ? `Loading low-res photos... ${atlasLoaded}/${totalAtlases}`
             : `Loading atlas textures... ${atlasLoaded}/${totalAtlases}`);
         }
 
@@ -942,10 +960,10 @@ export default function App() {
           await Promise.all(workers);
         }
         if (isCancelled) return;
-        setLoadingAtlases(false);
+        setLoadPhase(isPhone || !usePreview ? 'done' : 'hd');
+        setLoadProgress(0);
 
-        if (usePreview && !isMobile) {
-          setStatusMsg('Upgrading to HD atlases...');
+        if (usePreview && !isPhone) {
           (async () => {
             const HD_CONCURRENCY = 2;
             let hdNextIdx = 0;
@@ -974,9 +992,8 @@ export default function App() {
 
               atlasTextures[atlasIdx] = fullTex;
               hdLoaded++;
-              if (hdLoaded % 5 === 0) {
-                setStatusMsg(`HD upgrade... ${hdLoaded}/${manifest.atlasCount}`);
-              }
+              setLoadProgress(Math.round((hdLoaded / manifest.atlasCount) * 100));
+              setStatusMsg(`Loading high-res photos... ${hdLoaded}/${manifest.atlasCount}`);
 
               requestAnimationFrame(() => {
                 PIXI.Assets.unload(previewUrl);
@@ -994,7 +1011,10 @@ export default function App() {
               hdWorkers.push(hdWorker());
             }
             await Promise.all(hdWorkers);
-            if (!isCancelled) setStatusMsg('HD ready');
+            if (!isCancelled) {
+              setLoadPhase('done');
+              setStatusMsg('High-res ready');
+            }
           })();
         }
 
@@ -2201,30 +2221,48 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Loading (full overlay — initial boot only) ──── */}
-      {loading && !error && (
-        <div className="absolute inset-0 z-[1000] bg-rp-base flex flex-col items-center justify-center">
-          <div className="flex flex-col items-center gap-6 max-w-sm w-full px-8">
-            <ImageSpaceLogo size={72} />
-            <div className="text-center">
-              <h1 className="text-3xl font-extrabold tracking-tight text-rp-text">ImageSpace</h1>
-              <p className="text-sm text-rp-muted mt-1">Loading collection...</p>
+      {/* ── Loading overlay ───────────────────────────── *?/
+      {/* Full-screen overlay during boot, compact pill during atlas loading */}
+      {(loading || loadPhase === 'preview') && !error && (
+        <div className={loading
+          ? "absolute inset-0 z-[1000] bg-rp-base flex flex-col items-center justify-center"
+          : "absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none"
+        }>
+          {loading ? (
+            /* ── Full-screen boot overlay ──── */
+            <div className="flex flex-col items-center gap-6 max-w-sm w-full px-8">
+              <ImageSpaceLogo size={72} />
+              <div className="text-center">
+                <h1 className="text-3xl font-extrabold tracking-tight text-rp-text">ImageSpace</h1>
+                <p className="text-sm text-rp-muted mt-1">Loading collection...</p>
+              </div>
+              <div className="w-full space-y-2">
+                <div className="w-full h-2.5 bg-rp-hlMed rounded-full overflow-hidden shadow-inner">
+                  <div
+                    className="h-full bg-gradient-to-r from-rp-pine to-rp-foam rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${loadProgress || 15}%` }}
+                  />
+                </div>
+                <p className="text-xs text-rp-subtle font-medium text-center">{statusMsg}</p>
+              </div>
             </div>
-            <div className="w-full space-y-2">
-              <div className="w-full h-2.5 bg-rp-hlMed rounded-full overflow-hidden shadow-inner">
+          ) : (
+            /* ── Compact preview progress pill ──── */
+            <div className="bg-rp-surface/90 backdrop-blur-md border border-rp-hlMed rounded-full shadow-rp-lg px-5 py-2 flex items-center gap-3 pointer-events-auto">
+              <div className="w-40 h-2 bg-rp-hlMed rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-rp-pine to-rp-foam rounded-full transition-all duration-500 ease-out"
-                  style={{ width: '30%' }}
+                  className="h-full bg-gradient-to-r from-rp-pine to-rp-foam rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${loadProgress}%` }}
                 />
               </div>
-              <p className="text-xs text-rp-subtle font-medium text-center">{statusMsg}</p>
+              <span className="text-xs font-bold text-rp-pine tabular-nums whitespace-nowrap">{statusMsg}</span>
             </div>
-          </div>
+          )}
         </div>
       )}
 
-      {/* ── Compact progress bar (atlas streaming) ──── */}
-      {loadingAtlases && !error && (
+      {/* ── HD upgrade compact pill ──── */}
+      {loadPhase === 'hd' && !error && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
           <div className="bg-rp-surface/90 backdrop-blur-md border border-rp-hlMed rounded-full shadow-rp-lg px-5 py-2 flex items-center gap-3 pointer-events-auto">
             <div className="w-40 h-2 bg-rp-hlMed rounded-full overflow-hidden">
