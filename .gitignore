@@ -3,6 +3,9 @@ image_space/output/
 .DS_Store
 *.log
 .worktrees/
+.pi/
+.playwright-mcp/
+test-data/
 
 # Private project notes — never publish
 memory-bank/
