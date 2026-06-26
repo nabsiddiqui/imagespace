@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
-  Database, X, Layers, Grid, Magnet, Eye,
+  Database, X, Grid, Magnet, Eye,
   ZoomIn, ZoomOut, Maximize2,
-  Flame, PanelLeftClose, PanelLeft, PanelRight,
   Palette, Info,
   ChevronLeft, ChevronRight, Filter, ChevronDown,
   Clock, SlidersHorizontal
@@ -81,12 +80,24 @@ const DetailThumb = React.memo(({ point, atlasTextures, displaySize = 256 }) => 
 });
 
 /* ── View Mode Layouts ────────────────────────── */
+const LoadPill = ({ progress, msg }) => (
+  <div className="bg-rp-surface/90 backdrop-blur-md border border-rp-hlMed rounded-full shadow-rp-lg px-5 py-2 flex items-center gap-3 pointer-events-auto">
+    <div className="w-40 h-2 bg-rp-hlMed rounded-full overflow-hidden">
+      <div
+        className="h-full bg-gradient-to-r from-rp-pine to-rp-foam rounded-full transition-all duration-300 ease-out"
+        style={{ width: `${progress}%` }}
+      />
+    </div>
+    <span className="text-xs font-bold text-rp-pine tabular-nums whitespace-nowrap">{msg}</span>
+  </div>
+);
+
 const VIEW_MODES = {
-  tsne: { label: 't-SNE', icon: 'scatter', desc: 'Visual similarity layout' },
-  snap: { label: 'Snap', icon: 'magnet', desc: 'Grid-snapped t-SNE layout' },
-  grid: { label: 'Grid', icon: 'grid', desc: 'Ordinal grid layout' },
-  color: { label: 'Color', icon: 'palette', desc: 'Sorted by dominant color' },
-  timeline: { label: 'Timeline', icon: 'clock', desc: 'Chronological timeline' },
+  tsne: { label: 't-SNE', icon: 'scatter' },
+  snap: { label: 'Snap', icon: 'magnet' },
+  grid: { label: 'Grid', icon: 'grid' },
+  color: { label: 'Color', icon: 'palette' },
+  timeline: { label: 'Timeline', icon: 'clock' },
 };
 
 function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
@@ -197,30 +208,6 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
       }
       break;
     }
-    case 'clusters': {
-      const clusterMap = {};
-      for (const p of points) {
-        const c = p.cluster ?? 0;
-        if (!clusterMap[c]) clusterMap[c] = [];
-        clusterMap[c].push(p);
-      }
-      const cids = Object.keys(clusterMap).sort((a, b) => clusterMap[b].length - clusterMap[a].length);
-      let yOff = 0;
-      const sp = thumbSize * 1.4;
-      const gap = thumbSize * 4;
-      for (const cid of cids) {
-        const pts = clusterMap[cid];
-        const cols = Math.ceil(Math.sqrt(pts.length));
-        const rows = Math.ceil(pts.length / cols);
-        const xStart = -(cols * sp) / 2;
-        for (let i = 0; i < pts.length; i++) {
-          pts[i].targetX = xStart + (i % cols) * sp;
-          pts[i].targetY = yOff + Math.floor(i / cols) * sp;
-        }
-        yOff += rows * sp + gap;
-      }
-      break;
-    }
     case 'timeline': {
       // Sort by timestamp, arrange in columns top-to-bottom (vertical layout)
       const sorted = [...points].sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
@@ -243,84 +230,30 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
 }
 
 /* ── Cluster Constants ────────────────────────── */
-const NUM_CLUSTERS = 10;
 const CLUSTER_COLORS = [
   '#286983', '#56949f', '#ea9d34', '#b4637a', '#907aa9',
   '#d7827e', '#569f84', '#9893a5', '#c4a7e7', '#797593',
 ];
 
-/* ── K-Means Clustering ──────────────────────── */
-function computeClusters(points, k = NUM_CLUSTERS, maxIter = 25) {
-  const n = points.length;
-  if (n === 0) return [];
-
-  // Use pre-computed cluster IDs from pipeline (v2 binary) if available
-  const hasPrecomputed = points.some(p => p.cluster !== undefined);
-  if (hasPrecomputed) {
-    const clusterMap = {};
-    for (let i = 0; i < n; i++) {
-      const cid = points[i].cluster ?? 0;
-      if (!clusterMap[cid]) clusterMap[cid] = { indices: [], sx: 0, sy: 0 };
-      clusterMap[cid].indices.push(i);
-      clusterMap[cid].sx += (points[i].tsneX ?? points[i].originalX);
-      clusterMap[cid].sy += (points[i].tsneY ?? points[i].originalY);
-    }
-    return Object.entries(clusterMap)
-      .map(([cid, data]) => ({
-        id: parseInt(cid),
-        centroid: { x: data.sx / data.indices.length, y: data.sy / data.indices.length },
-        count: data.indices.length,
-        indices: data.indices,
-        color: CLUSTER_COLORS[parseInt(cid) % CLUSTER_COLORS.length],
-      }))
-      .sort((a, b) => b.count - a.count);
+/* ── Clusters ──────────────────────── */
+function computeClusters(points) {
+  const clusterMap = {};
+  for (let i = 0; i < points.length; i++) {
+    const cid = points[i].cluster ?? 0;
+    if (!clusterMap[cid]) clusterMap[cid] = { indices: [], sx: 0, sy: 0 };
+    clusterMap[cid].indices.push(i);
+    clusterMap[cid].sx += (points[i].tsneX ?? points[i].originalX);
+    clusterMap[cid].sy += (points[i].tsneY ?? points[i].originalY);
   }
-
-  // Fallback: client-side K-means on t-SNE coordinates
-  const step = Math.floor(n / k);
-  const centroids = [];
-  for (let i = 0; i < k; i++) {
-    const p = points[i * step];
-    centroids.push({ x: p.tsneX ?? p.originalX, y: p.tsneY ?? p.originalY });
-  }
-  const assignments = new Int32Array(n);
-  for (let iter = 0; iter < maxIter; iter++) {
-    for (let i = 0; i < n; i++) {
-      let minDist = Infinity, minIdx = 0;
-      const px = points[i].tsneX ?? points[i].originalX;
-      const py = points[i].tsneY ?? points[i].originalY;
-      for (let j = 0; j < k; j++) {
-        const dx = px - centroids[j].x;
-        const dy = py - centroids[j].y;
-        const dist = dx * dx + dy * dy;
-        if (dist < minDist) { minDist = dist; minIdx = j; }
-      }
-      assignments[i] = minIdx;
-    }
-    const sums = Array.from({ length: k }, () => ({ x: 0, y: 0, count: 0 }));
-    for (let i = 0; i < n; i++) {
-      const c = assignments[i];
-      sums[c].x += (points[i].tsneX ?? points[i].originalX);
-      sums[c].y += (points[i].tsneY ?? points[i].originalY);
-      sums[c].count++;
-    }
-    for (let j = 0; j < k; j++) {
-      if (sums[j].count > 0) {
-        centroids[j].x = sums[j].x / sums[j].count;
-        centroids[j].y = sums[j].y / sums[j].count;
-      }
-    }
-  }
-  const clusters = Array.from({ length: k }, (_, i) => ({
-    id: i, centroid: centroids[i], count: 0, indices: [],
-    color: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
-  }));
-  for (let i = 0; i < n; i++) {
-    clusters[assignments[i]].count++;
-    clusters[assignments[i]].indices.push(i);
-    points[i].cluster = assignments[i];
-  }
-  return clusters.sort((a, b) => b.count - a.count);
+  return Object.entries(clusterMap)
+    .map(([cid, data]) => ({
+      id: parseInt(cid),
+      centroid: { x: data.sx / data.indices.length, y: data.sy / data.indices.length },
+      count: data.indices.length,
+      indices: data.indices,
+      color: CLUSTER_COLORS[parseInt(cid) % CLUSTER_COLORS.length],
+    }))
+    .sort((a, b) => b.count - a.count);
 }
 
 /* ── Extract Cluster Thumbnails ──────────────── */
@@ -411,9 +344,6 @@ export default function App() {
   const [showStats, setShowStats] = useState(false);
   const [tooltip, setTooltip] = useState(null);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
-  const [clusterLabels, setClusterLabels] = useState([]); // [{id, x, y, label, color, count}]
-  const clusterLabelsRef = useRef([]); // stable ref to avoid React re-renders from fresh arrays
-  const clusterCentroidsRef = useRef([]); // world positions of cluster group centers
   const clipLabelsRef = useRef(null); // CLIP-generated cluster labels from cluster_labels.json
   const thumbSizeRef = useRef(THUMB_SIZE); // actual thumb size from manifest
   const [hasTimestamps, setHasTimestamps] = useState(false); // whether dataset has time data
@@ -568,35 +498,6 @@ export default function App() {
       for (const p of pointsRef.current) {
         app._movingSet.add(p.id);
       }
-    }
-
-    // Compute cluster label positions for cluster view
-    if (mode === 'clusters') {
-      const hasFilter = visSet && visSet.size < pointsRef.current.length;
-      const pts = hasFilter ? pointsRef.current.filter(p => visSet.has(p.id)) : pointsRef.current;
-      const clusterMap = {};
-      for (const p of pts) {
-        const c = p.cluster ?? 0;
-        if (!clusterMap[c]) clusterMap[c] = { sx: 0, sy: 0, minY: Infinity, count: 0 };
-        clusterMap[c].sx += p.targetX;
-        clusterMap[c].sy += p.targetY;
-        clusterMap[c].minY = Math.min(clusterMap[c].minY, p.targetY);
-        clusterMap[c].count++;
-      }
-      const labels = Object.entries(clusterMap)
-        .sort((a, b) => b[1].count - a[1].count)
-        .map(([cid, data], idx) => ({
-          id: parseInt(cid),
-          worldX: data.sx / data.count,
-          worldY: data.minY - thumbSizeRef.current * 2.5,
-          label: clipLabelsRef.current?.[cid]?.label || `Cluster ${idx + 1}`,
-          color: CLUSTER_COLORS[parseInt(cid) % CLUSTER_COLORS.length],
-          count: data.count,
-        }));
-      clusterCentroidsRef.current = labels;
-    } else {
-      clusterCentroidsRef.current = [];
-      setClusterLabels([]);
     }
 
     // Compute timeline mapping
@@ -858,7 +759,6 @@ export default function App() {
             dots.push({ nx, ny });
           }
           minimapDataRef.current = { minX: mMinX, minY: mMinY, rangeX, rangeY, dots };
-          console.log('[minimap] built data:', dots.length, 'dots from', pts.length, 'points');
           setMinimapReady(true);
         }
 
@@ -1156,7 +1056,6 @@ export default function App() {
               }
             }
             neighborsRef.current = { k: nnK, indices, distances };
-            console.log(`Loaded k-NN: ${nnCount} × ${nnK}`);
           }
         } catch (_) { /* neighbors.bin is optional */ }
 
@@ -1237,24 +1136,6 @@ export default function App() {
             app._lastUiUpdate = now;
             setZoomLevel(viewport.scale.x);
             setStats(s => ({ ...s, fps: Math.round(app.ticker.FPS) }));
-          }
-
-          // Update cluster label screen positions (throttled separately)
-          const LABEL_THROTTLE = isMobile ? 500 : 100;
-          if (clusterCentroidsRef.current.length > 0 && (!app._lastLabelUpdate || now - app._lastLabelUpdate > LABEL_THROTTLE)) {
-            app._lastLabelUpdate = now;
-            const labels = clusterCentroidsRef.current.map(c => {
-              const screen = viewport.toScreen(c.worldX, c.worldY);
-              return { ...c, x: screen.x, y: screen.y };
-            });
-            // Only trigger React re-render if label positions actually changed (avoid fresh array reference)
-            const prev = clusterLabelsRef.current;
-            const changed = labels.length !== prev.length ||
-              labels.some((l, i) => Math.abs(l.x - (prev[i]?.x ?? 0)) > 1 || Math.abs(l.y - (prev[i]?.y ?? 0)) > 1);
-            if (changed) {
-              clusterLabelsRef.current = labels;
-              setClusterLabels(labels);
-            }
           }
 
           // Update timeline current time based on viewport center (throttled)
@@ -1475,7 +1356,6 @@ export default function App() {
       case 'scatter': return <Eye size={14} />;
       case 'magnet': return <Magnet size={14} />;
       case 'grid': return <Grid size={14} />;
-      case 'flame': return <Flame size={14} />;
       case 'palette': return <Palette size={14} />;
       case 'clock': return <Clock size={14} />;
       default: return <Eye size={14} />;
@@ -1664,27 +1544,6 @@ export default function App() {
         />
       )}
 
-      {/* ── Cluster Labels (floating, shown in tsne + clusters views) ─ */}
-      {showHotspots && (viewMode === 'tsne' || viewMode === 'clusters') && clusterLabels.length > 0 && clusterLabels.map((cl, idx) => (
-        <div
-          key={cl.id}
-          className="absolute z-[35] pointer-events-none flex items-center gap-2 transition-all"
-          style={{
-            left: cl.x,
-            top: cl.y,
-            transform: 'translate(-50%, -100%)',
-          }}
-        >
-          <div className="flex items-center gap-2 bg-rp-surface/95 backdrop-blur-md rounded-lg border border-rp-hlMed shadow-rp px-3 py-1.5">
-            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: cl.color }} />
-            <span className="text-xs font-bold text-rp-text whitespace-nowrap">Hotspot {idx + 1}: {cl.label}</span>
-            <span className="text-[10px] text-rp-muted font-semibold">{cl.count.toLocaleString()}</span>
-          </div>
-        </div>
-      ))}
-
-
-
       {/* ── UI Overlay ────────────────────────── */}
       {/* Top section — pinned to top */}
       <div className="absolute top-0 left-0 right-0 pointer-events-none z-50 p-4">
@@ -1708,7 +1567,7 @@ export default function App() {
                     return (
                       <button
                         key={h.id}
-                        onClick={() => { if (viewMode !== 'data') flyToHotspot(h); }}
+                          onClick={() => flyToHotspot(h)}
                         className={`bg-rp-surface/90 backdrop-blur-md rounded-xl border border-rp-hlMed shadow-rp transition-all duration-200 ${viewMode !== 'data' ? 'cursor-pointer' : 'cursor-default'} ${
                           activeHotspot === h.id
                             ? 'ring-2 ring-rp-pine shadow-rp-lg'
@@ -2182,7 +2041,7 @@ export default function App() {
       )}
 
       {/* ── Tooltip ─────────────────────────── */}
-      {tooltip && viewMode !== 'clusters' && viewMode !== 'color' && (
+       {tooltip && viewMode !== 'color' && (
         <div
           className="absolute z-[80] pointer-events-none bg-rp-surface/95 backdrop-blur-md rounded-lg border border-rp-hlMed shadow-rp px-3 py-2"
           style={{ left: tooltip.x + 16, top: tooltip.y - 8, maxWidth: '260px' }}
@@ -2239,7 +2098,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ── Loading overlay ───────────────────────────── *?/
+      {/* ── Loading overlay ───────────────────────────── */}
       {/* Full-screen overlay during boot, compact pill during atlas loading */}
       {(loading || loadPhase === 'preview') && !error && (
         <div className={loading
@@ -2265,16 +2124,7 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* ── Compact preview progress pill ──── */
-            <div className="bg-rp-surface/90 backdrop-blur-md border border-rp-hlMed rounded-full shadow-rp-lg px-5 py-2 flex items-center gap-3 pointer-events-auto">
-              <div className="w-40 h-2 bg-rp-hlMed rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-rp-pine to-rp-foam rounded-full transition-all duration-300 ease-out"
-                  style={{ width: `${loadProgress}%` }}
-                />
-              </div>
-              <span className="text-xs font-bold text-rp-pine tabular-nums whitespace-nowrap">{statusMsg}</span>
-            </div>
+            <LoadPill progress={loadProgress} msg={statusMsg} />
           )}
         </div>
       )}
@@ -2282,15 +2132,7 @@ export default function App() {
       {/* ── HD upgrade compact pill ──── */}
       {loadPhase === 'hd' && !error && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
-          <div className="bg-rp-surface/90 backdrop-blur-md border border-rp-hlMed rounded-full shadow-rp-lg px-5 py-2 flex items-center gap-3 pointer-events-auto">
-            <div className="w-40 h-2 bg-rp-hlMed rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-rp-pine to-rp-foam rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${loadProgress}%` }}
-              />
-            </div>
-            <span className="text-xs font-bold text-rp-pine tabular-nums whitespace-nowrap">{statusMsg}</span>
-          </div>
+          <LoadPill progress={loadProgress} msg={statusMsg} />
         </div>
       )}
 

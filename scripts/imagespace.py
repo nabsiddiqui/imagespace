@@ -40,7 +40,7 @@ from pathlib import Path
 from multiprocessing import cpu_count
 
 import numpy as np
-from PIL import Image, ExifTags
+from PIL import Image
 
 # ── Configuration ─────────────────────────────────────────────
 THUMB_SIZE = 64  # Thumbnail size in pixels (square)
@@ -50,7 +50,6 @@ CLIP_IMAGE_SIZE = 224  # CLIP input resolution
 CLIP_DIM = 512  # CLIP ViT-B/32 embedding dimension
 CLIP_MEAN = np.array([0.48145466, 0.4578275, 0.40821073], dtype=np.float32)
 CLIP_STD = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
-NUM_CLUSTERS = 15  # Fallback KMeans clusters
 TSNE_PERPLEXITY = 30  # openTSNE perplexity
 BATCH_SIZE = 64  # Embedding batch size (larger = faster with ONNX)
 PCA_DIMS = 50  # PCA reduction before t-SNE
@@ -78,6 +77,21 @@ def discover_images(input_dir):
 
 
 # ── Stage 2: Thumbnail Generation + Atlas Packing ────────────
+def _center_crop_thumb(img_path, size):
+    """Center-crop to square and resize to `size`×`size`. Gray placeholder on failure."""
+    try:
+        img = Image.open(img_path).convert("RGB")
+        w, h = img.size
+        side = min(w, h)
+        left = (w - side) // 2
+        top = (h - side) // 2
+        return img.crop((left, top, left + side, top + side)).resize(
+            (size, size), Image.BILINEAR
+        )
+    except Exception:
+        return Image.new("RGB", (size, size), (128, 128, 128))
+
+
 def generate_atlases(
     images, output_dir, thumb_size=THUMB_SIZE, atlas_size=ATLAS_SIZE, quality=60
 ):
@@ -101,16 +115,7 @@ def generate_atlases(
                 end="\r",
             )
 
-        try:
-            img = Image.open(img_path).convert("RGB")
-            w, h = img.size
-            side = min(w, h)
-            left = (w - side) // 2
-            top = (h - side) // 2
-            img = img.crop((left, top, left + side, top + side))
-            img = img.resize((thumb_size, thumb_size), Image.BILINEAR)
-        except Exception as e:
-            img = Image.new("RGB", (thumb_size, thumb_size), (128, 128, 128))
+        img = _center_crop_thumb(img_path, thumb_size)
 
         col = current_img_in_atlas % images_per_row
         row = current_img_in_atlas // images_per_row
@@ -164,16 +169,7 @@ def generate_preview_atlases(
                     end="\r",
                 )
 
-            try:
-                img = Image.open(images[img_idx]).convert("RGB")
-                w, h = img.size
-                side = min(w, h)
-                left = (w - side) // 2
-                top = (h - side) // 2
-                img = img.crop((left, top, left + side, top + side))
-                img = img.resize((thumb_size, thumb_size), Image.BILINEAR)
-            except Exception:
-                img = Image.new("RGB", (thumb_size, thumb_size), (128, 128, 128))
+            img = _center_crop_thumb(images[img_idx], thumb_size)
 
             local_idx = img_idx - start_img
             col = local_idx % images_per_row
@@ -195,7 +191,7 @@ def generate_preview_atlases(
 
 # ── Stage 3: Embedding Extraction ────────────────────────────
 def extract_embeddings(images):
-    """Extract CLIP ViT-B/32 embeddings. Tries ONNX first (fastest), then PyTorch, then histograms."""
+    """Extract CLIP ViT-B/32 embeddings. Tries ONNX first (fastest), then PyTorch."""
     # Try ONNX Runtime (fastest)
     try:
         return _extract_clip_onnx(images)
@@ -206,11 +202,9 @@ def extract_embeddings(images):
     try:
         return _extract_clip_torch(images)
     except (ImportError, Exception) as e:
-        print(f"  PyTorch CLIP failed: {e}")
-
-    # Fallback: color histograms
-    print("  Falling back to color histogram embeddings...")
-    return _extract_color_histograms(images)
+        raise RuntimeError(
+            "CLIP embedding extraction failed. Install onnxruntime or torch/transformers."
+        ) from e
 
 
 def _get_onnx_model_path():
@@ -287,8 +281,6 @@ def _extract_clip_onnx(images):
     )
 
     input_name = session.get_inputs()[0].name
-    output_names = [o.name for o in session.get_outputs()]
-
     embeddings = np.zeros((len(images), CLIP_DIM), dtype=np.float32)
     start = time.time()
 
@@ -390,42 +382,6 @@ def _extract_clip_torch(images):
     return embeddings
 
 
-def _extract_color_histograms(images, dim=CLIP_DIM):
-    """Fallback: color histogram + spatial grid embeddings."""
-    print("  Extracting color histograms...")
-    embeddings = np.zeros((len(images), dim), dtype=np.float32)
-    start = time.time()
-
-    for idx, img_path in enumerate(images):
-        if idx % 1000 == 0:
-            print(f"  Histogram {idx}/{len(images)}", end="\r")
-        try:
-            img = Image.open(img_path).convert("RGB").resize((64, 64))
-            arr = np.array(img, dtype=np.float32) / 255.0
-            features = []
-            for c in range(3):
-                h, _ = np.histogram(arr[:, :, c], bins=64, range=(0, 1))
-                features.append(h.astype(np.float32))
-            # 3x3 spatial color grid (trim to divisible-by-3)
-            bh, bw = arr.shape[0] // 3, arr.shape[1] // 3
-            grid = arr[: bh * 3, : bw * 3].reshape(3, bh, 3, bw, 3).mean(axis=(1, 3))
-            features.append(grid.flatten().astype(np.float32))
-            vec = np.concatenate(features)
-            if len(vec) < dim:
-                vec = np.pad(vec, (0, dim - len(vec)))
-            else:
-                vec = vec[:dim]
-            norm = np.linalg.norm(vec)
-            if norm > 0:
-                vec /= norm
-            embeddings[idx] = vec
-        except Exception:
-            pass
-
-    print(f"\n  Color histograms: {time.time() - start:.1f}s")
-    return embeddings
-
-
 # ── Stage 4: Dimensionality Reduction + Clustering ───────────
 def reduce_dimensions(
     embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXITY, thumb_size=THUMB_SIZE
@@ -448,33 +404,20 @@ def reduce_dimensions(
     # openTSNE (FFT-accelerated, ~10-20x faster than sklearn)
     print(f"\n  Running openTSNE (n={n}, perplexity={perplexity})...")
     start = time.time()
-    try:
-        from openTSNE import TSNE
+    from openTSNE import TSNE
 
-        tsne = TSNE(
-            n_components=2,
-            perplexity=min(perplexity, n // 3),
-            exaggeration=4,
-            initialization="pca",
-            metric="euclidean",
-            neighbors="approx",
-            n_jobs=-1,
-            random_state=42,
-            verbose=True,
-        )
-        tsne_coords = np.array(tsne.fit(embeddings_pca))
-    except ImportError:
-        print("  openTSNE not found, falling back to sklearn (much slower)...")
-        from sklearn.manifold import TSNE as skTSNE
-
-        tsne = skTSNE(
-            n_components=2,
-            perplexity=min(perplexity, n - 1),
-            random_state=42,
-            init="pca" if n > 50 else "random",
-            learning_rate="auto",
-        )
-        tsne_coords = tsne.fit_transform(embeddings_pca)
+    tsne = TSNE(
+        n_components=2,
+        perplexity=min(perplexity, n // 3),
+        exaggeration=4,
+        initialization="pca",
+        metric="euclidean",
+        neighbors="approx",
+        n_jobs=-1,
+        random_state=42,
+        verbose=True,
+    )
+    tsne_coords = np.array(tsne.fit(embeddings_pca))
     print(f"  t-SNE completed in {time.time() - start:.1f}s")
 
     # Scale to viewer range — ensure enough room for non-overlapping thumbnails
@@ -543,57 +486,37 @@ def reduce_dimensions(
     # Clustering: HDBSCAN on PCA embeddings (high-d has better density structure)
     # Note: clustering on 2D t-SNE coords destroys density → poor clusters.
     # The 50-d PCA space preserves natural cluster structure for HDBSCAN.
-    try:
-        import hdbscan as hdb
+    import hdbscan as hdb
 
-        print(
-            f"\n  Running HDBSCAN on PCA embeddings (min_cluster_size={min_cluster_size})..."
-        )
-        start = time.time()
-        clusterer = hdb.HDBSCAN(
-            min_cluster_size=min_cluster_size,
-            min_samples=5,
-            metric="euclidean",
-            cluster_selection_method="leaf",
-            core_dist_n_jobs=-1,
-        )
-        cluster_ids = clusterer.fit_predict(embeddings_pca)
-        cluster_probs = clusterer.probabilities_.copy()
-        n_clusters = len(set(cluster_ids)) - (1 if -1 in cluster_ids else 0)
-        n_noise = (cluster_ids == -1).sum()
+    print(
+        f"\n  Running HDBSCAN on PCA embeddings (min_cluster_size={min_cluster_size})..."
+    )
+    start = time.time()
+    clusterer = hdb.HDBSCAN(
+        min_cluster_size=min_cluster_size,
+        min_samples=5,
+        metric="euclidean",
+        cluster_selection_method="leaf",
+        core_dist_n_jobs=-1,
+    )
+    cluster_ids = clusterer.fit_predict(embeddings_pca)
+    cluster_probs = clusterer.probabilities_.copy()
+    n_clusters = len(set(cluster_ids)) - (1 if -1 in cluster_ids else 0)
+    n_noise = (cluster_ids == -1).sum()
 
-        if n_noise > 0 and n_clusters > 0:
-            from scipy.spatial import cKDTree
+    if n_noise > 0 and n_clusters > 0:
+        from scipy.spatial import cKDTree
 
-            valid_mask = cluster_ids >= 0
-            tree = cKDTree(embeddings_pca[valid_mask])
-            valid_labels = cluster_ids[valid_mask]
-            valid_probs = cluster_probs[valid_mask]
-            _, nearest = tree.query(embeddings_pca[cluster_ids == -1])
-            cluster_ids[cluster_ids == -1] = valid_labels[nearest]
-            # Give reassigned noise points low confidence
-            cluster_probs[cluster_probs == 0] = 0.1
-        print(
-            f"  HDBSCAN: {n_clusters} clusters, {n_noise} noise reassigned ({time.time() - start:.1f}s)"
-        )
-    except ImportError:
-        from sklearn.cluster import MiniBatchKMeans
-
-        n_clusters = min(NUM_CLUSTERS, n)
-        print(f"\n  Using MiniBatchKMeans (k={n_clusters})...")
-        start = time.time()
-        kmeans = MiniBatchKMeans(
-            n_clusters=n_clusters,
-            batch_size=max(1024, n // 10),
-            random_state=42,
-            n_init=3,
-        )
-        cluster_ids = kmeans.fit_predict(embeddings_pca)
-        # Distance-based confidence for KMeans (inverse of distance to centroid, normalized)
-        dists = kmeans.transform(embeddings_pca).min(axis=1)
-        max_d = dists.max() if dists.max() > 0 else 1
-        cluster_probs = (1 - dists / max_d).astype(np.float32)
-        print(f"  MiniBatchKMeans: {time.time() - start:.1f}s")
+        valid_mask = cluster_ids >= 0
+        tree = cKDTree(embeddings_pca[valid_mask])
+        valid_labels = cluster_ids[valid_mask]
+        _, nearest = tree.query(embeddings_pca[cluster_ids == -1])
+        cluster_ids[cluster_ids == -1] = valid_labels[nearest]
+        # Give reassigned noise points low confidence
+        cluster_probs[cluster_probs == 0] = 0.1
+    print(
+        f"  HDBSCAN: {n_clusters} clusters, {n_noise} noise reassigned ({time.time() - start:.1f}s)"
+    )
 
     return (
         tsne_coords.astype(np.float32),
@@ -630,13 +553,16 @@ def write_neighbors_bin(output_dir, knn_indices, knn_distances):
     """Write neighbors.bin: for each image, k neighbor indices (uint32) + k distances (float32).
     Header: uint32 count, uint32 k. Then count * k * (uint32 + float32) = count * k * 8 bytes."""
     n, k = knn_indices.shape
+    # Structured array: each record is (uint32 idx, float32 dist). Layout matches the
+    # original per-pair struct.pack("<If") byte-for-byte.
+    dt = np.dtype([("idx", "<u4"), ("dist", "<f4")])
+    paired = np.empty((n, k), dtype=dt)
+    paired["idx"] = knn_indices.astype(np.uint32)
+    paired["dist"] = knn_distances.astype(np.float32)
     path = os.path.join(output_dir, "neighbors.bin")
     with open(path, "wb") as f:
-        f.write(struct.pack("<II", n, k))
-        for i in range(n):
-            for j in range(k):
-                f.write(struct.pack("<I", int(knn_indices[i, j])))
-                f.write(struct.pack("<f", float(knn_distances[i, j])))
+        f.write(np.array([n, k], dtype="<u4").tobytes())
+        f.write(paired.tobytes())
     print(f"  neighbors.bin: {n} × {k} ({os.path.getsize(path) / 1024 / 1024:.1f} MB)")
 
 
@@ -953,16 +879,8 @@ def extract_timestamps(images):
 def _get_exif_year(img_path):
     """Extract year from EXIF DateTimeOriginal."""
     try:
-        img = Image.open(img_path)
-        exif_data = img._getexif()
-        if exif_data:
-            for tag_id, value in exif_data.items():
-                tag = ExifTags.TAGS.get(tag_id, tag_id)
-                if tag == "DateTimeOriginal":
-                    from datetime import datetime
-
-                    dt = datetime.strptime(value, "%Y:%m:%d %H:%M:%S")
-                    return dt.year
+        value = Image.open(img_path).getexif().get(36867)  # DateTimeOriginal
+        return int(str(value)[:4]) if value else None
     except Exception:
         pass
     return None
@@ -978,55 +896,24 @@ def write_binary_data(
     preview_atlas_data=None,
 ):
     """Write binary layout data. v2=24 bytes, v3=28 bytes (with preview UVs)."""
-    if preview_atlas_data is not None:
-        bytes_per_image = 28
-        binary_data = bytearray(len(snapped_coords) * bytes_per_image)
-        for i in range(len(snapped_coords)):
-            ai, u, v = atlas_data[i]
+    is_v3 = preview_atlas_data is not None
+    bytes_per_image = 28 if is_v3 else 24
+    fmt = "<ffffHHHHHH" if is_v3 else "<ffffHHHH"
+    n = len(snapped_coords)
+    binary_data = bytearray(n * bytes_per_image)
+    for i in range(n):
+        ai, u, v = atlas_data[i]
+        cid_raw = int(cluster_ids[i])
+        cid = 65535 if cid_raw < 0 else min(cid_raw, 65534)
+        row = (
+            float(snapped_coords[i][0]), float(snapped_coords[i][1]),
+            float(raw_tsne_coords[i][0]), float(raw_tsne_coords[i][1]),
+            ai, u, v, cid,
+        )
+        if is_v3:
             _, u_preview, v_preview = preview_atlas_data[i]
-            # HDBSCAN uses -1 for noise; map to 65535 (max uint16)
-            cid_raw = int(cluster_ids[i])
-            cid = 65535 if cid_raw < 0 else min(cid_raw, 65534)
-            sx, sy = float(snapped_coords[i][0]), float(snapped_coords[i][1])
-            rx, ry = float(raw_tsne_coords[i][0]), float(raw_tsne_coords[i][1])
-            struct.pack_into(
-                "<ffffHHHHHH",
-                binary_data,
-                i * bytes_per_image,
-                sx,
-                sy,
-                rx,
-                ry,
-                ai,
-                u,
-                v,
-                cid,
-                u_preview,
-                v_preview,
-            )
-    else:
-        bytes_per_image = 24
-        binary_data = bytearray(len(snapped_coords) * bytes_per_image)
-        for i in range(len(snapped_coords)):
-            ai, u, v = atlas_data[i]
-            # HDBSCAN uses -1 for noise; map to 65535 (max uint16)
-            cid_raw = int(cluster_ids[i])
-            cid = 65535 if cid_raw < 0 else min(cid_raw, 65534)
-            sx, sy = float(snapped_coords[i][0]), float(snapped_coords[i][1])
-            rx, ry = float(raw_tsne_coords[i][0]), float(raw_tsne_coords[i][1])
-            struct.pack_into(
-                "<ffffHHHH",
-                binary_data,
-                i * bytes_per_image,
-                sx,
-                sy,
-                rx,
-                ry,
-                ai,
-                u,
-                v,
-                cid,
-            )
+            row += (u_preview, v_preview)
+        struct.pack_into(fmt, binary_data, i * bytes_per_image, *row)
 
     output_path = os.path.join(output_dir, "data.bin")
     with open(output_path, "wb") as f:
@@ -1099,7 +986,6 @@ def write_metadata_csv(
         for threshold, name in names:
             if h <= threshold:
                 return name
-        return "red"
 
     extra_cols = []
     if external_metadata:
@@ -1247,20 +1133,41 @@ def main():
     # Stage 2
     if args.relayout:
         print(f"\n[2/8] Skipping atlas generation (relayout mode)")
-        # Reconstruct atlas_data from existing data.bin
         bin_path = os.path.join(str(output_dir), "data.bin")
         if os.path.exists(bin_path):
+            manifest_path = os.path.join(str(output_dir), "manifest.json")
+            stride = 24
+            preview_atlas_data = None
+            preview_atlas_count = None
+            try:
+                with open(manifest_path) as f:
+                    stride = json.load(f).get('bytesPerImage', 24)
+            except:
+                pass
             raw = open(bin_path, "rb").read()
+            inferred = len(raw) // len(images)
+            if inferred != stride and len(raw) % len(images) == 0:
+                stride = inferred
             atlas_data = []
             for i in range(len(images)):
-                off = i * 24
+                off = i * stride
                 ai = struct.unpack_from("<H", raw, off + 16)[0]
                 u = struct.unpack_from("<H", raw, off + 18)[0]
                 v = struct.unpack_from("<H", raw, off + 20)[0]
                 atlas_data.append((ai, u, v))
             atlas_count = max(a[0] for a in atlas_data) + 1
+            if stride >= 28:
+                preview_data = []
+                for i in range(len(images)):
+                    off = i * stride
+                    up = struct.unpack_from("<H", raw, off + 24)[0]
+                    vp = struct.unpack_from("<H", raw, off + 26)[0]
+                    preview_data.append((atlas_data[i][0], up, vp))
+                preview_atlas_data = preview_data
+                preview_atlas_count = atlas_count
             print(
                 f"  Loaded atlas data for {len(atlas_data)} images from existing data.bin"
+                f" ({stride} bytes/img{' w/ preview' if preview_atlas_data else ''})"
             )
         else:
             print("  Error: data.bin not found for relayout mode!")
@@ -1270,23 +1177,22 @@ def main():
         atlas_data, atlas_count = generate_atlases(
             images, str(output_dir), args.thumb_size, args.atlas_size, args.quality
         )
-
-    preview_atlas_data = None
-    preview_atlas_count = None
-    if args.hd and not args.relayout:
-        print(
-            f"\n[2b/8] Generating preview atlases (64px, quality={args.preview_quality})..."
-        )
-        images_per_full_atlas = (args.atlas_size // args.thumb_size) ** 2
-        preview_atlas_data, preview_atlas_count = generate_preview_atlases(
-            images,
-            str(output_dir),
-            atlas_count,
-            images_per_full_atlas,
-            thumb_size=64,
-            atlas_size=args.atlas_size,
-            quality=args.preview_quality,
-        )
+        preview_atlas_data = None
+        preview_atlas_count = None
+        if args.hd:
+            print(
+                f"\n[2b/8] Generating preview atlases (64px, quality={args.preview_quality})..."
+            )
+            images_per_full_atlas = (args.atlas_size // args.thumb_size) ** 2
+            preview_atlas_data, preview_atlas_count = generate_preview_atlases(
+                images,
+                str(output_dir),
+                atlas_count,
+                images_per_full_atlas,
+                thumb_size=64,
+                atlas_size=args.atlas_size,
+                quality=args.preview_quality,
+            )
 
     # Stage 3 — with caching
     emb_cache = os.path.join(str(cache_dir), "embeddings.npy")
