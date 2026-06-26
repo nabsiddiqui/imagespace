@@ -53,6 +53,7 @@ CLIP_STD = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
 TSNE_PERPLEXITY = 30  # openTSNE perplexity
 BATCH_SIZE = 64  # Embedding batch size (larger = faster with ONNX)
 PCA_DIMS = 50  # PCA reduction before t-SNE
+DEFAULT_SEED = 42  # PCA + openTSNE reproducibility
 
 
 # ── Stage 1: Image Discovery ─────────────────────────────────
@@ -384,7 +385,11 @@ def _extract_clip_torch(images):
 
 # ── Stage 4: Dimensionality Reduction + Clustering ───────────
 def reduce_dimensions(
-    embeddings, min_cluster_size=50, perplexity=TSNE_PERPLEXITY, thumb_size=THUMB_SIZE
+    embeddings,
+    min_cluster_size=50,
+    perplexity=TSNE_PERPLEXITY,
+    thumb_size=THUMB_SIZE,
+    seed=DEFAULT_SEED,
 ):
     """Run PCA → openTSNE → HDBSCAN. Returns (tsne_coords, cluster_ids)."""
     from sklearn.decomposition import PCA
@@ -395,7 +400,7 @@ def reduce_dimensions(
     pca_dims = min(PCA_DIMS, n - 1, embeddings.shape[1])
     print(f"\n  PCA: {embeddings.shape[1]}-d → {pca_dims}-d...")
     start = time.time()
-    pca = PCA(n_components=pca_dims, random_state=42)
+    pca = PCA(n_components=pca_dims, random_state=seed)
     embeddings_pca = pca.fit_transform(embeddings)
     print(
         f"  PCA: {time.time() - start:.1f}s ({pca.explained_variance_ratio_.sum():.1%} variance)"
@@ -414,7 +419,7 @@ def reduce_dimensions(
         metric="euclidean",
         neighbors="approx",
         n_jobs=-1,
-        random_state=42,
+        random_state=seed,
         verbose=True,
     )
     tsne_coords = np.array(tsne.fit(embeddings_pca))
@@ -1081,6 +1086,12 @@ def main():
         "--tsne-perplexity", type=int, default=TSNE_PERPLEXITY, help="t-SNE perplexity"
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_SEED,
+        help="Random seed for PCA and openTSNE (default 42)",
+    )
+    parser.add_argument(
         "--cache-dir",
         help="Directory to cache embeddings (skip re-extraction if cached)",
     )
@@ -1211,7 +1222,11 @@ def main():
     print(f"\n[4/9] PCA → openTSNE → HDBSCAN...")
     tsne_coords, raw_tsne_coords, cluster_ids, embeddings_pca, cluster_probs = (
         reduce_dimensions(
-            embeddings, args.min_cluster_size, args.tsne_perplexity, args.thumb_size
+            embeddings,
+            args.min_cluster_size,
+            args.tsne_perplexity,
+            args.thumb_size,
+            args.seed,
         )
     )
 

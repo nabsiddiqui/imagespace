@@ -59,7 +59,8 @@ With optional external metadata (CSV must have a `filename` column):
 python3 scripts/imagespace.py /path/to/your/images/ \
   -o image_space/public/data/ \
   --metadata /path/to/metadata.csv \
-  --thumb-size 128 --quality 85
+  --thumb-size 128 --quality 85 \
+  --seed 42
 ```
 
 **3. Build and serve**
@@ -107,6 +108,7 @@ python3 scripts/imagespace.py /path/to/images/ \
 | `--preview-quality` | 40 | WebP quality for preview atlases (only used with --hd) |
 | `--min-cluster-size` | 50 | HDBSCAN minimum cluster size |
 | `--tsne-perplexity` | 30 | t-SNE perplexity |
+| `--seed` | 42 | Random seed for PCA and openTSNE reproducibility |
 | `--cache-dir` | none | Directory to cache CLIP embeddings (`.npy`) |
 | `--relayout` | false | Skip atlas + CLIP, re-run t-SNE/HDBSCAN only |
 
@@ -120,7 +122,7 @@ ImageSpace uses grid-snapped layouts (Grid, Color, Timeline views) as a delibera
 
 **Visual clarity.** When exploring 50,000 images, every image is visible and accessible in a grid. No image is hidden behind another. This is critical for research workflows where users need to scan, filter, and identify patterns across an entire collection — not just the images that happen to be on top.
 
-**Predictability.** Grid layouts are deterministic: the same dataset always produces the same layout. Researchers can reproduce views, share screenshots, and reference specific positions. Freeform layouts introduce randomness in overlap ordering that undermines reproducibility.
+**Predictability.** Grid layouts are deterministic: the same dataset always produces the same layout. Researchers can reproduce views, share screenshots, and reference specific positions. The pipeline also exposes `--seed` (default `42`) for reproducible PCA and openTSNE layout generation.
 
 **Tradeoffs.** Grid snapping sacrifices organic, "gallery-wall" aesthetics and the ability to manually arrange images. The t-SNE scatter view provides the organic clustering experience, while grid views prioritize systematic exploration. This separation is intentional — each view mode serves a different analytical purpose.
 
