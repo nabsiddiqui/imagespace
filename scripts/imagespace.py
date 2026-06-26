@@ -10,15 +10,15 @@ Transforms a folder of images into static data files for the ImageSpace viewer:
 
 Usage:
     python imagespace.py /path/to/images --output ./dist/data
-    python imagespace.py /path/to/images --output ./dist/data --gpu
     python imagespace.py /path/to/images --output ./dist/data --metadata existing.csv
+    python imagespace.py /path/to/images --output ./dist/data --hd --seed 42
 
-Performance (50K images, Apple Silicon):
-    - Atlas generation: ~2-3 min
+Performance (50K images, Apple Silicon, with --hd):
+    - Atlas generation (full + preview): ~3-5 min
     - CLIP embeddings (ONNX+CoreML): ~2-3 min
-    - openTSNE: ~30-60s
-    - HDBSCAN: ~10-30s
-    - Total: ~5-8 min
+    - PCA + openTSNE + HDBSCAN: ~1-2 min
+    - Metadata + features: ~1-2 min
+    - Total: ~16-40 min (CPU-only CLIP is much slower)
 
 Dependencies:
     Required: pillow, numpy, scikit-learn, opentsne, hdbscan

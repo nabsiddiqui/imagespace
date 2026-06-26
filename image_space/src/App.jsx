@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Database, X, Grid, Magnet, Eye,
   ZoomIn, ZoomOut, Maximize2,
@@ -405,7 +405,7 @@ export default function App() {
   }, [minimapReady, loading]);
 
   /* ── Compute visible set from hotspot + csvFilters + rangeFilters ── */
-  const computeVisibleSet = useCallback((hotspotId, filters, hotspotsData, meta, ranges = {}) => {
+  const computeVisibleSet = (hotspotId, filters, hotspotsData, meta, ranges = {}) => {
     let ids = null;
 
     // Hotspot filter
@@ -471,10 +471,10 @@ export default function App() {
     }
 
     return ids;
-  }, []);
+  };
 
   /* ── Recompute layout with current filters ── */
-  const relayout = useCallback((mode, visSet) => {
+  const relayout = (mode, visSet) => {
     visibleSetRef.current = visSet;
 
     // Toggle sortableChildren — only needed for t-SNE z-depth ordering.
@@ -554,9 +554,9 @@ export default function App() {
         }
       }
     }, 100);
-  }, []);
+  };
 
-  const switchView = useCallback((mode) => {
+  const switchView = (mode) => {
     setViewMode(mode);
     viewModeRef.current = mode;
     // Reset time filter when leaving timeline
@@ -570,7 +570,7 @@ export default function App() {
       relayout(mode, visSet);
       return prev;
     });
-  }, [csvFilters, rangeFilters, hotspots, metadata, computeVisibleSet, relayout]);
+  };
 
   /* ── PixiJS boot ────────────────────────────── */
   useEffect(() => {
@@ -1310,13 +1310,13 @@ export default function App() {
       spatialHashRef.current = {};
     };
   }, []);
-  const flyToHotspot = useCallback((h) => {
+  const flyToHotspot = (h) => {
     const newActive = activeHotspot === h.id ? null : h.id;
     setActiveHotspot(newActive);
     // Recompute visible set with hotspot + csv filters
     const visSet = computeVisibleSet(newActive, csvFilters, hotspots, metadata, rangeFilters);
     relayout(viewMode, visSet);
-  }, [activeHotspot, csvFilters, rangeFilters, hotspots, metadata, viewMode, computeVisibleSet, relayout]);
+  };
 
   const handleZoom = (dir) => {
     const vp = viewportRef.current;
@@ -1363,7 +1363,7 @@ export default function App() {
   };
 
   /* ── k-NN helpers ── */
-  const getNeighbors = useCallback((imageId) => {
+  const getNeighbors = (imageId) => {
     if (!neighborsRef.current || imageId < 0 || imageId >= neighborsRef.current.indices.length) return [];
     const { indices, distances } = neighborsRef.current;
     const result = [];
@@ -1371,17 +1371,17 @@ export default function App() {
       result.push({ id: indices[imageId][j], distance: distances[imageId][j] });
     }
     return result;
-  }, []);
+  };
 
-  const flyToImage = useCallback((imageId) => {
+  const flyToImage = (imageId) => {
     const vp = viewportRef.current;
     const p = pointsRef.current[imageId];
     if (!vp || !p) return;
     setSelectedItem({ id: p.id, x: p.x, y: p.y });
     vp.animate({ position: { x: p.x, y: p.y }, scale: Math.max(vp.scale.x, 2), time: 400 });
-  }, []);
+  };
 
-  const NeighborThumb = useCallback(({ imageId, size = 64, onClick }) => {
+  const NeighborThumb = ({ imageId, size = 64, onClick }) => {
     const p = pointsRef.current[imageId];
     if (!p) return null;
     const _scale = size / thumbSizeRef.current;
@@ -1400,7 +1400,7 @@ export default function App() {
         title={`Image #${imageId}`}
       />
     );
-  }, []);
+  };
 
   /* ── CSV filter helpers ── */
   const FILTER_SKIP_COLS = new Set(['id', 'filename', 'width', 'height', 'timestamp']);
@@ -1455,7 +1455,7 @@ export default function App() {
   }, [metadata]);
 
   const rangePendingRef = useRef(null);
-  const handleRangeChange = useCallback((col, values) => {
+  const handleRangeChange = (col, values) => {
     setRangeFilters(prev => {
       const next = { ...prev };
       const opt = continuousFilterOptions[col];
@@ -1478,10 +1478,10 @@ export default function App() {
       });
       return next;
     });
-  }, [continuousFilterOptions, csvFilters, hotspots, metadata, viewMode, computeVisibleSet, relayout]);
+  };
 
 
-  const handleFilterChange = useCallback((col, val) => {
+  const handleFilterChange = (col, val) => {
     setCsvFilters(prev => {
       const next = { ...prev };
       const existing = next[col] ? new Set(next[col]) : new Set();
@@ -1502,15 +1502,15 @@ export default function App() {
       });
       return next;
     });
-  }, [hotspots, metadata, viewMode, computeVisibleSet, relayout, rangeFilters]);
+  };
 
-  const clearAllFilters = useCallback(() => {
+  const clearAllFilters = () => {
     setCsvFilters({});
     setRangeFilters({});
     setActiveHotspot(null);
     const visSet = null;
     relayout(viewMode, visSet);
-  }, [viewMode, relayout]);
+  };
 
   const activeRangeCount = Object.keys(rangeFilters).length;
   const activeFilterCount = Object.values(csvFilters).reduce((sum, s) => sum + (s ? s.size : 0), 0) + (activeHotspot !== null ? 1 : 0) + activeRangeCount;
@@ -2151,3 +2151,4 @@ export default function App() {
     </div>
   );
 }
+
