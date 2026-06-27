@@ -8,7 +8,7 @@
 
 An interactive browser-based tool for exploring large image collections. Point it at a folder of images; it produces a navigable 2D scatter plot where similar images cluster together.
 
-**The viewer is a static site — no backend, no server, no database.** Once processed, share the `output/` folder on GitHub Pages, any CDN, or a USB drive.
+**The viewer is a static site — no backend, no server, no database.** Run one command and the output directory is ready to upload to GitHub Pages, any CDN, or a USB drive: it contains `index.html` + `assets/` + `data/`. No Node/Vite build required to view results.
 
 **GPU recommended.** Hardware acceleration significantly speeds up the CLIP embedding stage. NVIDIA CUDA and Apple Silicon CoreML (Neural Engine) are both supported. A standard CPU works too if you don't have a compatible GPU.
 
@@ -23,74 +23,93 @@ An interactive browser-based tool for exploring large image collections. Point i
 
 ### Process your own images
 
-**1a. Install dependencies (Apple Silicon or CPU only)**
+**1. Install**
+
+From this repo:
 
 ```bash
-# Python pipeline — CoreML (Neural Engine) is auto-detected on Apple Silicon
-pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime scipy
-
-# Frontend
-cd image_space && npm install && cd ..
+pip install .
 ```
 
-**1b. Install dependencies (NVIDIA GPU)**
+This installs the `imagespace` command plus the bundled viewer app shell. The Python dependencies (`pillow`, `numpy`, `scikit-learn`, `opentsne`, `hdbscan`, `scipy`) are installed automatically. For CLIP embeddings you also need a backend:
 
 ```bash
-# Python pipeline with CUDA GPU support
-pip install pillow numpy scikit-learn opentsne hdbscan onnxruntime-gpu scipy
+# Recommended — ONNX runtime (auto-detects Apple Silicon CoreML / NVIDIA CUDA)
+pip install onnxruntime        # or onnxruntime-gpu for CUDA
 
-# Frontend
-cd image_space && npm install && cd ..
+# Alternative — torch backend (slower, no ONNX runtime needed)
+pip install torch transformers huggingface_hub
 ```
 
-CUDA is auto-detected. No extra flags needed.
+> The viewer app shell is bundled with the package (`imagespace_viewer_shell/`), so the install above is all you need to produce a viewable site. To modify the viewer itself (React/PixiJS in `image_space/`), rebuild the shell with `bash scripts/build_viewer_shell.sh` (requires Node), then `pip install .` again.
+
 **2. Run the pipeline**
 
 ```bash
-python3 scripts/imagespace.py /path/to/your/images/ \
-  -o image_space/public/data/ \
-  --thumb-size 128 \
-  --quality 85
+imagespace -i /path/to/your/images/ -o ./output
 ```
 
-With optional external metadata (CSV must have a `filename` column):
+Dual-resolution progressive loading is ON by default — 64px preview atlases are generated alongside 128px HD atlases, so the viewer shows low-res images first and upgrades to HD on capable devices. The output directory is a complete, uploadable static site:
+
+```
+output/
+  index.html        ← viewer entry point
+  assets/           ← viewer JS/CSS
+  favicon.svg       ← ImageSpace icon
+  data/             ← atlas textures, data.bin, manifest.json, metadata.csv, ...
+```
+
+With optional external metadata (CSV must have a `filename` column) and a fixed seed for a reproducible layout (by default the layout is random each run):
 
 ```bash
-python3 scripts/imagespace.py /path/to/your/images/ \
-  -o image_space/public/data/ \
+imagespace -i /path/to/your/images/ \
+  -o ./output \
   --metadata /path/to/metadata.csv \
-  --thumb-size 128 --quality 85 \
   --seed 42
 ```
 
-**3. Build and serve**
+For single-resolution output (no preview atlases), pass `--no-hd`:
 
 ```bash
-cd image_space
-npx vite build
-python3 -m http.server 5174 -d "$(pwd)/output"
+imagespace -i /path/to/your/images/ -o ./output --no-hd
 ```
 
-Open http://localhost:5174
+> You can also run it without installing: `python3 scripts/imagespace.py -i ... -o ...`, or pass the input as a positional argument: `imagespace /path/to/images -o ./output`.
+
+**3. Serve locally**
+
+```bash
+python3 -m http.server 5174 -d ./output
+```
+
+Open http://localhost:5174 — then upload the `output/` folder to any static host.
 
 ---
 
 ### Iterate faster with caching
 
-Once you've run the pipeline once, save time on subsequent runs:
+Once you've run the pipeline once, save time on subsequent runs. The embeddings cache is **opt-in** via `--cache-dir` (default runs never write it, keeping output lean):
 
 ```bash
 # Cache embeddings — skip the CLIP stage on re-runs (~18 min saved for 50K images)
-python3 scripts/imagespace.py /path/to/images/ \
-  -o image_space/public/data/ \
-  --cache-dir image_space/public/data/ \
-  --thumb-size 128
+imagespace -i /path/to/images/ \
+  -o ./output \
+  --cache-dir ./emb_cache/
 
 # Relayout only — re-run t-SNE + HDBSCAN without redoing atlas or CLIP (~45s for 50K)
-python3 scripts/imagespace.py /path/to/images/ \
-  -o image_space/public/data/ \
-  --cache-dir image_space/public/data/ \
-  --relayout --thumb-size 128
+imagespace -i /path/to/images/ \
+  -o ./output \
+  --cache-dir ./emb_cache/ \
+  --relayout
+```
+
+For seed-sweep workflows that only need the raw data (no app shell), add `--data-only`:
+
+```bash
+imagespace -i /path/to/images/ \
+  -o ./output \
+  --cache-dir ./emb_cache/ \
+  --data-only --relayout --seed 7
 ```
 
 ---
@@ -99,18 +118,20 @@ python3 scripts/imagespace.py /path/to/images/ \
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--output`, `-o` | required | Output directory |
+| `-i`, `--input` | required | Input directory (or pass as a positional argument) |
+| `--output`, `-o` | required | Output directory (becomes a self-contained static site) |
 | `--metadata` | none | External metadata CSV to merge (must have `filename` column) |
-| `--thumb-size` | 64 | Thumbnail size in pixels (64 or 128 recommended) |
+| `--thumb-size` | 128 | Thumbnail size in pixels (128 with --hd, 64 with --no-hd) |
 | `--atlas-size` | 4096 | Atlas texture dimensions |
 | `--quality` | 60 | WebP compression quality (1–100) |
-| `--hd` | false | Generate dual-resolution atlases (64px preview + 128px full). Auto-sets thumb-size=128 |
+| `--hd` / `--no-hd` | `--hd` | Generate dual-resolution atlases (64px preview + 128px full). ON by default |
 | `--preview-quality` | 40 | WebP quality for preview atlases (only used with --hd) |
 | `--min-cluster-size` | 50 | HDBSCAN minimum cluster size |
 | `--tsne-perplexity` | 30 | t-SNE perplexity |
-| `--seed` | 42 | Random seed for PCA and openTSNE reproducibility |
-| `--cache-dir` | none | Directory to cache CLIP embeddings (`.npy`) |
+| `--seed` | none | Random seed for PCA and openTSNE. Default: fully random each run. Pass a fixed seed (e.g. `--seed 42`) for a reproducible layout |
+| `--cache-dir` | none | Directory to cache CLIP embeddings (`.npy`). Opt-in; default runs never write it |
 | `--relayout` | false | Skip atlas + CLIP, re-run t-SNE/HDBSCAN only |
+| `--data-only` | false | Emit only `data/` (skip the viewer app shell). For relayout/seed-sweep workflows |
 
 ## Why Grid Snapping Is the Default
 
@@ -122,7 +143,7 @@ ImageSpace uses grid-snapped layouts (Grid, Color, Timeline views) as a delibera
 
 **Visual clarity.** When exploring 50,000 images, every image is visible and accessible in a grid. No image is hidden behind another. This is critical for research workflows where users need to scan, filter, and identify patterns across an entire collection — not just the images that happen to be on top.
 
-**Predictability.** Grid layouts are deterministic: the same dataset always produces the same layout. Researchers can reproduce views, share screenshots, and reference specific positions. The pipeline also exposes `--seed` (default `42`) for reproducible PCA and openTSNE layout generation.
+**Predictability.** Grid layouts are deterministic: the same dataset always produces the same layout. Researchers can reproduce views, share screenshots, and reference specific positions. The pipeline exposes `--seed` (no seed by default = random each run); pass a fixed seed (e.g. `--seed 42`) for reproducible PCA and openTSNE layout generation.
 
 **Tradeoffs.** Grid snapping sacrifices organic, "gallery-wall" aesthetics and the ability to manually arrange images. The t-SNE scatter view provides the organic clustering experience, while grid views prioritize systematic exploration. This separation is intentional — each view mode serves a different analytical purpose.
 
@@ -136,13 +157,14 @@ ImageSpace supports progressive atlas loading for fast initial display:
 
 The distinction is device-based, not viewport-based: iPads and Android tablets get HD, regardless of window size. iPhones and Android phones stay on preview.
 
-To generate dual-resolution data, run the pipeline with `--hd`:
+To generate dual-resolution data, just run the pipeline (dual-resolution is the default). Pass `--no-hd` to generate single-resolution 128px atlases only:
 
 ```bash
-python3 scripts/imagespace.py /path/to/images/ \
-  -o image_space/public/data/ \
-  --metadata /path/to/metadata.csv \
-  --thumb-size 128 --quality 60 --hd
+# Dual-resolution (default): preview + HD atlases
+imagespace -i /path/to/images/ -o ./output --metadata /path/to/metadata.csv
+
+# Single-resolution 128px only (no preview atlases)
+imagespace -i /path/to/images/ -o ./output --no-hd
 ```
 
 ## Metadata Format

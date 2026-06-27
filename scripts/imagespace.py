@@ -2,16 +2,30 @@
 """
 ImageSpace — Fast Pipeline for Exploratory Visualization of Image Collections
 
-Transforms a folder of images into static data files for the ImageSpace viewer:
-  - Atlas WebP textures (sprite sheets of thumbnails)
-  - Binary layout data (t-SNE coordinates, atlas positions, cluster IDs)
-  - Manifest JSON (metadata for the viewer)
-  - Metadata CSV (merged with external metadata if provided)
+Transforms a folder of images into a self-contained, uploadable static site:
+  - Viewer app shell (index.html + assets/ + favicon.svg) for the ImageSpace viewer
+  - Atlas WebP textures (sprite sheets of thumbnails) under data/
+  - Binary layout data (t-SNE coordinates, atlas positions, cluster IDs) under data/
+  - Manifest JSON (metadata for the viewer) under data/
+  - Metadata CSV (merged with external metadata if provided) under data/
+
+The output directory is directly uploadable to any static host (GitHub Pages,
+Netlify, Cloudflare Pages, or even a local `python3 -m http.server`). No Vite
+build or backend is required to view the result.
+
+Dual-resolution progressive loading is ON by default: 64px preview atlases are
+generated alongside 128px HD atlases, so the viewer shows low-res images first
+and upgrades to HD on capable devices. Pass --no-hd for single-resolution output.
 
 Usage:
-    python imagespace.py /path/to/images --output ./dist/data
-    python imagespace.py /path/to/images --output ./dist/data --metadata existing.csv
-    python imagespace.py /path/to/images --output ./dist/data --hd --seed 42
+    imagespace -i /path/to/images -o ./output
+    imagespace -i /path/to/images -o ./output --metadata existing.csv
+    imagespace -i /path/to/images -o ./output --seed 42   # reproducible layout
+    imagespace /path/to/images -o ./output            # positional input also works
+    imagespace -i /path/to/images -o ./output --no-hd # single-resolution only
+
+Install as a command (from this repo):
+    pip install .
 
 Performance (50K images, Apple Silicon, with --hd):
     - Atlas generation (full + preview): ~3-5 min
@@ -33,6 +47,7 @@ import csv
 import json
 import math
 import os
+import shutil
 import struct
 import sys
 import time
@@ -389,7 +404,7 @@ def reduce_dimensions(
     min_cluster_size=50,
     perplexity=TSNE_PERPLEXITY,
     thumb_size=THUMB_SIZE,
-    seed=DEFAULT_SEED,
+    seed=None,
 ):
     """Run PCA → openTSNE → HDBSCAN. Returns (tsne_coords, cluster_ids)."""
     from sklearn.decomposition import PCA
@@ -1058,19 +1073,59 @@ def read_external_metadata(metadata_path):
     return lookup
 
 
+def _find_viewer_shell():
+    """Locate the bundled viewer app shell (index.html + assets/ + favicon.svg).
+
+    Resolution order:
+      1. <repo>/imagespace_viewer_shell/viewer_shell — when run from a repo
+         clone via `python scripts/imagespace.py` (dev workflow). The shell
+         lives in the installable data package so pip installs and dev runs
+         share one copy.
+      2. The installed `imagespace_viewer_shell` package — when installed via
+         `pip install .` (the shell ships as package data).
+    Returns a Path to the shell directory, or None if not found.
+    """
+    # 1. Repo layout: scripts/../imagespace_viewer_shell/viewer_shell
+    local = Path(__file__).resolve().parent.parent / "imagespace_viewer_shell" / "viewer_shell"
+    if (local / "index.html").is_file():
+        return local
+    # 2. Installed package data.
+    try:
+        import importlib.resources as ir
+        try:
+            ref = ir.files("imagespace_viewer_shell")
+            root = Path(str(ref)) if hasattr(ref, "__fspath__") else Path(ref.anchor)
+        except Exception:
+            return None
+        cand = root / "viewer_shell"
+        if (cand / "index.html").is_file():
+            return cand
+    except Exception:
+        pass
+    return None
+
+
 # ── Main Pipeline ─────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(
         description="ImageSpace — Transform images into an interactive visualization",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("input", help="Directory containing images")
+    parser.add_argument(
+        "input_pos",
+        nargs="?",
+        help="Directory containing images (positional shortcut; see also -i/--input)",
+    )
+    parser.add_argument(
+        "-i", "--input", dest="input",
+        help="Directory containing images",
+    )
     parser.add_argument("--output", "-o", required=True, help="Output directory")
     parser.add_argument(
         "--min-cluster-size", type=int, default=50, help="HDBSCAN min_cluster_size"
     )
     parser.add_argument(
-        "--thumb-size", type=int, default=THUMB_SIZE, help="Thumbnail size in pixels"
+        "--thumb-size", type=int, default=128, help="Thumbnail size in pixels (128)"
     )
     parser.add_argument(
         "--atlas-size",
@@ -1088,8 +1143,10 @@ def main():
     parser.add_argument(
         "--seed",
         type=int,
-        default=DEFAULT_SEED,
-        help="Random seed for PCA and openTSNE (default 42)",
+        default=None,
+        help="Random seed for PCA and openTSNE reproducibility. Default: none "
+             "(fully random each run). Pass a fixed seed (e.g. --seed 42) to "
+             "make the layout reproducible.",
     )
     parser.add_argument(
         "--cache-dir",
@@ -1102,8 +1159,11 @@ def main():
     )
     parser.add_argument(
         "--hd",
-        action="store_true",
-        help="Generate both 64px preview and 128px full atlases for progressive loading",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Generate dual-resolution atlases: 64px previews load first, then 128px HD "
+             "swaps in on desktop/tablet (phones stay on previews). ON by default; "
+             "pass --no-hd for single-resolution output (thumb-size 64).",
     )
     parser.add_argument(
         "--preview-quality",
@@ -1111,20 +1171,43 @@ def main():
         default=40,
         help="WebP quality for preview atlases (default 40)",
     )
+    parser.add_argument(
+        "--data-only",
+        action="store_true",
+        help="Emit only the data/ folder (skip the viewer app shell). "
+             "Useful for relayout/seed-sweep workflows. Default emits a full site.",
+    )
     args = parser.parse_args()
-    input_dir = Path(args.input).resolve()
+    # Allow `imagespace -i imgs -o out` or `imagespace imgs -o out` (positional).
+    input_path = args.input if args.input else args.input_pos
+    if not input_path:
+        parser.error("an input directory is required (use -i/--input, or pass it as a "
+                     "positional argument)")
+    input_dir = Path(input_path).resolve()
     output_dir = Path(args.output).resolve()
 
     if not input_dir.is_dir():
         print(f"Error: {input_dir} is not a directory")
         sys.exit(1)
 
-    if args.hd and args.thumb_size != 128:
+    # --hd requires 128px thumbnails; --no-hd falls back to the 64px default.
+    if args.hd:
         args.thumb_size = 128
+    elif args.thumb_size == 128:
+        # If someone explicitly wants --no-hd at 128px, honor it; otherwise leave
+        # the 64px default intact.
+        pass
 
     os.makedirs(output_dir, exist_ok=True)
-    cache_dir = Path(args.cache_dir).resolve() if args.cache_dir else output_dir
-    os.makedirs(cache_dir, exist_ok=True)
+    # Pipeline-generated viewer data lives in <out>/data/ so the output dir is a
+    # self-contained static site (index.html + assets/ + data/).
+    data_dir = output_dir / "data"
+    os.makedirs(data_dir, exist_ok=True)
+    # Embeddings cache: only written when --cache-dir is given (power-user
+    # seed-sweep workflow). Default runs never write embeddings to the output.
+    cache_dir = Path(args.cache_dir).resolve() if args.cache_dir else None
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
     total_start = time.time()
 
     print(f"\n{'=' * 60}")
@@ -1144,9 +1227,9 @@ def main():
     # Stage 2
     if args.relayout:
         print(f"\n[2/8] Skipping atlas generation (relayout mode)")
-        bin_path = os.path.join(str(output_dir), "data.bin")
+        bin_path = os.path.join(str(data_dir), "data.bin")
         if os.path.exists(bin_path):
-            manifest_path = os.path.join(str(output_dir), "manifest.json")
+            manifest_path = os.path.join(str(data_dir), "manifest.json")
             stride = 24
             preview_atlas_data = None
             preview_atlas_count = None
@@ -1186,7 +1269,7 @@ def main():
     else:
         print(f"\n[2/8] Generating WebP atlas textures (quality={args.quality})...")
         atlas_data, atlas_count = generate_atlases(
-            images, str(output_dir), args.thumb_size, args.atlas_size, args.quality
+            images, str(data_dir), args.thumb_size, args.atlas_size, args.quality
         )
         preview_atlas_data = None
         preview_atlas_count = None
@@ -1197,7 +1280,7 @@ def main():
             images_per_full_atlas = (args.atlas_size // args.thumb_size) ** 2
             preview_atlas_data, preview_atlas_count = generate_preview_atlases(
                 images,
-                str(output_dir),
+                str(data_dir),
                 atlas_count,
                 images_per_full_atlas,
                 thumb_size=64,
@@ -1205,18 +1288,22 @@ def main():
                 quality=args.preview_quality,
             )
 
-    # Stage 3 — with caching
-    emb_cache = os.path.join(str(cache_dir), "embeddings.npy")
-    if os.path.exists(emb_cache) and (args.relayout or args.cache_dir):
+    # Stage 3 — with caching. The embeddings cache is opt-in via --cache-dir;
+    # default runs never persist embeddings to disk (keeps output lean).
+    if cache_dir is not None:
+        emb_cache = os.path.join(str(cache_dir), "embeddings.npy")
+    else:
+        emb_cache = None
+    if emb_cache and os.path.exists(emb_cache) and (args.relayout or args.cache_dir):
         print(f"\n[3/8] Loading cached embeddings from {emb_cache}...")
         embeddings = np.load(emb_cache)
         print(f"  Loaded {embeddings.shape[0]} × {embeddings.shape[1]} embeddings")
     else:
         print(f"\n[3/8] Extracting embeddings (auto-detecting hardware)...")
         embeddings = extract_embeddings(images)
-        # Save to cache
-        np.save(emb_cache, embeddings)
-        print(f"  Cached embeddings to {emb_cache}")
+        if emb_cache:
+            np.save(emb_cache, embeddings)
+            print(f"  Cached embeddings to {emb_cache}")
     
     # Stage 4
     print(f"\n[4/9] PCA → openTSNE → HDBSCAN...")
@@ -1233,17 +1320,17 @@ def main():
     # Stage 4b: k-NN
     print(f"\n[5/9] k-Nearest Neighbors...")
     knn_indices, knn_distances = compute_knn(embeddings_pca, k=10)
-    write_neighbors_bin(str(output_dir), knn_indices, knn_distances)
+    write_neighbors_bin(str(data_dir), knn_indices, knn_distances)
     outlier_scores = compute_outlier_scores(knn_distances)
 
     # Stage 4c: CLIP cluster labels
     print(f"\n[6/9] CLIP cluster labels...")
     cluster_labels = generate_cluster_labels(embeddings, cluster_ids)
     if cluster_labels:
-        write_cluster_labels(str(output_dir), cluster_labels)
+        write_cluster_labels(str(data_dir), cluster_labels)
 
     # Stage 5
-    meta_csv_path = os.path.join(str(output_dir), "metadata.csv")
+    meta_csv_path = os.path.join(str(data_dir), "metadata.csv")
     skip_metadata = (
         args.relayout and os.path.exists(meta_csv_path) and not args.metadata
     )
@@ -1275,7 +1362,7 @@ def main():
     # Stage 6
     print(f"\n[9/9] Writing output files...")
     write_binary_data(
-        str(output_dir),
+        str(data_dir),
         tsne_coords,
         raw_tsne_coords,
         atlas_data,
@@ -1283,7 +1370,7 @@ def main():
         preview_atlas_data,
     )
     write_manifest(
-        str(output_dir),
+        str(data_dir),
         len(images),
         atlas_count,
         args.thumb_size,
@@ -1297,7 +1384,7 @@ def main():
     )
     if timestamps is not None:
         write_metadata_csv(
-            str(output_dir),
+            str(data_dir),
             images,
             cluster_ids,
             timestamps,
@@ -1307,6 +1394,27 @@ def main():
             outlier_scores,
             cluster_confidence,
         )
+
+    # Stage 7 — copy the bundled viewer app shell so the output dir is a
+    # self-contained, uploadable static site (index.html + assets/ + data/).
+    # Skip with --data-only (relayout/seed-sweep workflows).
+    if not args.data_only:
+        shell_src = _find_viewer_shell()
+        if shell_src is not None:
+            for name in ("index.html", "favicon.svg", ".nojekyll"):
+                src_file = shell_src / name
+                if src_file.exists():
+                    shutil.copy2(src_file, output_dir / name)
+            assets_src = shell_src / "assets"
+            if assets_src.is_dir():
+                shutil.copytree(assets_src, output_dir / "assets", dirs_exist_ok=True)
+            print(f"  Copied viewer app shell into {output_dir}")
+        else:
+            print(
+                f"  WARNING: viewer shell not found. Run scripts/build_viewer_shell.sh "
+                f"to bundle the viewer, or pip install with the shell package. "
+                f"Output contains data/ only."
+            )
 
     elapsed = time.time() - total_start
     print(f"\n{'=' * 60}")

@@ -20,3 +20,8 @@ scripts/embeddings.npy
 .netlify
 __pycache__/
 image_space/public/data/embeddings.npy
+
+# Python packaging build artifacts
+build/
+*.egg-info/
+dist/

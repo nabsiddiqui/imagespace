@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "imagespace"
+version = "1.1.0"
+description = "Transform a folder of images into an interactive 2D scatter-plot visualization (CLIP + t-SNE + HDBSCAN). Static-site output, no backend required."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "Nabeel Siddiqui" }]
+keywords = ["image", "visualization", "clip", "tsne", "hdbscan", "digital-humanities"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Environment :: Web Environment",
+]
+dependencies = [
+    "pillow",
+    "numpy",
+    "scikit-learn",
+    "opentsne",
+    "hdbscan",
+    "scipy",
+]
+
+[project.optional-dependencies]
+# Recommended: ONNX CLIP embeddings (fast, GPU-accelerated on Apple Silicon/CUDA).
+onnx = ["onnxruntime"]
+# Fallback: torch + transformers CLIP backend (slower, no ONNX runtime needed).
+torch = ["torch", "transformers", "huggingface_hub"]
+# Everything needed for a full recommended install (ONNX + model download).
+full = ["onnxruntime", "huggingface_hub"]
+
+[project.scripts]
+imagespace = "imagespace:main"
+
+[tool.setuptools]
+# `imagespace` is a single-file module at scripts/imagespace.py, installed as a
+# top-level module. `imagespace_viewer_shell` is a regular package at the repo
+# root holding the bundled viewer app shell (committed data, shipped as package-data).
+py-modules = ["imagespace"]
+packages = ["imagespace_viewer_shell"]
+
+[tool.setuptools.package-dir]
+# Top-level modules (imagespace) are looked up under scripts/.
+"" = "scripts"
+# The viewer-shell data package lives at the repo root.
+imagespace_viewer_shell = "imagespace_viewer_shell"
+
+[tool.setuptools.package-data]
+# Bundle the data-free viewer app shell with the installed package so the
+# pipeline can emit a self-contained static site without a separate Vite build.
+imagespace_viewer_shell = ["viewer_shell/**/*"]
