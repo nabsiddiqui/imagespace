@@ -1120,7 +1120,7 @@ def main():
     )
     parser.add_argument("--output", "-o", required=True, help="Output directory")
     parser.add_argument(
-        "--min-cluster-size", type=int, default=50, help="HDBSCAN min_cluster_size"
+        "--min-cluster-size", type=int, default=None, help="HDBSCAN min_cluster_size (default: auto-scales to dataset size)"
     )
     parser.add_argument(
         "--thumb-size", type=int, default=128, help="Thumbnail size in pixels (128)"
@@ -1305,10 +1305,14 @@ def main():
     
     # Stage 4
     print(f"\n[4/9] PCA → openTSNE → HDBSCAN...")
+    mcs = args.min_cluster_size
+    if mcs is None:
+        mcs = max(10, min(50, len(images) // 200))
+        print(f"  Auto min_cluster_size={mcs} for {len(images)} images")
     tsne_coords, raw_tsne_coords, cluster_ids, embeddings_pca, cluster_probs = (
         reduce_dimensions(
             embeddings,
-            args.min_cluster_size,
+            mcs,
             args.tsne_perplexity,
             args.thumb_size,
             args.seed,

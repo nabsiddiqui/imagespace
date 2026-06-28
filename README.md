@@ -137,7 +137,7 @@ imagespace -i /path/to/images/ \
 | `--quality` | 60 | WebP compression quality (1–100) |
 | `--hd` / `--no-hd` | `--hd` | Generate dual-resolution atlases (64px preview + 128px full). ON by default |
 | `--preview-quality` | 40 | WebP quality for preview atlases (only used with --hd) |
-| `--min-cluster-size` | 50 | HDBSCAN minimum cluster size |
+| `--min-cluster-size` | auto | HDBSCAN minimum cluster size (auto-scales to dataset size; pass a number to override) |
 | `--tsne-perplexity` | 30 | t-SNE perplexity |
 | `--seed` | none | Random seed for PCA and openTSNE. Default: fully random each run. Pass a fixed seed (e.g. `--seed 42`) for a reproducible layout |
 | `--cache-dir` | none | Directory to cache CLIP embeddings (`.npy`). Opt-in; default runs never write it |
