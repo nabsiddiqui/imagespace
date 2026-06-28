@@ -1,11 +1,11 @@
 node_modules/
 image_space/output/
+output/
 .DS_Store
 *.log
 .worktrees/
 .pi/
 .playwright-mcp/
-test-data/
 
 # Private project notes — never publish
 memory-bank/

@@ -45,7 +45,6 @@ import argparse
 import colorsys
 import csv
 import json
-import math
 import os
 import shutil
 import struct
@@ -68,7 +67,6 @@ CLIP_STD = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
 TSNE_PERPLEXITY = 30  # openTSNE perplexity
 BATCH_SIZE = 64  # Embedding batch size (larger = faster with ONNX)
 PCA_DIMS = 50  # PCA reduction before t-SNE
-DEFAULT_SEED = 42  # PCA + openTSNE reproducibility
 
 
 # ── Stage 1: Image Discovery ─────────────────────────────────

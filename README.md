@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/logo.svg" width="100" alt="ImageSpace logo"/>
   <h1>ImageSpace</h1>
-  <strong><a href="https://nabeelsiddiqui.net/imagespace-demo">Live Demo →</a></strong> — 49,585 WikiArt paintings visualized with CLIP + t-SNE
+  <strong><a href="https://nabeelsiddiqui.net/imagespace-demo">Live Demo →</a></strong> — 49,585 WikiArt images visualized with CLIP + t-SNE
 </div>
 
 ---
@@ -45,9 +45,20 @@ pip install torch transformers huggingface_hub
 
 **2. Run the pipeline**
 
+> The repo ships with `test-data/` — a 500-image WikiArt sample with `metadata.csv`, ready to try without sourcing your own images. Skip to the [example run](#try-it-with-the-bundled-sample) below, or use your own folder of images:
+
 ```bash
 imagespace -i /path/to/your/images/ -o ./output
 ```
+
+#### Try it with the bundled sample
+
+```bash
+imagespace -i test-data -o ./output --metadata test-data/metadata.csv --seed 42
+python3 -m http.server 5174 -d ./output
+```
+
+Then open http://localhost:5174. `test-data/` contains 500 WikiArt images (sampled with seed 42, covering 25 art-historical styles) plus a `metadata.csv` with `filename,artist,style,title,width,height` columns.
 
 Dual-resolution progressive loading is ON by default — 64px preview atlases are generated alongside 128px HD atlases, so the viewer shows low-res images first and upgrades to HD on capable devices. The output directory is a complete, uploadable static site:
 

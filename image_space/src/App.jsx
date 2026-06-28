@@ -340,7 +340,6 @@ export default function App() {
   const [hotspots, setHotspots] = useState([]);
   const [showHotspots, setShowHotspots] = useState(true);
   const [activeHotspot, setActiveHotspot] = useState(null);
-  const [colorsReady, setColorsReady] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [tooltip, setTooltip] = useState(null);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
@@ -944,7 +943,6 @@ export default function App() {
         (async () => {
           await new Promise(r => setTimeout(r, 500)); // let UI settle first
           await computeAvgColors(pointsRef.current, atlasTextures, scaledThumbSize, () => {});
-          setColorsReady(true);
         })();
 
         /* Load metadata CSV (optional) */
