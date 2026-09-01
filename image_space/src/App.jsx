@@ -119,7 +119,7 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
     for (const p of allPoints) {
       if (visibleSet.has(p.id)) {
         p.sprite.alpha = 1;
-        p.sprite.tint = 0xffffff;
+        p.sprite.tint = pointTint(p);
       } else if (isStableLayout) {
         // Dim but don't hide in stable-layout views
         p.sprite.alpha = 0.12;
@@ -133,7 +133,7 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
   } else {
     for (const p of allPoints) {
       p.sprite.alpha = 1;
-      p.sprite.tint = 0xffffff;
+      p.sprite.tint = pointTint(p);
     }
   }
 
@@ -148,6 +148,7 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
       const cMap = {};
       for (const p of points) {
         const c = p.cluster ?? 0;
+        if (c === NOISE_CLUSTER_ID) continue;
         if (!cMap[c]) cMap[c] = { sx: 0, sy: 0, n: 0 };
         cMap[c].sx += p.targetX;
         cMap[c].sy += p.targetY;
@@ -159,6 +160,7 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
       }
       for (const p of points) {
         const c = cMap[p.cluster ?? 0];
+        if (!c) continue;
         const dist = Math.hypot(p.targetX - c.cx, p.targetY - c.cy);
         // Invert: closer to centroid = higher zIndex (rendered on top)
         // Normalize by max distance in cluster to keep values reasonable
@@ -167,6 +169,10 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
       for (const p of points) {
         if (!p.sprite) continue;
         const c = cMap[p.cluster ?? 0];
+        if (!c) {
+          p.sprite.zIndex = -1;
+          continue;
+        }
         const dist = Math.hypot(p.targetX - c.cx, p.targetY - c.cy);
         const maxD = c.maxDist || 1;
         p.sprite.zIndex = Math.round((1 - dist / maxD) * 1000);
@@ -234,6 +240,10 @@ const CLUSTER_COLORS = [
   '#286983', '#56949f', '#ea9d34', '#b4637a', '#907aa9',
   '#d7827e', '#569f84', '#9893a5', '#c4a7e7', '#797593',
 ];
+const NOISE_CLUSTER_ID = 65535;
+const NOISE_COLOR = '#9893a5';
+const NOISE_TINT = 0x9893a5;
+const pointTint = (point) => point.cluster === NOISE_CLUSTER_ID ? NOISE_TINT : 0xffffff;
 
 /* ── Clusters ──────────────────────── */
 function computeClusters(points) {
@@ -246,19 +256,28 @@ function computeClusters(points) {
     clusterMap[cid].sy += (points[i].tsneY ?? points[i].originalY);
   }
   return Object.entries(clusterMap)
-    .map(([cid, data]) => ({
-      id: parseInt(cid),
-      centroid: { x: data.sx / data.indices.length, y: data.sy / data.indices.length },
-      count: data.indices.length,
-      indices: data.indices,
-      color: CLUSTER_COLORS[parseInt(cid) % CLUSTER_COLORS.length],
-    }))
-    .sort((a, b) => b.count - a.count);
+    .map(([cid, data]) => {
+      const id = parseInt(cid);
+      const isNoise = id === NOISE_CLUSTER_ID;
+      return {
+        id,
+        isNoise,
+        centroid: { x: data.sx / data.indices.length, y: data.sy / data.indices.length },
+        count: data.indices.length,
+        indices: data.indices,
+        color: isNoise ? NOISE_COLOR : CLUSTER_COLORS[id % CLUSTER_COLORS.length],
+      };
+    })
+    .sort((a, b) => {
+      if (a.isNoise !== b.isNoise) return a.isNoise ? 1 : -1;
+      return b.count - a.count;
+    });
 }
 
 /* ── Extract Cluster Thumbnails ──────────────── */
 function extractClusterThumbs(clusters, points, atlasTextures, thumbSize) {
   for (const cluster of clusters) {
+    if (cluster.isNoise) continue;
     const cx = cluster.centroid.x, cy = cluster.centroid.y;
     const reps = cluster.indices
       .map(i => ({ i, d: Math.hypot((points[i].tsneX ?? points[i].originalX) - cx, (points[i].tsneY ?? points[i].originalY) - cy) }))
@@ -822,6 +841,7 @@ export default function App() {
             const initY = pd.tsneY ?? pd.y;
             sprite.position.set(initX, initY);
             sprite.eventMode = 'none';
+            sprite.tint = pd.cluster === NOISE_CLUSTER_ID ? NOISE_TINT : 0xffffff;
             if (usePreview) {
               sprite.width = currentThumbSize;
               sprite.height = currentThumbSize;
@@ -1159,7 +1179,7 @@ export default function App() {
                   const ts = p.timestamp ?? 0;
                   if (ts >= loTs && ts <= hiTs) {
                     p.sprite.alpha = 1;
-                    p.sprite.tint = 0xffffff;
+                    p.sprite.tint = pointTint(p);
                   } else {
                     p.sprite.alpha = 0.1;
                     p.sprite.tint = 0xcccccc;
@@ -1171,7 +1191,7 @@ export default function App() {
                 for (const p of pointsRef.current) {
                   if (vs && !vs.has(p.id)) continue;
                   p.sprite.alpha = 1;
-                  p.sprite.tint = 0xffffff;
+                  p.sprite.tint = pointTint(p);
                 }
               }
             }
@@ -1205,7 +1225,7 @@ export default function App() {
             }
           }
           if (closest !== lastHovered) {
-            if (lastHovered) { lastHovered.sprite.scale.set(1); lastHovered.sprite.tint = 0xffffff; }
+            if (lastHovered) { lastHovered.sprite.scale.set(1); lastHovered.sprite.tint = pointTint(lastHovered); }
             if (closest) { closest.sprite.scale.set(1.5); closest.sprite.tint = 0xea9d34; }
             lastHovered = closest;
             if (closest) {
@@ -1401,7 +1421,7 @@ export default function App() {
   };
 
   /* ── CSV filter helpers ── */
-  const FILTER_SKIP_COLS = new Set(['id', 'filename', 'width', 'height', 'timestamp']);
+  const FILTER_SKIP_COLS = new Set(['id', 'filename', 'display_cluster', 'width', 'height', 'timestamp']);
   const MAX_FILTER_VALUES = 200;
 
   const filterOptions = useMemo(() => {
@@ -1512,6 +1532,7 @@ export default function App() {
 
   const activeRangeCount = Object.keys(rangeFilters).length;
   const activeFilterCount = Object.values(csvFilters).reduce((sum, s) => sum + (s ? s.size : 0), 0) + (activeHotspot !== null ? 1 : 0) + activeRangeCount;
+  const allNoise = hotspots.length === 1 && hotspots[0].isNoise;
 
   /* ── Render ─────────────────────────────────── */
 
@@ -1560,12 +1581,23 @@ export default function App() {
             {!loading && hotspots.length > 0 && (
               <div className={`h-[calc(100vh-100px)] border-r border-rp-hlHigh pr-3 transition-all duration-300 overflow-hidden ${showHotspots ? 'w-[180px] md:w-[240px] opacity-100' : 'w-0 opacity-0'}`}>
                 <div className="pointer-events-auto flex flex-col gap-1.5 md:gap-2 max-w-[180px] md:max-w-[240px] h-full overflow-y-auto scrollbar-thin">
-                  {hotspots.map((h, i) => {
+                  {allNoise ? (
+                    <div className="bg-rp-surface/90 rounded-xl border border-rp-hlMed shadow-rp p-4" role="status">
+                      <div className="w-10 h-2 rounded-full mb-3" style={{ backgroundColor: NOISE_COLOR }} />
+                      <p className="text-xs font-bold text-rp-text">No clusters found</p>
+                      <p className="text-[10px] text-rp-muted mt-1 leading-relaxed">
+                        HDBSCAN classified all {hotspots[0].count.toLocaleString()} images as noise.
+                      </p>
+                    </div>
+                  ) : hotspots.map((h, i) => {
                     const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
+                    const label = h.isNoise
+                      ? 'Noise'
+                      : `Hotspot ${i + 1}: ${clipLabelsRef.current?.[h.id]?.label || `Cluster ${h.id + 1}`}`;
                     return (
                       <button
                         key={h.id}
-                          onClick={() => flyToHotspot(h)}
+                        onClick={() => flyToHotspot(h)}
                         className={`bg-rp-surface/90 backdrop-blur-md rounded-xl border border-rp-hlMed shadow-rp transition-all duration-200 ${viewMode !== 'data' ? 'cursor-pointer' : 'cursor-default'} ${
                           activeHotspot === h.id
                             ? 'ring-2 ring-rp-pine shadow-rp-lg'
@@ -1573,14 +1605,14 @@ export default function App() {
                         }`}
                       >
                         <div className="flex items-center gap-3 p-3">
-                          {h.thumbnails?.[0] ? (
+                          {!h.isNoise && h.thumbnails?.[0] ? (
                             <img src={h.thumbnails[0]} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
                           ) : (
-                            <div className="w-12 h-12 rounded-lg shrink-0" style={{ backgroundColor: h.color, opacity: 0.4 }} />
+                            <div className="w-12 h-12 rounded-lg shrink-0" style={{ backgroundColor: h.color, opacity: h.isNoise ? 0.7 : 0.4 }} />
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-rp-text leading-tight">Hotspot {i + 1}: {clipLabelsRef.current?.[h.id]?.label || `Cluster ${i + 1}`}</p>
-                            <p className="text-[10px] text-rp-muted mt-0.5">{h.count.toLocaleString()} images</p>
+                            <p className="text-xs font-bold text-rp-text leading-tight">{label}</p>
+                            <p className="text-[10px] text-rp-muted mt-0.5">{h.count.toLocaleString()} images{h.isNoise ? ' · HDBSCAN noise' : ''}</p>
                             <div className="mt-1 h-1.5 bg-rp-hlMed rounded-full overflow-hidden">
                               <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: h.color }} />
                             </div>
@@ -2014,6 +2046,9 @@ export default function App() {
                     ? Object.entries(metadata.rows[selectedItem.id])
                         .filter(([k]) => k !== 'id')
                         .map(([k, v]) => {
+                          if (k === 'cluster' && String(v) === '-1') {
+                            return [k, 'Noise'];
+                          }
                           if (k === 'cluster' && clipLabelsRef.current?.[v]) {
                             return [k, clipLabelsRef.current[v].label];
                           }
@@ -2049,7 +2084,9 @@ export default function App() {
             const title = meta?.title;
             const artist = meta?.artist;
             const cluster = meta?.cluster;
-            const clusterLabel = cluster && clipLabelsRef.current?.[cluster]?.label;
+            const clusterLabel = String(cluster) === '-1'
+              ? 'Noise'
+              : clipLabelsRef.current?.[cluster]?.label;
             return (
               <>
                 {title && <p className="text-xs font-bold text-rp-text leading-snug">{title}</p>}
@@ -2080,7 +2117,8 @@ export default function App() {
             <div className="space-y-3">
               {[
                 ['Total Images', stats.count.toLocaleString()],
-                ['Clusters', hotspots.length.toString()],
+                ['Clusters', hotspots.filter(h => !h.isNoise).length.toString()],
+                ['Noise', (hotspots.find(h => h.isNoise)?.count || 0).toLocaleString()],
                 ['Atlas Textures', String(stats.atlasCount || '?')],
                 ['Thumbnail Size', `${thumbSizeRef.current}px`],
                 ['Current View', VIEW_MODES[viewMode]?.label || viewMode],

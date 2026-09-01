@@ -404,7 +404,7 @@ def reduce_dimensions(
     thumb_size=THUMB_SIZE,
     seed=None,
 ):
-    """Run PCA → openTSNE → HDBSCAN. Returns (tsne_coords, cluster_ids)."""
+    """Run PCA, openTSNE, and HDBSCAN while preserving raw noise labels."""
     from sklearn.decomposition import PCA
 
     n = len(embeddings)
@@ -519,27 +519,32 @@ def reduce_dimensions(
     )
     cluster_ids = clusterer.fit_predict(embeddings_pca)
     cluster_probs = clusterer.probabilities_.copy()
+    noise_mask = cluster_ids == -1
     n_clusters = len(set(cluster_ids)) - (1 if -1 in cluster_ids else 0)
-    n_noise = (cluster_ids == -1).sum()
+    n_noise = int(noise_mask.sum())
 
+    # Preserve HDBSCAN's raw -1 noise label. A nearest-cluster assignment is
+    # retained separately for researchers who need a secondary comparison,
+    # but it never replaces the algorithm's original decision.
+    display_cluster_ids = cluster_ids.copy()
     if n_noise > 0 and n_clusters > 0:
         from scipy.spatial import cKDTree
 
-        valid_mask = cluster_ids >= 0
+        valid_mask = ~noise_mask
         tree = cKDTree(embeddings_pca[valid_mask])
         valid_labels = cluster_ids[valid_mask]
-        _, nearest = tree.query(embeddings_pca[cluster_ids == -1])
-        cluster_ids[cluster_ids == -1] = valid_labels[nearest]
-        # Give reassigned noise points low confidence
-        cluster_probs[cluster_probs == 0] = 0.1
+        _, nearest = tree.query(embeddings_pca[noise_mask])
+        display_cluster_ids[noise_mask] = valid_labels[nearest]
+    cluster_probs[noise_mask] = 0.0
     print(
-        f"  HDBSCAN: {n_clusters} clusters, {n_noise} noise reassigned ({time.time() - start:.1f}s)"
+        f"  HDBSCAN: {n_clusters} clusters, {n_noise} noise preserved ({time.time() - start:.1f}s)"
     )
 
     return (
         tsne_coords.astype(np.float32),
         raw_tsne_coords.astype(np.float32),
         cluster_ids.astype(np.int32),
+        display_cluster_ids.astype(np.int32),
         embeddings_pca,
         cluster_probs,
     )
@@ -976,6 +981,7 @@ def write_metadata_csv(
     output_dir,
     images,
     cluster_ids,
+    display_cluster_ids,
     timestamps,
     colors,
     external_metadata=None,
@@ -1011,7 +1017,7 @@ def write_metadata_csv(
             extra_cols = [c for c in row.keys() if c.lower() != "filename"]
             break
 
-    base_cols = ["id", "filename", "cluster", "timestamp", "dominant_color"]
+    base_cols = ["id", "filename", "cluster", "display_cluster", "timestamp", "dominant_color"]
     feature_cols = []
     if image_features:
         feature_cols.extend(["brightness", "complexity", "edge_density"])
@@ -1032,6 +1038,7 @@ def write_metadata_csv(
                 i,
                 img_path.name,
                 int(cluster_ids[i]),
+                int(display_cluster_ids[i]),
                 timestamps[i] if timestamps[i] > 0 else "",
                 color_name,
             ]
@@ -1056,6 +1063,42 @@ def write_metadata_csv(
         print(f"  Metadata: merged {matched}/{len(images)} rows")
     else:
         print(f"  Metadata: {output_path}")
+
+
+def refresh_metadata_clusters(
+    metadata_path, cluster_ids, display_cluster_ids, cluster_confidence
+):
+    """Refresh analysis fields during --relayout without discarding metadata."""
+    with open(metadata_path, "r", newline="") as f:
+        reader = csv.DictReader(f)
+        fieldnames = list(reader.fieldnames or [])
+        rows = list(reader)
+
+    for name in ("cluster", "display_cluster", "cluster_confidence"):
+        if name not in fieldnames:
+            insert_at = fieldnames.index("cluster") + 1 if "cluster" in fieldnames else len(fieldnames)
+            fieldnames.insert(insert_at, name)
+
+    updated = 0
+    for position, row in enumerate(rows):
+        try:
+            image_id = int(row.get("id", position))
+        except (TypeError, ValueError):
+            image_id = position
+        if not 0 <= image_id < len(cluster_ids):
+            continue
+        row["cluster"] = str(int(cluster_ids[image_id]))
+        row["display_cluster"] = str(int(display_cluster_ids[image_id]))
+        row["cluster_confidence"] = str(cluster_confidence[image_id])
+        updated += 1
+
+    temp_path = f"{metadata_path}.tmp"
+    with open(temp_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+    os.replace(temp_path, metadata_path)
+    print(f"  Metadata: refreshed cluster fields for {updated}/{len(rows)} rows")
 
 
 def read_external_metadata(metadata_path):
@@ -1309,7 +1352,7 @@ def main():
     if mcs is None:
         mcs = max(10, min(50, len(images) // 200))
         print(f"  Auto min_cluster_size={mcs} for {len(images)} images")
-    tsne_coords, raw_tsne_coords, cluster_ids, embeddings_pca, cluster_probs = (
+    tsne_coords, raw_tsne_coords, cluster_ids, display_cluster_ids, embeddings_pca, cluster_probs = (
         reduce_dimensions(
             embeddings,
             mcs,
@@ -1328,8 +1371,11 @@ def main():
     # Stage 4c: CLIP cluster labels
     print(f"\n[6/9] CLIP cluster labels...")
     cluster_labels = generate_cluster_labels(embeddings, cluster_ids)
+    cluster_labels_path = data_dir / "cluster_labels.json"
     if cluster_labels:
         write_cluster_labels(str(data_dir), cluster_labels)
+    elif cluster_labels_path.exists():
+        cluster_labels_path.unlink()
 
     # Stage 5
     meta_csv_path = os.path.join(str(data_dir), "metadata.csv")
@@ -1389,11 +1435,19 @@ def main():
             str(data_dir),
             images,
             cluster_ids,
+            display_cluster_ids,
             timestamps,
             colors,
             external_metadata,
             image_features,
             outlier_scores,
+            cluster_confidence,
+        )
+    elif skip_metadata:
+        refresh_metadata_clusters(
+            meta_csv_path,
+            cluster_ids,
+            display_cluster_ids,
             cluster_confidence,
         )
 
