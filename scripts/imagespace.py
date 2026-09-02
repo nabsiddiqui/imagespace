@@ -523,18 +523,8 @@ def reduce_dimensions(
     n_clusters = len(set(cluster_ids)) - (1 if -1 in cluster_ids else 0)
     n_noise = int(noise_mask.sum())
 
-    # Preserve HDBSCAN's raw -1 noise label. A nearest-cluster assignment is
-    # retained separately for researchers who need a secondary comparison,
-    # but it never replaces the algorithm's original decision.
-    display_cluster_ids = cluster_ids.copy()
-    if n_noise > 0 and n_clusters > 0:
-        from scipy.spatial import cKDTree
-
-        valid_mask = ~noise_mask
-        tree = cKDTree(embeddings_pca[valid_mask])
-        valid_labels = cluster_ids[valid_mask]
-        _, nearest = tree.query(embeddings_pca[noise_mask])
-        display_cluster_ids[noise_mask] = valid_labels[nearest]
+    # Preserve HDBSCAN's raw -1 noise label. Noise remains unassigned rather
+    # than being forced into a nearby cluster after clustering.
     cluster_probs[noise_mask] = 0.0
     print(
         f"  HDBSCAN: {n_clusters} clusters, {n_noise} noise preserved ({time.time() - start:.1f}s)"
@@ -544,7 +534,6 @@ def reduce_dimensions(
         tsne_coords.astype(np.float32),
         raw_tsne_coords.astype(np.float32),
         cluster_ids.astype(np.int32),
-        display_cluster_ids.astype(np.int32),
         embeddings_pca,
         cluster_probs,
     )
@@ -981,7 +970,6 @@ def write_metadata_csv(
     output_dir,
     images,
     cluster_ids,
-    display_cluster_ids,
     timestamps,
     colors,
     external_metadata=None,
@@ -1017,7 +1005,7 @@ def write_metadata_csv(
             extra_cols = [c for c in row.keys() if c.lower() != "filename"]
             break
 
-    base_cols = ["id", "filename", "cluster", "display_cluster", "timestamp", "dominant_color"]
+    base_cols = ["id", "filename", "cluster", "timestamp", "dominant_color"]
     feature_cols = []
     if image_features:
         feature_cols.extend(["brightness", "complexity", "edge_density"])
@@ -1038,7 +1026,6 @@ def write_metadata_csv(
                 i,
                 img_path.name,
                 int(cluster_ids[i]),
-                int(display_cluster_ids[i]),
                 timestamps[i] if timestamps[i] > 0 else "",
                 color_name,
             ]
@@ -1065,16 +1052,20 @@ def write_metadata_csv(
         print(f"  Metadata: {output_path}")
 
 
-def refresh_metadata_clusters(
-    metadata_path, cluster_ids, display_cluster_ids, cluster_confidence
-):
+def refresh_metadata_clusters(metadata_path, cluster_ids, cluster_confidence):
     """Refresh analysis fields during --relayout without discarding metadata."""
     with open(metadata_path, "r", newline="") as f:
         reader = csv.DictReader(f)
         fieldnames = list(reader.fieldnames or [])
         rows = list(reader)
 
-    for name in ("cluster", "display_cluster", "cluster_confidence"):
+    # Remove the deprecated post-clustering nearest assignment from older outputs.
+    if "display_cluster" in fieldnames:
+        fieldnames.remove("display_cluster")
+        for row in rows:
+            row.pop("display_cluster", None)
+
+    for name in ("cluster", "cluster_confidence"):
         if name not in fieldnames:
             insert_at = fieldnames.index("cluster") + 1 if "cluster" in fieldnames else len(fieldnames)
             fieldnames.insert(insert_at, name)
@@ -1088,7 +1079,6 @@ def refresh_metadata_clusters(
         if not 0 <= image_id < len(cluster_ids):
             continue
         row["cluster"] = str(int(cluster_ids[image_id]))
-        row["display_cluster"] = str(int(display_cluster_ids[image_id]))
         row["cluster_confidence"] = str(cluster_confidence[image_id])
         updated += 1
 
@@ -1352,7 +1342,7 @@ def main():
     if mcs is None:
         mcs = max(10, min(50, len(images) // 200))
         print(f"  Auto min_cluster_size={mcs} for {len(images)} images")
-    tsne_coords, raw_tsne_coords, cluster_ids, display_cluster_ids, embeddings_pca, cluster_probs = (
+    tsne_coords, raw_tsne_coords, cluster_ids, embeddings_pca, cluster_probs = (
         reduce_dimensions(
             embeddings,
             mcs,
@@ -1435,7 +1425,6 @@ def main():
             str(data_dir),
             images,
             cluster_ids,
-            display_cluster_ids,
             timestamps,
             colors,
             external_metadata,
@@ -1447,7 +1436,6 @@ def main():
         refresh_metadata_clusters(
             meta_csv_path,
             cluster_ids,
-            display_cluster_ids,
             cluster_confidence,
         )
 

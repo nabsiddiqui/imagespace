@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
-  Database, X, Grid, Magnet, Eye,
+  Database, X, Grid, Magnet, Eye, EyeOff,
   ZoomIn, ZoomOut, Maximize2,
   Palette, Info,
   ChevronLeft, ChevronRight, Filter, ChevronDown,
@@ -100,7 +100,7 @@ const VIEW_MODES = {
   timeline: { label: 'Timeline', icon: 'clock' },
 };
 
-function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
+function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE, noiseDisplay = 'show') {
   // Reset z-ordering when switching away from t-SNE (grid/color/timeline have flat z)
   if (mode !== 'tsne') {
     for (const p of allPoints) {
@@ -114,12 +114,15 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
   const points = (hasFilter && !isStableLayout) ? allPoints.filter(p => visibleSet.has(p.id)) : allPoints;
   const n = points.length;
 
-  // Visibility: in stable modes dim non-visible, in other modes hide them
+  // Visibility: in stable modes dim non-visible, in other modes hide them.
+  // Hide mode always removes raw HDBSCAN noise, even when no other filter is active.
   if (hasFilter) {
     for (const p of allPoints) {
-      if (visibleSet.has(p.id)) {
+      if (noiseDisplay === 'hide' && isNoisePoint(p)) {
+        p.sprite.alpha = 0;
+      } else if (visibleSet.has(p.id)) {
         p.sprite.alpha = 1;
-        p.sprite.tint = pointTint(p);
+        p.sprite.tint = pointTint(p, noiseDisplay);
       } else if (isStableLayout) {
         // Dim but don't hide in stable-layout views
         p.sprite.alpha = 0.12;
@@ -132,8 +135,8 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE) {
     }
   } else {
     for (const p of allPoints) {
-      p.sprite.alpha = 1;
-      p.sprite.tint = pointTint(p);
+      p.sprite.alpha = noiseDisplay === 'hide' && isNoisePoint(p) ? 0 : 1;
+      p.sprite.tint = pointTint(p, noiseDisplay);
     }
   }
 
@@ -243,17 +246,20 @@ const CLUSTER_COLORS = [
 const NOISE_CLUSTER_ID = 65535;
 const NOISE_COLOR = '#9893a5';
 const NOISE_TINT = 0x9893a5;
-const pointTint = (point) => point.cluster === NOISE_CLUSTER_ID ? NOISE_TINT : 0xffffff;
+const isNoisePoint = (point) => point.cluster === NOISE_CLUSTER_ID;
+const pointTint = (point) => isNoisePoint(point) ? NOISE_TINT : 0xffffff;
 
 /* ── Clusters ──────────────────────── */
-function computeClusters(points) {
+function computeClusters(points, noiseDisplay = 'show') {
   const clusterMap = {};
   for (let i = 0; i < points.length; i++) {
-    const cid = points[i].cluster ?? 0;
+    const point = points[i];
+    if (noiseDisplay === 'hide' && isNoisePoint(point)) continue;
+    const cid = point.cluster ?? 0;
     if (!clusterMap[cid]) clusterMap[cid] = { indices: [], sx: 0, sy: 0 };
     clusterMap[cid].indices.push(i);
-    clusterMap[cid].sx += (points[i].tsneX ?? points[i].originalX);
-    clusterMap[cid].sy += (points[i].tsneY ?? points[i].originalY);
+    clusterMap[cid].sx += (point.tsneX ?? point.originalX);
+    clusterMap[cid].sy += (point.tsneY ?? point.originalY);
   }
   return Object.entries(clusterMap)
     .map(([cid, data]) => {
@@ -373,6 +379,9 @@ export default function App() {
   const [csvFilters, setCsvFilters] = useState({});  // { columnName: selectedValue | null }
   const [rangeFilters, setRangeFilters] = useState({}); // { columnName: [min, max] } for continuous columns
   const [showRangePanel, setShowRangePanel] = useState(false); // toggle range slider panel
+  const [noiseDisplay, setNoiseDisplay] = useState('show'); // 'show' | 'hide'
+  const noiseDisplayRef = useRef('show');
+  const [noiseSupport, setNoiseSupport] = useState({ hasNoise: false, rawCount: 0 });
   const [openFilter, setOpenFilter] = useState(null); // which dropdown is open
   const [filterSearch, setFilterSearch] = useState(''); // search text within open filter dropdown
   const visibleSetRef = useRef(null);                // current Set<id> or null (all visible)
@@ -402,6 +411,7 @@ export default function App() {
       ctx.fillStyle = 'rgba(180, 40, 40, 0.55)';
       const dots = md.dots;
       for (let i = 0; i < dots.length; i++) {
+        if (noiseDisplayRef.current === 'hide' && dots[i].isNoise) continue;
         ctx.fillRect(dots[i].nx * (W - 4) + 2, dots[i].ny * (H - 4) + 2, 2, 2);
       }
       // Viewport rectangle
@@ -425,6 +435,11 @@ export default function App() {
   /* ── Compute visible set from hotspot + csvFilters + rangeFilters ── */
   const computeVisibleSet = (hotspotId, filters, hotspotsData, meta, ranges = {}) => {
     let ids = null;
+
+    // Noise display is a presentation policy layered over every other filter.
+    if (noiseDisplayRef.current === 'hide') {
+      ids = new Set(pointsRef.current.filter(p => !isNoisePoint(p)).map(p => p.id));
+    }
 
     // Hotspot filter
     if (hotspotId !== null && hotspotsData.length > 0) {
@@ -508,7 +523,7 @@ export default function App() {
       }
     }
 
-    computeLayout(pointsRef.current, mode, visSet, thumbSizeRef.current);
+    computeLayout(pointsRef.current, mode, visSet, thumbSizeRef.current, noiseDisplayRef.current);
 
     // Mark all points as moving so the animation ticker picks them up
     const app = appRef.current;
@@ -572,6 +587,26 @@ export default function App() {
         }
       }
     }, 100);
+  };
+
+  const changeNoiseDisplay = (mode) => {
+    if (mode !== 'show' && mode !== 'hide') return;
+    noiseDisplayRef.current = mode;
+    setNoiseDisplay(mode);
+    setActiveHotspot(null);
+    setTooltip(null);
+    if (mode === 'hide' && selectedItem && isNoisePoint(pointsRef.current[selectedItem.id])) {
+      setSelectedItem(null);
+      setShowDetailPanel(false);
+    }
+
+    const nextHotspots = computeClusters(pointsRef.current, mode);
+    if (atlasTexturesRef.current) {
+      extractClusterThumbs(nextHotspots, pointsRef.current, atlasTexturesRef.current, thumbSizeRef.current);
+    }
+    setHotspots(nextHotspots);
+    const visSet = computeVisibleSet(null, csvFilters, nextHotspots, metadata, rangeFilters);
+    relayout(viewModeRef.current, visSet);
   };
 
   const switchView = (mode) => {
@@ -742,8 +777,10 @@ export default function App() {
           }
         }
 
-        /* Compute hotspots early — only needs binary point data, not atlas textures */
+        /* Compute hotspots and raw noise count early from binary point data. */
         const clusters = computeClusters(allPointData);
+        const rawNoiseCount = allPointData.reduce((count, point) => count + (isNoisePoint(point) ? 1 : 0), 0);
+        setNoiseSupport({ hasNoise: rawNoiseCount > 0, rawCount: rawNoiseCount });
 
         /* Load CLIP cluster labels early so hotspot names show immediately */
         try {
@@ -774,7 +811,7 @@ export default function App() {
             const p = pts[i];
             const nx = (p.tsneX - mMinX) / rangeX;
             const ny = (p.tsneY - mMinY) / rangeY;
-            dots.push({ nx, ny });
+            dots.push({ nx, ny, isNoise: p.cluster === NOISE_CLUSTER_ID });
           }
           minimapDataRef.current = { minX: mMinX, minY: mMinY, rangeX, rangeY, dots };
           setMinimapReady(true);
@@ -1020,7 +1057,7 @@ export default function App() {
                 rows.push(row);
               }
 
-              // Attach timestamp to points if available
+              // Attach timestamps to points if available.
               const tsCol = columns.indexOf('timestamp');
               if (tsCol >= 0) {
                 let tsCount = 0;
@@ -1031,6 +1068,7 @@ export default function App() {
                 }
                 if (tsCount > 0) setHasTimestamps(true);
               }
+
               // Exclude 'id' and 'timestamp' from filter columns
               const filterCols = catCols.filter(c => c !== 'timestamp');
 
@@ -1178,8 +1216,8 @@ export default function App() {
                   if (vs && !vs.has(p.id)) continue;
                   const ts = p.timestamp ?? 0;
                   if (ts >= loTs && ts <= hiTs) {
-                    p.sprite.alpha = 1;
-                    p.sprite.tint = pointTint(p);
+                    p.sprite.alpha = noiseDisplayRef.current === 'hide' && isNoisePoint(p) ? 0 : 1;
+                    p.sprite.tint = pointTint(p, noiseDisplayRef.current);
                   } else {
                     p.sprite.alpha = 0.1;
                     p.sprite.tint = 0xcccccc;
@@ -1190,8 +1228,8 @@ export default function App() {
                 const vs = visibleSetRef.current;
                 for (const p of pointsRef.current) {
                   if (vs && !vs.has(p.id)) continue;
-                  p.sprite.alpha = 1;
-                  p.sprite.tint = pointTint(p);
+                  p.sprite.alpha = noiseDisplayRef.current === 'hide' && isNoisePoint(p) ? 0 : 1;
+                  p.sprite.tint = pointTint(p, noiseDisplayRef.current);
                 }
               }
             }
@@ -1217,6 +1255,7 @@ export default function App() {
               const cell = spatialHashRef.current[`${gx + ix},${gy + iy}`];
               if (cell) {
                 for (const p of cell) {
+                  if (p.sprite.alpha === 0) continue;
                   const ddx = p.x - worldPos.x, ddy = p.y - worldPos.y;
                   const dsq = ddx * ddx + ddy * ddy;
                   if (dsq < minDistSq) { minDistSq = dsq; closest = p; }
@@ -1225,7 +1264,7 @@ export default function App() {
             }
           }
           if (closest !== lastHovered) {
-            if (lastHovered) { lastHovered.sprite.scale.set(1); lastHovered.sprite.tint = pointTint(lastHovered); }
+            if (lastHovered) { lastHovered.sprite.scale.set(1); lastHovered.sprite.tint = pointTint(lastHovered, noiseDisplayRef.current); }
             if (closest) { closest.sprite.scale.set(1.5); closest.sprite.tint = 0xea9d34; }
             lastHovered = closest;
             if (closest) {
@@ -1526,7 +1565,7 @@ export default function App() {
     setCsvFilters({});
     setRangeFilters({});
     setActiveHotspot(null);
-    const visSet = null;
+    const visSet = computeVisibleSet(null, {}, hotspots, metadata, {});
     relayout(viewMode, visSet);
   };
 
@@ -1752,22 +1791,42 @@ export default function App() {
               </div>
             )}
 
-            {/* Range filter toggle button — own card */}
-            {Object.keys(continuousFilterOptions).length > 0 && (
-              <button
-                onClick={() => setShowRangePanel(p => !p)}
-                className={`pointer-events-auto cursor-pointer rp-card flex items-center gap-1.5 px-3 py-1.5 transition-all hover:shadow-rp-lg ${
-                  showRangePanel || activeRangeCount > 0
-                    ? 'ring-1 ring-rp-pine/30'
-                    : ''
-                }`}
-              >
-                <SlidersHorizontal size={12} className={`pointer-events-none ${activeRangeCount > 0 ? 'text-rp-pine' : 'text-rp-muted'}`} />
-                <span className={`pointer-events-none text-[11px] font-semibold ${activeRangeCount > 0 ? 'text-rp-pine' : 'text-rp-subtle'}`}>
-                  Properties{activeRangeCount > 0 ? ` (${activeRangeCount})` : ''}
-                </span>
-              </button>
-            )}
+            {/* Property and noise display controls */}
+            <div className="flex items-center gap-2">
+              {Object.keys(continuousFilterOptions).length > 0 && (
+                <button
+                  onClick={() => setShowRangePanel(p => !p)}
+                  className={`pointer-events-auto cursor-pointer rp-card flex items-center gap-1.5 px-3 py-1.5 transition-all hover:shadow-rp-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rp-pine ${
+                    showRangePanel || activeRangeCount > 0
+                      ? 'ring-1 ring-rp-pine/30'
+                      : ''
+                  }`}
+                >
+                  <SlidersHorizontal size={12} className={`pointer-events-none ${activeRangeCount > 0 ? 'text-rp-pine' : 'text-rp-muted'}`} />
+                  <span className={`pointer-events-none text-[11px] font-semibold ${activeRangeCount > 0 ? 'text-rp-pine' : 'text-rp-subtle'}`}>
+                    Properties{activeRangeCount > 0 ? ` (${activeRangeCount})` : ''}
+                  </span>
+                </button>
+              )}
+
+              {noiseSupport.hasNoise && (
+                <button
+                  type="button"
+                  onClick={() => changeNoiseDisplay(noiseDisplay === 'show' ? 'hide' : 'show')}
+                  aria-pressed={noiseDisplay === 'hide'}
+                  aria-label={`${noiseDisplay === 'show' ? 'Hide' : 'Show'} HDBSCAN noise`}
+                  title={`${noiseDisplay === 'show' ? 'Hide' : 'Show'} HDBSCAN noise`}
+                  className={`pointer-events-auto cursor-pointer rp-card flex items-center gap-1.5 px-3 py-1.5 transition-all hover:shadow-rp-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rp-pine ${
+                    noiseDisplay === 'hide' ? 'ring-1 ring-rp-pine/30' : ''
+                  }`}
+                >
+                  {noiseDisplay === 'hide' ? <EyeOff size={12} /> : <Eye size={12} />}
+                  <span className="text-[11px] font-semibold text-rp-subtle">
+                    Noise: {noiseDisplay === 'hide' ? 'Hide' : 'Show'}
+                  </span>
+                </button>
+              )}
+            </div>
 
             {/* Inline property slider cards */}
             {showRangePanel && Object.keys(continuousFilterOptions).length > 0 && (
@@ -2118,7 +2177,7 @@ export default function App() {
               {[
                 ['Total Images', stats.count.toLocaleString()],
                 ['Clusters', hotspots.filter(h => !h.isNoise).length.toString()],
-                ['Noise', (hotspots.find(h => h.isNoise)?.count || 0).toLocaleString()],
+                ['Noise', noiseSupport.rawCount.toLocaleString()],
                 ['Atlas Textures', String(stats.atlasCount || '?')],
                 ['Thumbnail Size', `${thumbSizeRef.current}px`],
                 ['Current View', VIEW_MODES[viewMode]?.label || viewMode],
