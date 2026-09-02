@@ -25,3 +25,6 @@ image_space/public/data/embeddings.npy
 build/
 *.egg-info/
 dist/
+
+# Local agent tooling state
+.opencode/

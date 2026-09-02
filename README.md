@@ -2,6 +2,8 @@
   <img src="assets/logo.svg" width="100" alt="ImageSpace logo"/>
   <h1>ImageSpace</h1>
   <strong><a href="https://nabeelsiddiqui.net/imagespace-demo">Live Demo →</a></strong> — 49,585 WikiArt images visualized with CLIP + t-SNE
+  <br/><br/>
+  <a href="https://github.com/nabsiddiqui/imagespace/actions/workflows/ci.yml"><img src="https://github.com/nabsiddiqui/imagespace/actions/workflows/ci.yml/badge.svg" alt="CI status"/></a>
 </div>
 
 ---
@@ -196,6 +198,15 @@ python3 tests/run_checks.py --seed 42
 ```
 
 It runs deterministic pipeline checks twice, validates provenance and label schemas, guards the HDBSCAN noise policy, builds the frontend and package, and exits zero only when the two seeded outputs match.
+
+For a fast, network-free check of the numeric core (no model downloads), run the unit suite:
+
+```bash
+pip install ".[test]"
+pytest
+```
+
+Continuous integration runs the unit suite across Python 3.10–3.12 and against the oldest supported dependency versions, and rebuilds the viewer, so the pipeline is verified to keep working as its dependencies change. See [`tests/README.md`](tests/README.md) for the full layout.
 
 ## Why Grid Snapping Is the Default
 
