@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "imagespace"
-version = "1.1.0"
+version = "1.2.0"
 description = "Transform a folder of images into an interactive 2D scatter-plot visualization (CLIP + t-SNE + HDBSCAN). Static-site output, no backend required."
 readme = "README.md"
 license = { text = "MIT" }
@@ -31,26 +31,27 @@ dependencies = [
 onnx = ["onnxruntime"]
 # Fallback: torch + transformers CLIP backend (slower, no ONNX runtime needed).
 torch = ["torch", "transformers", "huggingface_hub"]
-# Everything needed for a full recommended install (ONNX + model download).
-full = ["onnxruntime", "huggingface_hub"]
+# Everything needed for embeddings plus aligned text-based cluster labels.
+full = ["onnxruntime", "huggingface_hub", "torch", "transformers"]
 
 [project.scripts]
 imagespace = "imagespace:main"
 
 [tool.setuptools]
-# `imagespace` is a single-file module at scripts/imagespace.py, installed as a
-# top-level module. `imagespace_viewer_shell` is a regular package at the repo
-# root holding the bundled viewer app shell (committed data, shipped as package-data).
+# `imagespace` is a single-file module at scripts/imagespace.py. The companion
+# packages hold the bundled viewer shell and versioned analysis resources.
 py-modules = ["imagespace"]
-packages = ["imagespace_viewer_shell"]
+packages = ["imagespace_viewer_shell", "imagespace_resources"]
 
 [tool.setuptools.package-dir]
 # Top-level modules (imagespace) are looked up under scripts/.
 "" = "scripts"
 # The viewer-shell data package lives at the repo root.
 imagespace_viewer_shell = "imagespace_viewer_shell"
+imagespace_resources = "imagespace_resources"
 
 [tool.setuptools.package-data]
 # Bundle the data-free viewer app shell with the installed package so the
 # pipeline can emit a self-contained static site without a separate Vite build.
 imagespace_viewer_shell = ["viewer_shell/**/*"]
+imagespace_resources = ["label_presets/*.json"]

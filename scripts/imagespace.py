@@ -45,11 +45,13 @@ import argparse
 import colorsys
 import csv
 import json
+import hashlib
 import os
 import shutil
 import struct
 import sys
 import time
+from importlib import resources
 from pathlib import Path
 from multiprocessing import cpu_count
 
@@ -67,6 +69,11 @@ CLIP_STD = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
 TSNE_PERPLEXITY = 30  # openTSNE perplexity
 BATCH_SIZE = 64  # Embedding batch size (larger = faster with ONNX)
 PCA_DIMS = 50  # PCA reduction before t-SNE
+SOFTWARE_VERSION = "1.2.0"
+DEFAULT_CLIP_MODEL = "openai/clip-vit-base-patch32"
+DEFAULT_LABEL_PRESET = "art-v1"
+DEFAULT_LABEL_UNCERTAINTY_THRESHOLD = 0.01
+ONNX_CLIP_REPO = "Xenova/clip-vit-base-patch32"
 
 
 # ── Stage 1: Image Discovery ─────────────────────────────────
@@ -88,6 +95,24 @@ def discover_images(input_dir):
             if ext in SUPPORTED_FORMATS:
                 images.append(Path(root) / f)
     return images
+
+
+def corpus_fingerprint(images, input_dir):
+    """Hash stable corpus identity fields to prevent stale embedding-cache reuse."""
+    root = Path(input_dir).resolve()
+    digest = hashlib.sha256()
+    for image in images:
+        path = Path(image)
+        stat = path.stat()
+        try:
+            relative = path.resolve().relative_to(root)
+        except ValueError:
+            relative = path.name
+        digest.update(str(relative).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(stat.st_size).encode("ascii"))
+        digest.update(b"\n")
+    return digest.hexdigest()
 
 
 # ── Stage 2: Thumbnail Generation + Atlas Packing ────────────
@@ -204,25 +229,30 @@ def generate_preview_atlases(
 
 
 # ── Stage 3: Embedding Extraction ────────────────────────────
-def extract_embeddings(images):
-    """Extract CLIP ViT-B/32 embeddings. Tries ONNX first (fastest), then PyTorch."""
-    # Try ONNX Runtime (fastest)
-    try:
-        return _extract_clip_onnx(images)
-    except Exception as e:
-        print(f"  ONNX CLIP failed: {e}")
+def extract_embeddings(images, model_id=DEFAULT_CLIP_MODEL):
+    """Extract CLIP embeddings and return ``(embeddings, backend)``.
 
-    # Try PyTorch (slower but more compatible)
+    The optimized ONNX artifact is available for the default model. Other
+    Hugging Face CLIP model ids use the PyTorch backend so the image and text
+    encoders always come from the same checkpoint.
+    """
+    if model_id == DEFAULT_CLIP_MODEL:
+        try:
+            return _extract_clip_onnx(images), "onnxruntime"
+        except Exception as e:
+            print(f"  ONNX CLIP failed: {e}")
+
     try:
-        return _extract_clip_torch(images)
-    except (ImportError, Exception) as e:
+        return _extract_clip_torch(images, model_id), "transformers"
+    except Exception as e:
         raise RuntimeError(
-            "CLIP embedding extraction failed. Install onnxruntime or torch/transformers."
+            f"CLIP embedding extraction failed for {model_id}. Install "
+            "onnxruntime for the default model or torch/transformers."
         ) from e
 
 
 def _get_onnx_model_path():
-    """Download or locate CLIP ONNX vision model."""
+    """Download or locate the default CLIP ONNX vision model."""
     cache_dir = Path.home() / ".cache" / "imagespace"
     model_path = cache_dir / "clip-vit-b32-visual.onnx"
     if model_path.exists():
@@ -233,7 +263,7 @@ def _get_onnx_model_path():
 
         print("  Downloading CLIP ONNX vision model (first time only)...")
         downloaded = hf_hub_download(
-            repo_id="Xenova/clip-vit-base-patch32",
+            repo_id=ONNX_CLIP_REPO,
             filename="onnx/vision_model.onnx",
             cache_dir=str(cache_dir),
         )
@@ -337,14 +367,14 @@ def _extract_clip_onnx(images):
     return embeddings
 
 
-def _extract_clip_torch(images):
-    """CLIP embeddings via transformers + PyTorch (fallback). Auto-detects GPU."""
+def _extract_clip_torch(images, model_id=DEFAULT_CLIP_MODEL):
+    """CLIP embeddings via transformers + PyTorch. Auto-detects GPU."""
     import torch
     from transformers import CLIPModel, CLIPProcessor
 
-    print("  Loading CLIP ViT-B/32 (PyTorch)...")
-    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    print(f"  Loading {model_id} (PyTorch)...")
+    model = CLIPModel.from_pretrained(model_id)
+    processor = CLIPProcessor.from_pretrained(model_id)
 
     device = "cpu"
     if torch.cuda.is_available():
@@ -357,7 +387,8 @@ def _extract_clip_torch(images):
         print("  Using CPU")
 
     model = model.to(device).eval()
-    embeddings = np.zeros((len(images), CLIP_DIM), dtype=np.float32)
+    projection_dim = int(getattr(model.config, "projection_dim", CLIP_DIM))
+    embeddings = np.zeros((len(images), projection_dim), dtype=np.float32)
     start = time.time()
 
     for batch_start in range(0, len(images), BATCH_SIZE):
@@ -403,30 +434,36 @@ def reduce_dimensions(
     perplexity=TSNE_PERPLEXITY,
     thumb_size=THUMB_SIZE,
     seed=None,
+    pca_dims=PCA_DIMS,
+    hdbscan_min_samples=5,
+    hdbscan_selection_method="leaf",
 ):
     """Run PCA, openTSNE, and HDBSCAN while preserving raw noise labels."""
     from sklearn.decomposition import PCA
 
     n = len(embeddings)
 
-    # PCA first: reduce 512-d to 50-d for much faster t-SNE
-    pca_dims = min(PCA_DIMS, n - 1, embeddings.shape[1])
+    # PCA first for faster t-SNE and more stable density estimation.
+    requested_pca_dims = pca_dims
+    pca_dims = min(requested_pca_dims, n - 1, embeddings.shape[1])
+    if pca_dims < 1:
+        raise ValueError("PCA requires at least two images")
     print(f"\n  PCA: {embeddings.shape[1]}-d → {pca_dims}-d...")
     start = time.time()
     pca = PCA(n_components=pca_dims, random_state=seed)
     embeddings_pca = pca.fit_transform(embeddings)
-    print(
-        f"  PCA: {time.time() - start:.1f}s ({pca.explained_variance_ratio_.sum():.1%} variance)"
-    )
+    explained_variance = float(pca.explained_variance_ratio_.sum())
+    print(f"  PCA: {time.time() - start:.1f}s ({explained_variance:.1%} variance)")
 
     # openTSNE (FFT-accelerated, ~10-20x faster than sklearn)
-    print(f"\n  Running openTSNE (n={n}, perplexity={perplexity})...")
+    effective_perplexity = min(perplexity, max(1, n // 3))
+    print(f"\n  Running openTSNE (n={n}, perplexity={effective_perplexity})...")
     start = time.time()
     from openTSNE import TSNE
 
     tsne = TSNE(
         n_components=2,
-        perplexity=min(perplexity, n // 3),
+        perplexity=effective_perplexity,
         exaggeration=4,
         initialization="pca",
         metric="euclidean",
@@ -512,9 +549,9 @@ def reduce_dimensions(
     start = time.time()
     clusterer = hdb.HDBSCAN(
         min_cluster_size=min_cluster_size,
-        min_samples=5,
+        min_samples=hdbscan_min_samples,
         metric="euclidean",
-        cluster_selection_method="leaf",
+        cluster_selection_method=hdbscan_selection_method,
         core_dist_n_jobs=-1,
     )
     cluster_ids = clusterer.fit_predict(embeddings_pca)
@@ -536,6 +573,31 @@ def reduce_dimensions(
         cluster_ids.astype(np.int32),
         embeddings_pca,
         cluster_probs,
+        {
+            "pca": {
+                "requestedDimensions": requested_pca_dims,
+                "dimensions": pca_dims,
+                "explainedVariance": explained_variance,
+            },
+            "tsne": {
+                "implementation": "openTSNE",
+                "perplexity": effective_perplexity,
+                "requestedPerplexity": perplexity,
+                "exaggeration": 4,
+                "metric": "euclidean",
+                "initialization": "pca",
+                "seed": seed,
+            },
+            "hdbscan": {
+                "minClusterSize": min_cluster_size,
+                "minSamples": hdbscan_min_samples,
+                "selectionMethod": hdbscan_selection_method,
+                "metric": "euclidean",
+                "noisePolicy": "preserve-unassigned",
+                "noiseLabel": -1,
+                "noiseCount": n_noise,
+            },
+        },
     )
 
 
@@ -579,195 +641,138 @@ def write_neighbors_bin(output_dir, knn_indices, knn_distances):
 
 
 # ── Stage 4c: CLIP Cluster Labels ────────────────────────────
-def generate_cluster_labels(embeddings, cluster_ids):
-    """Use CLIP text encoder to find descriptive labels for each cluster.
-    Computes cluster centroids in CLIP space, then matches against candidate texts."""
+def load_label_vocabulary(path=None):
+    """Load and validate a versioned label vocabulary."""
+    if path:
+        source = Path(path)
+        if not source.is_file():
+            raise FileNotFoundError(f"Label candidates file not found: {source}")
+        payload = json.loads(source.read_text(encoding="utf-8"))
+    else:
+        try:
+            source = resources.files("imagespace_resources").joinpath(
+                "label_presets", f"{DEFAULT_LABEL_PRESET}.json"
+            )
+            payload = json.loads(source.read_text(encoding="utf-8"))
+        except ModuleNotFoundError:
+            # Direct source invocation puts scripts/ rather than the repo root on
+            # sys.path; resolve the adjacent development resource explicitly.
+            source = Path(__file__).resolve().parents[1] / "imagespace_resources" / "label_presets" / f"{DEFAULT_LABEL_PRESET}.json"
+            payload = json.loads(source.read_text(encoding="utf-8"))
+
+    entries = payload.get("candidates") if isinstance(payload, dict) else payload
+    if not isinstance(entries, list) or len(entries) < 3:
+        raise ValueError("Label vocabulary must contain at least three candidates")
+
+    normalized = []
+    for entry in entries:
+        if isinstance(entry, str):
+            text, short_name = entry.strip(), entry.strip()
+        elif isinstance(entry, dict):
+            text = str(entry.get("text", "")).strip()
+            short_name = str(entry.get("short_name", text)).strip()
+        else:
+            raise ValueError("Each label candidate must be a string or object")
+        if not text:
+            raise ValueError("Label candidates cannot be empty")
+        normalized.append({"text": text, "short_name": short_name or text})
+
+    vocab_id = payload.get("id", Path(str(source)).stem) if isinstance(payload, dict) else Path(str(source)).stem
+    version = payload.get("version", 1) if isinstance(payload, dict) else 1
+    return {"id": str(vocab_id), "version": version, "candidates": normalized}
+
+
+def generate_cluster_labels(
+    embeddings,
+    cluster_ids,
+    model_id=DEFAULT_CLIP_MODEL,
+    vocabulary=None,
+    uncertainty_threshold=DEFAULT_LABEL_UNCERTAINTY_THRESHOLD,
+):
+    """Match non-noise cluster centroids against a versioned text vocabulary."""
     try:
-        from transformers import CLIPModel, AutoTokenizer
         import torch
-    except ImportError:
-        print("  Skipping cluster labels (transformers/torch not available)")
-        return None
+        from transformers import AutoTokenizer, CLIPModel
+    except ImportError as exc:
+        raise RuntimeError(
+            "Cluster labels require torch and transformers. Install imagespace[full]."
+        ) from exc
 
-    print("\n  Generating CLIP cluster labels...")
+    vocabulary = vocabulary or load_label_vocabulary()
+    entries = vocabulary["candidates"]
+    candidates = [entry["text"] for entry in entries]
+    short_names = {entry["text"]: entry["short_name"] for entry in entries}
+
+    print(f"\n  Generating cluster labels with {model_id} and {vocabulary['id']}...")
     start = time.time()
-
-    # Candidate labels — broad art/visual concepts
-    candidates = [
-        # Subject matter
-        "portrait painting of a person",
-        "landscape with mountains and sky",
-        "seascape with ocean and boats",
-        "still life with flowers and fruit",
-        "religious painting with saints",
-        "mythological scene with gods",
-        "battle scene with soldiers",
-        "cityscape with buildings and streets",
-        "interior scene of a room",
-        "animals in nature",
-        "nude figure painting",
-        "group of people gathering",
-        "abstract geometric shapes",
-        "abstract expressionist painting",
-        # Style/color
-        "dark moody painting with shadows",
-        "bright colorful painting",
-        "golden warm-toned painting",
-        "cool blue and green painting",
-        "monochrome black and white artwork",
-        "pastel soft colored painting",
-        "red and orange warm painting",
-        "rich earth-toned painting",
-        # Technique/period
-        "impressionist brushstrokes painting",
-        "realistic detailed painting",
-        "medieval religious artwork",
-        "renaissance classical painting",
-        "baroque dramatic painting",
-        "modern minimalist artwork",
-        "romantic era landscape",
-        "expressionist distorted painting",
-        "surrealist dreamlike scene",
-        "art nouveau decorative design",
-        # Composition
-        "close-up face portrait",
-        "wide panoramic view",
-        "small figures in vast landscape",
-        "ornate decorative pattern",
-        "simple composition with few elements",
-        "complex busy scene with many figures",
-        "architectural drawing of a building",
-        "sketch or drawing on paper",
-    ]
-
-    # Load CLIP model + tokenizer (not processor, to avoid image processor issues)
-    model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-    tokenizer = AutoTokenizer.from_pretrained("openai/clip-vit-base-patch32")
+    model = CLIPModel.from_pretrained(model_id)
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
     model.eval()
 
-    # Encode candidate texts
     with torch.no_grad():
-        text_inputs = tokenizer(
-            candidates, return_tensors="pt", padding=True, truncation=True
-        )
+        text_inputs = tokenizer(candidates, return_tensors="pt", padding=True, truncation=True)
         text_features = model.get_text_features(**text_inputs)
-        # Handle both tensor and BaseModelOutput return types
         if hasattr(text_features, "pooler_output"):
             text_features = text_features.pooler_output
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-        text_np = text_features.numpy()
+        text_np = text_features.detach().cpu().numpy()
 
-    # Compute cluster centroids in CLIP embedding space
-    unique_clusters = sorted(set(cluster_ids))
+    if text_np.shape[1] != embeddings.shape[1]:
+        raise ValueError(
+            f"Image/text embedding dimensions differ for {model_id}: "
+            f"{embeddings.shape[1]} vs {text_np.shape[1]}"
+        )
+
     raw_labels = {}
-    for cid in unique_clusters:
+    for cid in sorted(set(cluster_ids)):
         if cid < 0:
             continue
-        mask = cluster_ids == cid
-        centroid = embeddings[mask].mean(axis=0)
-        centroid = centroid / np.linalg.norm(centroid)
-        # Cosine similarity with all candidates
-        sims = text_np @ centroid
+        centroid = embeddings[cluster_ids == cid].mean(axis=0)
+        norm = np.linalg.norm(centroid)
+        if norm == 0:
+            continue
+        sims = text_np @ (centroid / norm)
         top_idx = np.argsort(-sims)[:5]
-        raw_labels[int(cid)] = {
-            "top": [
-                {"text": candidates[i], "score": float(sims[i]), "idx": int(i)}
-                for i in top_idx
-            ],
-        }
+        raw_labels[int(cid)] = [
+            {"text": candidates[i], "score": float(sims[i])} for i in top_idx
+        ]
 
-    # Short display names for candidate labels
-    short_names = {
-        "portrait painting of a person": "Portraits",
-        "landscape with mountains and sky": "Mountain Landscapes",
-        "seascape with ocean and boats": "Seascapes",
-        "still life with flowers and fruit": "Still Life",
-        "religious painting with saints": "Religious",
-        "mythological scene with gods": "Mythological",
-        "battle scene with soldiers": "Battle Scenes",
-        "cityscape with buildings and streets": "Cityscapes",
-        "interior scene of a room": "Interiors",
-        "animals in nature": "Animals",
-        "nude figure painting": "Nudes",
-        "group of people gathering": "Group Figures",
-        "abstract geometric shapes": "Geometric Abstract",
-        "abstract expressionist painting": "Abstract Expressionist",
-        "dark moody painting with shadows": "Dark & Moody",
-        "bright colorful painting": "Bright & Colorful",
-        "golden warm-toned painting": "Warm-Toned",
-        "cool blue and green painting": "Cool-Toned",
-        "monochrome black and white artwork": "Monochrome",
-        "pastel soft colored painting": "Pastel",
-        "red and orange warm painting": "Warm Reds",
-        "rich earth-toned painting": "Earth-Toned",
-        "impressionist brushstrokes painting": "Impressionist",
-        "realistic detailed painting": "Realist",
-        "medieval religious artwork": "Medieval",
-        "renaissance classical painting": "Renaissance",
-        "baroque dramatic painting": "Baroque",
-        "modern minimalist artwork": "Minimalist",
-        "romantic era landscape": "Romantic Landscapes",
-        "expressionist distorted painting": "Expressionist",
-        "surrealist dreamlike scene": "Surrealist",
-        "art nouveau decorative design": "Art Nouveau",
-        "close-up face portrait": "Close-up Portraits",
-        "wide panoramic view": "Panoramic",
-        "small figures in vast landscape": "Vast Landscapes",
-        "ornate decorative pattern": "Decorative",
-        "simple composition with few elements": "Minimal Composition",
-        "complex busy scene with many figures": "Complex Scenes",
-        "architectural drawing of a building": "Architecture",
-        "sketch or drawing on paper": "Sketches",
-    }
-
-    # First pass: assign top label to each cluster
-    label_map = {}  # cid -> primary candidate text
-    for cid, data in raw_labels.items():
-        label_map[cid] = data["top"][0]["text"]
-
-    # Find duplicates
     from collections import Counter
 
-    label_counts = Counter(label_map.values())
-    duplicates = {label for label, count in label_counts.items() if count > 1}
-
-    # Second pass: disambiguate duplicates using the 2nd-ranked label as qualifier
+    primary_labels = {cid: values[0]["text"] for cid, values in raw_labels.items()}
+    duplicates = {
+        label for label, count in Counter(primary_labels.values()).items() if count > 1
+    }
     labels = {}
     used_labels = set()
-    for cid, data in raw_labels.items():
-        primary = data["top"][0]["text"]
-        primary_short = short_names.get(primary, primary)
-
+    for cid, ranked in raw_labels.items():
+        primary = ranked[0]["text"]
+        label = short_names.get(primary, primary)
         if primary in duplicates:
-            # Try successive qualifiers until we find a unique combined label
-            label = primary_short
-            for rank in range(1, len(data["top"])):
-                secondary = data["top"][rank]["text"]
-                if secondary != primary:
-                    qualifier = short_names.get(secondary, secondary)
-                    candidate = f"{primary_short} — {qualifier}"
-                    if candidate not in used_labels:
-                        label = candidate
-                        break
-        else:
-            label = primary_short
-
-        # Ensure final uniqueness by appending cluster ID if still duplicate
+            for candidate in ranked[1:]:
+                qualifier = short_names.get(candidate["text"], candidate["text"])
+                combined = f"{label} — {qualifier}"
+                if combined not in used_labels:
+                    label = combined
+                    break
         if label in used_labels:
             label = f"{label} #{cid}"
         used_labels.add(label)
 
-        labels[int(cid)] = {
+        margin = float(ranked[0]["score"] - ranked[1]["score"])
+        labels[cid] = {
             "label": label,
-            "top3": [{"text": t["text"], "score": t["score"]} for t in data["top"][:3]],
+            "top3": ranked[:3],
+            "scoreMargin": margin,
+            "uncertain": margin < uncertainty_threshold,
+            "uncertaintyThreshold": uncertainty_threshold,
+            "vocabularyId": vocabulary["id"],
         }
-        print(f"    Cluster {cid}: {label} ({data['top'][0]['score']:.3f})")
+        marker = " uncertain" if labels[cid]["uncertain"] else ""
+        print(f"    Cluster {cid}: {label} ({ranked[0]['score']:.3f},{marker})")
 
-    print(
-        f"  Cluster labels: {len(labels)} clusters labeled ({time.time() - start:.1f}s)"
-    )
+    print(f"  Cluster labels: {len(labels)} clusters labeled ({time.time() - start:.1f}s)")
     return labels
-
 
 def write_cluster_labels(output_dir, labels):
     """Write cluster_labels.json."""
@@ -944,6 +949,7 @@ def write_manifest(
     atlas_size=ATLAS_SIZE,
     preview_atlas_count=None,
     preview_thumb_size=64,
+    provenance=None,
 ):
     """Write manifest.json for the viewer."""
     is_hd = preview_atlas_count is not None
@@ -955,6 +961,7 @@ def write_manifest(
         "bytesPerImage": 28 if is_hd else 24,
         "version": 3 if is_hd else 2,
         "atlasFormat": "webp",
+        "provenance": provenance or {},
     }
     if is_hd:
         manifest["hasPreviewAtlases"] = True
@@ -964,6 +971,15 @@ def write_manifest(
     with open(output_path, "w") as f:
         json.dump(manifest, f, indent=2)
     print(f"  Manifest (v{'3' if is_hd else '2'}): {output_path}")
+
+
+def write_analysis_config(output_dir, config):
+    """Write the complete, machine-readable analysis provenance contract."""
+    output_path = os.path.join(output_dir, "analysis_config.json")
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, sort_keys=True)
+        f.write("\n")
+    print(f"  analysis_config.json: {output_path}")
 
 
 def write_metadata_csv(
@@ -1153,7 +1169,33 @@ def main():
     )
     parser.add_argument("--output", "-o", required=True, help="Output directory")
     parser.add_argument(
-        "--min-cluster-size", type=int, default=None, help="HDBSCAN min_cluster_size (default: auto-scales to dataset size)"
+        "--min-cluster-size", type=int, default=None,
+        help="HDBSCAN min_cluster_size (default: auto-scales to dataset size)",
+    )
+    parser.add_argument(
+        "--hdbscan-min-samples", type=int, default=5,
+        help="HDBSCAN min_samples (default: 5)",
+    )
+    parser.add_argument(
+        "--hdbscan-selection-method", choices=("leaf", "eom"), default="leaf",
+        help="HDBSCAN cluster selection method (default: leaf)",
+    )
+    parser.add_argument(
+        "--pca-dims", type=int, default=PCA_DIMS,
+        help=f"PCA dimensions before t-SNE/HDBSCAN (default: {PCA_DIMS})",
+    )
+    parser.add_argument(
+        "--clip-model", default=DEFAULT_CLIP_MODEL,
+        help=f"Hugging Face CLIP model id (default: {DEFAULT_CLIP_MODEL})",
+    )
+    parser.add_argument(
+        "--label-candidates",
+        help="Versioned JSON label vocabulary; defaults to bundled art-v1 preset",
+    )
+    parser.add_argument(
+        "--label-uncertainty-threshold", type=float,
+        default=DEFAULT_LABEL_UNCERTAINTY_THRESHOLD,
+        help="Minimum top-1/top-2 score margin for a confident cluster label (default: 0.01)",
     )
     parser.add_argument(
         "--thumb-size", type=int, default=128, help="Thumbnail size in pixels (128)"
@@ -1209,6 +1251,14 @@ def main():
              "Useful for relayout/seed-sweep workflows. Default emits a full site.",
     )
     args = parser.parse_args()
+    if args.pca_dims < 1:
+        parser.error("--pca-dims must be at least 1")
+    if args.hdbscan_min_samples < 1:
+        parser.error("--hdbscan-min-samples must be at least 1")
+    if args.min_cluster_size is not None and args.min_cluster_size < 2:
+        parser.error("--min-cluster-size must be at least 2")
+    if args.label_uncertainty_threshold < 0:
+        parser.error("--label-uncertainty-threshold cannot be negative")
     # Allow `imagespace -i imgs -o out` or `imagespace imgs -o out` (positional).
     input_path = args.input if args.input else args.input_pos
     if not input_path:
@@ -1254,6 +1304,7 @@ def main():
         print("  No images found!")
         sys.exit(1)
     print(f"  Found {len(images)} images")
+    input_fingerprint = corpus_fingerprint(images, input_dir)
 
     # Stage 2
     if args.relayout:
@@ -1323,17 +1374,54 @@ def main():
     # default runs never persist embeddings to disk (keeps output lean).
     if cache_dir is not None:
         emb_cache = os.path.join(str(cache_dir), "embeddings.npy")
+        emb_meta_path = os.path.join(str(cache_dir), "embeddings.json")
     else:
         emb_cache = None
-    if emb_cache and os.path.exists(emb_cache) and (args.relayout or args.cache_dir):
+        emb_meta_path = None
+    if emb_cache and os.path.exists(emb_cache):
+        embedding_meta = {}
+        if os.path.exists(emb_meta_path):
+            with open(emb_meta_path, encoding="utf-8") as f:
+                embedding_meta = json.load(f)
+        cached_model = embedding_meta.get("modelId", DEFAULT_CLIP_MODEL)
+        cached_fingerprint = embedding_meta.get("corpusFingerprint")
+        if cached_model != args.clip_model:
+            raise RuntimeError(
+                f"Embedding cache uses {cached_model}, but --clip-model requests "
+                f"{args.clip_model}. Use a different --cache-dir."
+            )
+        if cached_fingerprint and cached_fingerprint != input_fingerprint:
+            raise RuntimeError(
+                "Embedding cache belongs to a different input corpus. "
+                "Use a separate --cache-dir or remove the stale cache."
+            )
         print(f"\n[3/8] Loading cached embeddings from {emb_cache}...")
         embeddings = np.load(emb_cache)
+        if embeddings.shape[0] != len(images):
+            raise RuntimeError(
+                f"Embedding cache has {embeddings.shape[0]} rows for {len(images)} images. "
+                "Use a separate --cache-dir or remove the stale cache."
+            )
+        embedding_backend = embedding_meta.get("backend", "unknown-cached")
         print(f"  Loaded {embeddings.shape[0]} × {embeddings.shape[1]} embeddings")
     else:
         print(f"\n[3/8] Extracting embeddings (auto-detecting hardware)...")
-        embeddings = extract_embeddings(images)
+        embeddings, embedding_backend = extract_embeddings(images, args.clip_model)
         if emb_cache:
             np.save(emb_cache, embeddings)
+            with open(emb_meta_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "modelId": args.clip_model,
+                        "backend": embedding_backend,
+                        "count": len(images),
+                        "dimensions": int(embeddings.shape[1]),
+                        "corpusFingerprint": input_fingerprint,
+                    },
+                    f,
+                    indent=2,
+                )
+                f.write("\n")
             print(f"  Cached embeddings to {emb_cache}")
     
     # Stage 4
@@ -1342,14 +1430,22 @@ def main():
     if mcs is None:
         mcs = max(10, min(50, len(images) // 200))
         print(f"  Auto min_cluster_size={mcs} for {len(images)} images")
-    tsne_coords, raw_tsne_coords, cluster_ids, embeddings_pca, cluster_probs = (
-        reduce_dimensions(
-            embeddings,
-            mcs,
-            args.tsne_perplexity,
-            args.thumb_size,
-            args.seed,
-        )
+    (
+        tsne_coords,
+        raw_tsne_coords,
+        cluster_ids,
+        embeddings_pca,
+        cluster_probs,
+        analysis,
+    ) = reduce_dimensions(
+        embeddings,
+        mcs,
+        args.tsne_perplexity,
+        args.thumb_size,
+        args.seed,
+        args.pca_dims,
+        args.hdbscan_min_samples,
+        args.hdbscan_selection_method,
     )
 
     # Stage 4b: k-NN
@@ -1360,7 +1456,14 @@ def main():
 
     # Stage 4c: CLIP cluster labels
     print(f"\n[6/9] CLIP cluster labels...")
-    cluster_labels = generate_cluster_labels(embeddings, cluster_ids)
+    label_vocabulary = load_label_vocabulary(args.label_candidates)
+    cluster_labels = generate_cluster_labels(
+        embeddings,
+        cluster_ids,
+        model_id=args.clip_model,
+        vocabulary=label_vocabulary,
+        uncertainty_threshold=args.label_uncertainty_threshold,
+    )
     cluster_labels_path = data_dir / "cluster_labels.json"
     if cluster_labels:
         write_cluster_labels(str(data_dir), cluster_labels)
@@ -1407,6 +1510,29 @@ def main():
         cluster_ids,
         preview_atlas_data,
     )
+    analysis_config = {
+        "schemaVersion": 1,
+        "software": {"name": "ImageSpace", "version": SOFTWARE_VERSION},
+        "corpus": {
+            "imageCount": len(images),
+            "fingerprint": input_fingerprint,
+        },
+        "embedding": {
+            "modelId": args.clip_model,
+            "backend": embedding_backend,
+            "dimensions": int(embeddings.shape[1]),
+        },
+        **analysis,
+        "labels": {
+            "modelId": args.clip_model,
+            "vocabularyId": label_vocabulary["id"],
+            "vocabularyVersion": label_vocabulary["version"],
+            "candidateCount": len(label_vocabulary["candidates"]),
+            "uncertaintyThreshold": args.label_uncertainty_threshold,
+            "topCandidatesStored": 3,
+        },
+    }
+    write_analysis_config(str(data_dir), analysis_config)
     write_manifest(
         str(data_dir),
         len(images),
@@ -1415,6 +1541,7 @@ def main():
         args.atlas_size,
         preview_atlas_count=preview_atlas_count,
         preview_thumb_size=64,
+        provenance=analysis_config,
     )
     # Normalize cluster confidence to 0-100 scale
     cluster_confidence = (

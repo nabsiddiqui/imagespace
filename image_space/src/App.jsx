@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Database, X, Grid, Magnet, Eye, EyeOff,
   ZoomIn, ZoomOut, Maximize2,
-  Palette, Info,
+  Palette, Info, BookOpen,
   ChevronLeft, ChevronRight, Filter, ChevronDown,
   Clock, SlidersHorizontal
 } from 'lucide-react';
@@ -107,7 +107,7 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE, nois
       if (p.sprite) p.sprite.zIndex = 0;
     }
   }
-  // If visibleSet provided, only layout those points; hide others (or dim in umap)
+  // If visibleSet is provided, only lay out those points and hide the rest.
   const hasFilter = visibleSet && visibleSet.size < allPoints.length;
   const isStableLayout = mode === 'tsne' || mode === 'snap';
   // In stable-layout modes show ALL points in their positions, just dim non-visible
@@ -366,6 +366,8 @@ export default function App() {
   const [showHotspots, setShowHotspots] = useState(true);
   const [activeHotspot, setActiveHotspot] = useState(null);
   const [showStats, setShowStats] = useState(false);
+  const [showMethods, setShowMethods] = useState(false);
+  const [analysisConfig, setAnalysisConfig] = useState(null);
   const [tooltip, setTooltip] = useState(null);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const clipLabelsRef = useRef(null); // CLIP-generated cluster labels from cluster_labels.json
@@ -681,6 +683,14 @@ export default function App() {
         atlasFormatRef.current = manifest.atlasFormat || 'jpg';
         atlasSizeRef.current = manifest.atlasSize || ATLAS_SIZE;
         thumbSizeRef.current = manifest.thumbSize || THUMB_SIZE;
+
+        try {
+          const configRes = await fetch(`${BASE}data/analysis_config.json`);
+          if (configRes.ok) setAnalysisConfig(await configRes.json());
+          else if (manifest.provenance) setAnalysisConfig(manifest.provenance);
+        } catch (_) {
+          if (manifest.provenance) setAnalysisConfig(manifest.provenance);
+        }
 
         setStatusMsg('Streaming binary layout...');
         const dRes = await fetch(`${BASE}data/data.bin`);
@@ -1686,6 +1696,14 @@ export default function App() {
               ))}
               <div className="w-px h-4 bg-rp-hlHigh mx-0.5" />
               <button
+                onClick={() => setShowMethods(true)}
+                className="p-1.5 rounded-md text-rp-subtle hover:bg-rp-hlLow hover:text-rp-text transition-all"
+                title="Methods and provenance"
+                aria-label="Methods and provenance"
+              >
+                <BookOpen size={14} />
+              </button>
+              <button
                 onClick={() => setShowStats(true)}
                 className="p-1.5 rounded-md text-rp-subtle hover:bg-rp-hlLow hover:text-rp-text transition-all"
                 title="Collection info"
@@ -2145,7 +2163,9 @@ export default function App() {
             const cluster = meta?.cluster;
             const clusterLabel = String(cluster) === '-1'
               ? 'Noise'
-              : clipLabelsRef.current?.[cluster]?.label;
+              : (cluster !== undefined && cluster !== null && cluster !== '')
+                ? clipLabelsRef.current?.[cluster]?.label || `Cluster ${Number(cluster) + 1}`
+                : null;
             return (
               <>
                 {title && <p className="text-xs font-bold text-rp-text leading-snug">{title}</p>}
@@ -2155,6 +2175,74 @@ export default function App() {
               </>
             );
           })()}
+        </div>
+      )}
+
+      {/* ── Methods / provenance modal ───────── */}
+      {showMethods && (
+        <div className="absolute inset-0 z-[200] bg-black/30 flex items-center justify-center p-4 md:p-8" onClick={() => setShowMethods(false)}>
+          <div className="bg-rp-surface rounded-2xl border border-rp-hlMed shadow-rp-lg max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 md:p-8" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-rp-pine text-white p-2 rounded-lg"><BookOpen size={18} /></div>
+                <div>
+                  <h2 className="text-xl font-extrabold text-rp-text">Methods &amp; Provenance</h2>
+                  <p className="text-xs text-rp-muted">Parameters recorded for this analysis</p>
+                </div>
+              </div>
+              <button onClick={() => setShowMethods(false)} aria-label="Close methods panel" className="p-1.5 rounded-lg border border-rp-hlHigh hover:bg-rp-love hover:text-white transition-all text-rp-muted">
+                <X size={16} />
+              </button>
+            </div>
+            {analysisConfig ? (
+              <div className="space-y-5 text-sm">
+                {[
+                  ['Embedding model', analysisConfig.embedding?.modelId],
+                  ['Embedding backend', analysisConfig.embedding?.backend],
+                  ['PCA dimensions', analysisConfig.pca?.dimensions],
+                  ['PCA explained variance', analysisConfig.pca?.explainedVariance != null ? `${(analysisConfig.pca.explainedVariance * 100).toFixed(1)}%` : null],
+                  ['t-SNE perplexity', analysisConfig.tsne?.perplexity],
+                  ['Random seed', analysisConfig.tsne?.seed ?? 'None'],
+                  ['HDBSCAN min. cluster size', analysisConfig.hdbscan?.minClusterSize],
+                  ['HDBSCAN min. samples', analysisConfig.hdbscan?.minSamples],
+                  ['HDBSCAN selection', analysisConfig.hdbscan?.selectionMethod],
+                  ['Noise policy', analysisConfig.hdbscan?.noisePolicy === 'preserve-unassigned' ? 'Preserved as unassigned' : analysisConfig.hdbscan?.noisePolicy],
+                  ['Label vocabulary', analysisConfig.labels?.vocabularyId],
+                  ['Label uncertainty margin', analysisConfig.labels?.uncertaintyThreshold],
+                ].filter(([, value]) => value !== undefined && value !== null).map(([key, value]) => (
+                  <div key={key} className="flex justify-between gap-6 border-b border-rp-hlMed/50 pb-2">
+                    <span className="text-rp-muted">{key}</span>
+                    <span className="font-semibold text-rp-text text-right break-all">{String(value)}</span>
+                  </div>
+                ))}
+                {clipLabelsRef.current && Object.keys(clipLabelsRef.current).length > 0 && (
+                  <div>
+                    <h3 className="font-bold text-rp-text mb-2">Cluster label evidence</h3>
+                    <div className="space-y-2">
+                      {Object.entries(clipLabelsRef.current).map(([clusterId, data]) => (
+                        <details key={clusterId} className="rounded-lg border border-rp-hlMed px-3 py-2">
+                          <summary className="cursor-pointer text-xs font-semibold text-rp-text">
+                            Cluster {Number(clusterId) + 1}: {data.label}
+                            {data.uncertain && <span className="ml-2 text-rp-gold">Uncertain</span>}
+                          </summary>
+                          <ol className="mt-2 space-y-1 text-[11px] text-rp-muted">
+                            {(data.top3 || []).map((candidate, index) => (
+                              <li key={`${candidate.text}-${index}`} className="flex justify-between gap-3">
+                                <span>{index + 1}. {candidate.text}</span>
+                                <span className="font-mono tabular-nums">{Number(candidate.score).toFixed(3)}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        </details>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-rp-muted">No analysis provenance was supplied with this collection.</p>
+            )}
+          </div>
         </div>
       )}
 

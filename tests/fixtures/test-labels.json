@@ -1,0 +1,10 @@
+{
+  "id": "imagespace-test-labels-v1",
+  "version": 1,
+  "candidates": [
+    {"text": "portrait painting of a person", "short_name": "Portraits"},
+    {"text": "landscape with mountains and sky", "short_name": "Landscapes"},
+    {"text": "abstract geometric shapes", "short_name": "Abstract"},
+    {"text": "still life with flowers and fruit", "short_name": "Still Life"}
+  ]
+}
