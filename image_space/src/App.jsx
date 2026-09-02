@@ -1055,7 +1055,6 @@ export default function App() {
             const lines = csvText.trim().split('\n');
             if (lines.length > 1) {
               const columns = parseCSVLine(lines[0]);
-              const idCol = columns.indexOf('id');
               const catCols = columns.filter(c => c !== 'id');
               const rows = [];
               for (let i = 1; i < lines.length; i++) {

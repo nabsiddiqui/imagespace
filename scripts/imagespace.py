@@ -229,6 +229,25 @@ def generate_preview_atlases(
 
 
 # ── Stage 3: Embedding Extraction ────────────────────────────
+def _load_rgb_batch(paths):
+    """Open a batch of images as RGB, substituting a gray placeholder on failure."""
+    batch = []
+    for path in paths:
+        try:
+            batch.append(Image.open(path).convert("RGB"))
+        except Exception:
+            batch.append(Image.new("RGB", (CLIP_IMAGE_SIZE, CLIP_IMAGE_SIZE), (128, 128, 128)))
+    return batch
+
+
+def _print_rate(label, done, total, start):
+    """Print an in-place progress line with throughput and ETA (stdout only)."""
+    elapsed = time.time() - start
+    rate = done / elapsed if elapsed > 0 else 0
+    eta = (total - done) / rate if rate > 0 else 0
+    print(f"  {label} {done}/{total} ({rate:.1f} img/s, ETA {eta:.0f}s)", end="\r")
+
+
 def extract_embeddings(images, model_id=DEFAULT_CLIP_MODEL):
     """Extract CLIP embeddings and return ``(embeddings, backend)``.
 
@@ -330,15 +349,7 @@ def _extract_clip_onnx(images):
 
     for batch_start in range(0, len(images), BATCH_SIZE):
         batch_end = min(batch_start + BATCH_SIZE, len(images))
-        batch_images = []
-        for img_path in images[batch_start:batch_end]:
-            try:
-                img = Image.open(img_path).convert("RGB")
-            except Exception:
-                img = Image.new(
-                    "RGB", (CLIP_IMAGE_SIZE, CLIP_IMAGE_SIZE), (128, 128, 128)
-                )
-            batch_images.append(img)
+        batch_images = _load_rgb_batch(images[batch_start:batch_end])
 
         pixel_values = _preprocess_clip_batch(batch_images)
         outputs = session.run(None, {input_name: pixel_values})[0]
@@ -355,13 +366,7 @@ def _extract_clip_onnx(images):
                 out_normalized
             )
 
-        elapsed = time.time() - start
-        rate = batch_end / elapsed if elapsed > 0 else 0
-        eta = (len(images) - batch_end) / rate if rate > 0 else 0
-        print(
-            f"  Embedding {batch_end}/{len(images)} ({rate:.1f} img/s, ETA {eta:.0f}s)",
-            end="\r",
-        )
+        _print_rate("Embedding", batch_end, len(images), start)
 
     print(f"\n  CLIP ONNX embeddings: {time.time() - start:.1f}s")
     return embeddings
@@ -393,15 +398,7 @@ def _extract_clip_torch(images, model_id=DEFAULT_CLIP_MODEL):
 
     for batch_start in range(0, len(images), BATCH_SIZE):
         batch_end = min(batch_start + BATCH_SIZE, len(images))
-        batch_images = []
-        for img_path in images[batch_start:batch_end]:
-            try:
-                img = Image.open(img_path).convert("RGB")
-            except Exception:
-                img = Image.new(
-                    "RGB", (CLIP_IMAGE_SIZE, CLIP_IMAGE_SIZE), (128, 128, 128)
-                )
-            batch_images.append(img)
+        batch_images = _load_rgb_batch(images[batch_start:batch_end])
 
         inputs = processor(images=batch_images, return_tensors="pt", padding=True)
         inputs = {k: v.to(device) for k, v in inputs.items()}
@@ -415,13 +412,7 @@ def _extract_clip_torch(images, model_id=DEFAULT_CLIP_MODEL):
             outputs = outputs / outputs.norm(dim=-1, keepdim=True)
             embeddings[batch_start:batch_end] = outputs.cpu().numpy()
 
-        elapsed = time.time() - start
-        rate = batch_end / elapsed if elapsed > 0 else 0
-        eta = (len(images) - batch_end) / rate if rate > 0 else 0
-        print(
-            f"  Embedding {batch_end}/{len(images)} ({rate:.1f} img/s, ETA {eta:.0f}s)",
-            end="\r",
-        )
+        _print_rate("Embedding", batch_end, len(images), start)
 
     print(f"\n  CLIP PyTorch embeddings: {time.time() - start:.1f}s")
     return embeddings
@@ -776,8 +767,6 @@ def generate_cluster_labels(
 
 def write_cluster_labels(output_dir, labels):
     """Write cluster_labels.json."""
-    import json
-
     path = os.path.join(output_dir, "cluster_labels.json")
     with open(path, "w") as f:
         json.dump(labels, f, indent=2)
@@ -847,32 +836,25 @@ def compute_image_features(images, thumb_size=32):
         if idx > 0 and idx % 5000 == 0:
             print(f"    Features: {idx}/{n} ({idx / n * 100:.0f}%)")
 
-    # Normalize to 0-100 scale
-    def norm100(arr):
-        mn, mx = arr.min(), arr.max()
-        if mx > mn:
-            return ((arr - mn) / (mx - mn) * 100).round(1)
-        return np.zeros_like(arr)
-
-    brightness = norm100(brightness)
-    complexity = norm100(complexity)
-    edge_density = norm100(edge_density)
-
     print(f"  Features computed in {time.time() - start:.1f}s")
     return {
-        "brightness": brightness,
-        "complexity": complexity,
-        "edge_density": edge_density,
+        "brightness": _normalize_0_100(brightness),
+        "complexity": _normalize_0_100(complexity),
+        "edge_density": _normalize_0_100(edge_density),
     }
+
+
+def _normalize_0_100(values):
+    """Min-max scale an array to the 0-100 range, rounded to one decimal."""
+    mn, mx = values.min(), values.max()
+    if mx > mn:
+        return ((values - mn) / (mx - mn) * 100).round(1)
+    return np.zeros_like(values)
 
 
 def compute_outlier_scores(knn_distances):
     """Compute outlier score from mean k-NN distance, normalized to 0-100."""
-    mean_dist = knn_distances.mean(axis=1)
-    mn, mx = mean_dist.min(), mean_dist.max()
-    if mx > mn:
-        return ((mean_dist - mn) / (mx - mn) * 100).round(1)
-    return np.zeros(len(mean_dist), dtype=np.float32)
+    return _normalize_0_100(knn_distances.mean(axis=1))
 
 
 # ── Stage 6: Extract Timestamps ──────────────────────────────
@@ -1271,13 +1253,9 @@ def main():
         print(f"Error: {input_dir} is not a directory")
         sys.exit(1)
 
-    # --hd requires 128px thumbnails; --no-hd falls back to the 64px default.
+    # --hd requires 128px thumbnails; --no-hd keeps the caller's thumb size.
     if args.hd:
         args.thumb_size = 128
-    elif args.thumb_size == 128:
-        # If someone explicitly wants --no-hd at 128px, honor it; otherwise leave
-        # the 64px default intact.
-        pass
 
     os.makedirs(output_dir, exist_ok=True)
     # Pipeline-generated viewer data lives in <out>/data/ so the output dir is a
