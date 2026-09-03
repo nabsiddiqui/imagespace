@@ -98,7 +98,7 @@ def validate_output(
     config = load_json(data / "analysis_config.json")
     manifest = load_json(data / "manifest.json")
     check(config["schemaVersion"] == 1, "provenance schema version is 1")
-    check(config["software"]["version"] == "1.2.0", "provenance software version is current")
+    check(config["software"]["version"] == "1.3.0", "provenance software version is current")
     check(config["corpus"]["imageCount"] == expected_count, "provenance image count matches fixture")
     check(len(config["corpus"]["fingerprint"]) == 64, "corpus fingerprint is recorded")
     check(config["embedding"]["modelId"] == "openai/clip-vit-base-patch32", "CLIP model id is recorded")
