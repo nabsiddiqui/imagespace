@@ -118,6 +118,7 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE, nois
   // Hide mode always removes raw HDBSCAN noise, even when no other filter is active.
   if (hasFilter) {
     for (const p of allPoints) {
+      applyNoiseFilter(p.sprite, isNoisePoint(p), noiseDisplay);
       if (noiseDisplay === 'hide' && isNoisePoint(p)) {
         p.sprite.alpha = 0;
       } else if (visibleSet.has(p.id)) {
@@ -135,6 +136,7 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE, nois
     }
   } else {
     for (const p of allPoints) {
+      applyNoiseFilter(p.sprite, isNoisePoint(p), noiseDisplay);
       p.sprite.alpha = noiseDisplay === 'hide' && isNoisePoint(p) ? 0 : 1;
       p.sprite.tint = pointTint(p, noiseDisplay);
     }
@@ -247,7 +249,23 @@ const NOISE_CLUSTER_ID = 65535;
 const NOISE_COLOR = '#9893a5';
 const NOISE_TINT = 0x9893a5;
 const isNoisePoint = (point) => point.cluster === NOISE_CLUSTER_ID;
-const pointTint = (point) => isNoisePoint(point) ? NOISE_TINT : 0xffffff;
+// Shared greyscale ColorMatrixFilter, assigned once PIXI loads (see PixiJS boot).
+// Reused across every noise sprite so shown-noise renders true black-and-white
+// against the full-color clustered images.
+let noiseGreyFilter = null;
+// When the greyscale filter is available, noise uses a clean white tint and the
+// filter supplies the desaturation. Before it loads, fall back to a grey multiply.
+const pointTint = (point) => {
+  if (!isNoisePoint(point)) return 0xffffff;
+  return noiseGreyFilter ? 0xffffff : NOISE_TINT;
+};
+// Toggle the greyscale filter on a sprite based on its noise state + display policy.
+const applyNoiseFilter = (sprite, isNoise, noiseDisplay) => {
+  const shouldGrey = !!(isNoise && noiseDisplay !== 'hide' && noiseGreyFilter);
+  const hasGrey = !!(sprite.filters && sprite.filters.length);
+  if (shouldGrey === hasGrey) return;
+  sprite.filters = shouldGrey ? [noiseGreyFilter] : null;
+};
 
 /* ── Clusters ──────────────────────── */
 function computeClusters(points, noiseDisplay = 'show') {
@@ -381,8 +399,8 @@ export default function App() {
   const [csvFilters, setCsvFilters] = useState({});  // { columnName: selectedValue | null }
   const [rangeFilters, setRangeFilters] = useState({}); // { columnName: [min, max] } for continuous columns
   const [showRangePanel, setShowRangePanel] = useState(false); // toggle range slider panel
-  const [noiseDisplay, setNoiseDisplay] = useState('show'); // 'show' | 'hide'
-  const noiseDisplayRef = useRef('show');
+  const [noiseDisplay, setNoiseDisplay] = useState('hide'); // 'show' | 'hide'
+  const noiseDisplayRef = useRef('hide');
   const [noiseSupport, setNoiseSupport] = useState({ hasNoise: false, rawCount: 0 });
   const [openFilter, setOpenFilter] = useState(null); // which dropdown is open
   const [filterSearch, setFilterSearch] = useState(''); // search text within open filter dropdown
@@ -647,6 +665,27 @@ export default function App() {
         pixiRef = PIXI;
         if (isCancelled) return;
 
+        // Build the shared noise filter now that PIXI is available. Noise sprites
+        // reference this single instance. Instead of a plain desaturate (which
+        // leaves already black-and-white source images looking normal), map
+        // luminance onto a dark-indigo -> light-iris ramp. This renders noise as a
+        // uniform single-hue monochrome that stays distinct from full-color
+        // clustered images AND from neutral B&W source images.
+        if (!noiseGreyFilter) {
+          noiseGreyFilter = new PIXI.ColorMatrixFilter();
+          const lr = 0.299, lg = 0.587, lb = 0.114; // luminance weights
+          const lo = [0.165, 0.153, 0.247];          // shadow tone (dark indigo)
+          const hi = [0.769, 0.655, 0.906];          // highlight tone (light iris)
+          const d = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+          // Row-major 4x5 ColorMatrix: each output channel = luminance*ramp + shadow.
+          noiseGreyFilter.matrix = [
+            lr * d[0], lg * d[0], lb * d[0], 0, lo[0],
+            lr * d[1], lg * d[1], lb * d[1], 0, lo[1],
+            lr * d[2], lg * d[2], lb * d[2], 0, lo[2],
+            0, 0, 0, 1, 0,
+          ];
+        }
+
         setStatusMsg('Initialising renderer...');
         app = new PIXI.Application();
         await app.init({
@@ -787,8 +826,10 @@ export default function App() {
           }
         }
 
-        /* Compute hotspots and raw noise count early from binary point data. */
-        const clusters = computeClusters(allPointData);
+        /* Compute hotspots and raw noise count early from binary point data.
+           Respect the current noise-display policy so a hidden-by-default noise
+           group does not appear in the Hotspots sidebar on first load. */
+        const clusters = computeClusters(allPointData, noiseDisplayRef.current);
         const rawNoiseCount = allPointData.reduce((count, point) => count + (isNoisePoint(point) ? 1 : 0), 0);
         setNoiseSupport({ hasNoise: rawNoiseCount > 0, rawCount: rawNoiseCount });
 
@@ -888,7 +929,14 @@ export default function App() {
             const initY = pd.tsneY ?? pd.y;
             sprite.position.set(initX, initY);
             sprite.eventMode = 'none';
-            sprite.tint = pd.cluster === NOISE_CLUSTER_ID ? NOISE_TINT : 0xffffff;
+            const spriteIsNoise = pd.cluster === NOISE_CLUSTER_ID;
+            sprite.tint = spriteIsNoise ? (noiseGreyFilter ? 0xffffff : NOISE_TINT) : 0xffffff;
+            // Apply the current noise-display policy at creation so the default
+            // (hide) takes effect on first paint, before any relayout runs.
+            if (noiseDisplayRef.current === 'hide' && spriteIsNoise) {
+              sprite.alpha = 0;
+            }
+            applyNoiseFilter(sprite, spriteIsNoise, noiseDisplayRef.current);
             if (usePreview) {
               sprite.width = currentThumbSize;
               sprite.height = currentThumbSize;
@@ -1225,6 +1273,7 @@ export default function App() {
                   if (vs && !vs.has(p.id)) continue;
                   const ts = p.timestamp ?? 0;
                   if (ts >= loTs && ts <= hiTs) {
+                    applyNoiseFilter(p.sprite, isNoisePoint(p), noiseDisplayRef.current);
                     p.sprite.alpha = noiseDisplayRef.current === 'hide' && isNoisePoint(p) ? 0 : 1;
                     p.sprite.tint = pointTint(p, noiseDisplayRef.current);
                   } else {
@@ -1237,6 +1286,7 @@ export default function App() {
                 const vs = visibleSetRef.current;
                 for (const p of pointsRef.current) {
                   if (vs && !vs.has(p.id)) continue;
+                  applyNoiseFilter(p.sprite, isNoisePoint(p), noiseDisplayRef.current);
                   p.sprite.alpha = noiseDisplayRef.current === 'hide' && isNoisePoint(p) ? 0 : 1;
                   p.sprite.tint = pointTint(p, noiseDisplayRef.current);
                 }

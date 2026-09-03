@@ -69,7 +69,7 @@ CLIP_STD = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
 TSNE_PERPLEXITY = 30  # openTSNE perplexity
 BATCH_SIZE = 64  # Embedding batch size (larger = faster with ONNX)
 PCA_DIMS = 50  # PCA reduction before t-SNE
-SOFTWARE_VERSION = "1.2.0"
+SOFTWARE_VERSION = "1.3.0"
 DEFAULT_CLIP_MODEL = "openai/clip-vit-base-patch32"
 DEFAULT_LABEL_PRESET = "art-v1"
 DEFAULT_LABEL_UNCERTAINTY_THRESHOLD = 0.01

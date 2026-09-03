@@ -33,6 +33,7 @@ Open http://localhost:5174. The generated site does not require Python, Node, a 
 - Lets you switch between scatter, grid, color-sorted, and timeline views
 - Filters by any metadata column (dropdowns) or computed feature (brightness, complexity, etc.)
 - Shows similar images and full metadata in a slide-in detail panel
+- Preserves HDBSCAN noise as unassigned and hides it by default, with a one-click toggle to reveal it in a distinct duotone tint
 - Renders 50,000 images at ~30 FPS in a browser via PixiJS WebGL
 
 ### Process your own images
@@ -163,6 +164,10 @@ imagespace -i /path/to/images/ \
 ## Methods and provenance
 
 Every run writes `data/analysis_config.json` and repeats that provenance inside `manifest.json`. The record includes the exact CLIP checkpoint and backend, PCA dimensions and explained variance, effective t-SNE settings, seed, HDBSCAN parameters and preserved-noise policy, and label-vocabulary version. The viewer's book icon opens the same record. Cluster label evidence in `cluster_labels.json` and the panel includes the top three candidate scores, score margin, and uncertainty decision.
+
+### Noise handling in the viewer
+
+ImageSpace never reassigns HDBSCAN noise to a nearby cluster; points HDBSCAN leaves unassigned (`cluster = -1`) stay unassigned in the data. In the viewer that noise is **hidden by default** so the clustered structure reads clearly, and it is omitted from the Hotspots sidebar until revealed. The `Noise` control (beside `Properties`) toggles it on. When shown, noise images render in a distinct indigo duotone rather than their natural colors, so they stay visually separable from the full-color clustered images even when a source image is itself black and white. Toggling `Show` returns the `Noise` group to the sidebar for filtering and inspection.
 
 A custom vocabulary is a JSON object with an `id`, `version`, and at least three candidates:
 
