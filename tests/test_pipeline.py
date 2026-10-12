@@ -1,6 +1,6 @@
 """Network-free unit tests for the ImageSpace numeric pipeline.
 
-These exercise the dependency-sensitive core (PCA, t-SNE, HDBSCAN, k-NN, image
+These exercise the dependency-sensitive core (UMAP, HDBSCAN, k-NN, image
 features, binary/CSV writers) without downloading models or building the
 frontend, so they can run fast across a matrix of Python and dependency
 versions. The heavy end-to-end contract lives in tests/run_checks.py.
@@ -14,36 +14,44 @@ import numpy as np
 
 # ── Dimensionality reduction + clustering ────────────────────
 def test_reduce_dimensions_shapes_and_provenance(ispace, embeddings):
-    coords, raw, clusters, pca, probs, analysis = ispace.reduce_dimensions(
-        embeddings, min_cluster_size=5, perplexity=8, seed=42,
-        pca_dims=20, hdbscan_min_samples=2, hdbscan_selection_method="leaf",
+    coords, raw, clusters, space, probs, analysis = ispace.reduce_dimensions(
+        embeddings, min_cluster_size=5, layout_neighbors=8, seed=42,
+        cluster_dims=5, hdbscan_min_samples=2, hdbscan_selection_method="leaf",
     )
     n = len(embeddings)
     assert coords.shape == (n, 2) and coords.dtype == np.float32
     assert raw.shape == (n, 2)
     assert clusters.shape == (n,) and clusters.dtype == np.int32
-    assert pca.shape == (n, 20)
+    assert space.shape == (n, 5)
     assert probs.shape == (n,)
-    assert 0.0 < analysis["pca"]["explainedVariance"] <= 1.0
-    assert analysis["pca"]["dimensions"] == 20
-    assert analysis["tsne"]["seed"] == 42
+    assert analysis["layout"]["method"] == "umap"
+    assert analysis["layout"]["metric"] == "cosine"
+    assert analysis["layout"]["nNeighbors"] == 8
+    assert analysis["layout"]["seed"] == 42
+    assert analysis["clusterSpace"]["dimensions"] == 5
+    assert analysis["clusterSpace"]["minDist"] == 0.0
+    assert "pca" not in analysis and "tsne" not in analysis
     assert analysis["hdbscan"]["minSamples"] == 2
     assert analysis["hdbscan"]["selectionMethod"] == "leaf"
     assert analysis["hdbscan"]["noisePolicy"] == "preserve-unassigned"
 
 
-def test_pca_dims_clamped_to_available(ispace, embeddings):
-    # Requesting more dims than n-1 must clamp, not crash.
-    _, _, _, pca, _, analysis = ispace.reduce_dimensions(
-        embeddings, min_cluster_size=5, perplexity=8, seed=1, pca_dims=999,
+def test_umap_settings_clamped_to_available(ispace, embeddings):
+    # Requesting more neighbors/dims than the corpus allows must clamp, not crash.
+    _, _, _, space, _, analysis = ispace.reduce_dimensions(
+        embeddings, min_cluster_size=5, layout_neighbors=999, seed=1,
+        cluster_dims=999, cluster_neighbors=999,
     )
-    assert pca.shape[1] == analysis["pca"]["dimensions"] <= len(embeddings) - 1
-    assert analysis["pca"]["requestedDimensions"] == 999
+    n = len(embeddings)
+    assert space.shape[1] == analysis["clusterSpace"]["dimensions"] <= n - 2
+    assert analysis["clusterSpace"]["requestedDimensions"] == 999
+    assert analysis["layout"]["nNeighbors"] <= n - 1
+    assert analysis["layout"]["requestedNNeighbors"] == 999
 
 
 def test_layout_is_deterministic_under_fixed_seed(ispace, embeddings):
-    a = ispace.reduce_dimensions(embeddings, min_cluster_size=5, perplexity=8, seed=7)
-    b = ispace.reduce_dimensions(embeddings, min_cluster_size=5, perplexity=8, seed=7)
+    a = ispace.reduce_dimensions(embeddings, min_cluster_size=5, layout_neighbors=8, seed=7)
+    b = ispace.reduce_dimensions(embeddings, min_cluster_size=5, layout_neighbors=8, seed=7)
     assert np.array_equal(a[0], b[0])  # snapped coords
     assert np.array_equal(a[2], b[2])  # cluster ids
 
@@ -51,7 +59,7 @@ def test_layout_is_deterministic_under_fixed_seed(ispace, embeddings):
 def test_noise_is_preserved_as_negative_one(ispace, embeddings):
     # Tiny clusters + strict min_samples should leave some points unassigned.
     _, _, clusters, _, probs, analysis = ispace.reduce_dimensions(
-        embeddings, min_cluster_size=5, perplexity=8, seed=42,
+        embeddings, min_cluster_size=5, layout_neighbors=8, seed=42,
         hdbscan_min_samples=4, hdbscan_selection_method="leaf",
     )
     noise = clusters == -1
@@ -69,6 +77,16 @@ def test_compute_knn_excludes_self(ispace, embeddings):
     for i in range(n):
         assert i not in idx[i]           # self removed
     assert np.all(np.diff(dist, axis=1) >= -1e-6)  # sorted ascending
+
+
+def test_compute_knn_uses_cosine_distance(ispace, embeddings):
+    # Cosine distance is invariant to vector length; Euclidean is not.
+    idx_a, dist_a = ispace.compute_knn(embeddings, k=5)
+    scaled = embeddings * np.linspace(0.5, 3.0, len(embeddings))[:, None]
+    idx_b, dist_b = ispace.compute_knn(scaled.astype(np.float32), k=5)
+    assert np.array_equal(idx_a, idx_b)
+    assert np.allclose(dist_a, dist_b, atol=1e-5)
+    assert np.all(dist_a >= -1e-6) and np.all(dist_a <= 2.0 + 1e-6)
 
 
 def test_outlier_scores_normalized_0_100(ispace, embeddings):

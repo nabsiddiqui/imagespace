@@ -93,7 +93,7 @@ const LoadPill = ({ progress, msg }) => (
 );
 
 const VIEW_MODES = {
-  tsne: { label: 't-SNE', icon: 'scatter' },
+  tsne: { label: 'UMAP', icon: 'scatter' },
   snap: { label: 'Snap', icon: 'magnet' },
   grid: { label: 'Grid', icon: 'grid' },
   color: { label: 'Color', icon: 'palette' },
@@ -2248,10 +2248,14 @@ export default function App() {
                 {[
                   ['Embedding model', analysisConfig.embedding?.modelId],
                   ['Embedding backend', analysisConfig.embedding?.backend],
-                  ['PCA dimensions', analysisConfig.pca?.dimensions],
-                  ['PCA explained variance', analysisConfig.pca?.explainedVariance != null ? `${(analysisConfig.pca.explainedVariance * 100).toFixed(1)}%` : null],
-                  ['t-SNE perplexity', analysisConfig.tsne?.perplexity],
-                  ['Random seed', analysisConfig.tsne?.seed ?? 'None'],
+                  ['Layout', analysisConfig.layout ? `UMAP 2-D, ${analysisConfig.layout.metric}` : null],
+                  ['Layout n_neighbors', analysisConfig.layout?.nNeighbors],
+                  ['Layout min_dist', analysisConfig.layout?.minDist],
+                  ['Clustering space', analysisConfig.clusterSpace ? `UMAP ${analysisConfig.clusterSpace.dimensions}-D, ${analysisConfig.clusterSpace.metric}` : null],
+                  ['Clustering n_neighbors', analysisConfig.clusterSpace?.nNeighbors],
+                  ['Clustering min_dist', analysisConfig.clusterSpace?.minDist],
+                  ['Neighbors', analysisConfig.neighbors ? `${analysisConfig.neighbors.k} nearest, ${analysisConfig.neighbors.metric} on ${analysisConfig.neighbors.dimensions}-D CLIP` : null],
+                  ['Random seed', analysisConfig.layout ? (analysisConfig.layout.seed ?? 'None') : null],
                   ['HDBSCAN min. cluster size', analysisConfig.hdbscan?.minClusterSize],
                   ['HDBSCAN min. samples', analysisConfig.hdbscan?.minSamples],
                   ['HDBSCAN selection', analysisConfig.hdbscan?.selectionMethod],

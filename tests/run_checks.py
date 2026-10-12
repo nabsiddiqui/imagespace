@@ -67,7 +67,7 @@ def pipeline_command(output, seed, extra=()):
         "-i", str(FIXTURE), "-o", str(output),
         "--no-hd", "--thumb-size", "32", "--atlas-size", "512",
         "--quality", "35", "--seed", str(seed),
-        "--pca-dims", "20", "--tsne-perplexity", "8",
+        "--cluster-dims", "5", "--umap-neighbors", "8", "--cluster-neighbors", "10",
         "--min-cluster-size", "3", "--hdbscan-min-samples", "2",
         "--hdbscan-selection-method", "leaf",
         "--cache-dir", str(CACHE), "--data-only", *extra,
@@ -82,7 +82,7 @@ def load_json(path):
 def validate_output(
     output,
     expected_count,
-    expected_pca=20,
+    expected_cluster_dims=5,
     vocabulary="imagespace-art-v1",
     min_samples=2,
     selection_method="leaf",
@@ -98,13 +98,15 @@ def validate_output(
     config = load_json(data / "analysis_config.json")
     manifest = load_json(data / "manifest.json")
     check(config["schemaVersion"] == 1, "provenance schema version is 1")
-    check(config["software"]["version"] == "1.3.0", "provenance software version is current")
+    check(config["software"]["version"] == "1.4.0", "provenance software version is current")
     check(config["corpus"]["imageCount"] == expected_count, "provenance image count matches fixture")
     check(len(config["corpus"]["fingerprint"]) == 64, "corpus fingerprint is recorded")
     check(config["embedding"]["modelId"] == "openai/clip-vit-base-patch32", "CLIP model id is recorded")
-    check(config["pca"]["dimensions"] == expected_pca, "effective PCA dimensions are recorded")
-    check(0 < config["pca"]["explainedVariance"] <= 1, "PCA explained variance is valid")
-    check(config["tsne"]["seed"] is not None, "t-SNE seed is recorded")
+    check("pca" not in config and "tsne" not in config, "no PCA or t-SNE stages remain in provenance")
+    check(config["layout"]["method"] == "umap" and config["layout"]["metric"] == "cosine", "UMAP layout (cosine) is recorded")
+    check(config["layout"]["seed"] is not None, "UMAP seed is recorded")
+    check(config["clusterSpace"]["dimensions"] == expected_cluster_dims, "effective clustering-space dimensions are recorded")
+    check(config["neighbors"]["metric"] == "cosine" and config["neighbors"]["dimensions"] == config["embedding"]["dimensions"], "neighbors use cosine on full CLIP embeddings")
     check(config["hdbscan"]["minSamples"] == min_samples, "HDBSCAN min_samples flag is wired")
     check(config["hdbscan"]["selectionMethod"] == selection_method, "HDBSCAN selection method is wired")
     check(config["hdbscan"]["noisePolicy"] == "preserve-unassigned", "noise policy remains preserve-unassigned")
@@ -182,7 +184,7 @@ def main():
 
     shutil.copytree(OUT_A, OUT_VARIANT)
     run(pipeline_command(OUT_VARIANT, args.seed, (
-        "--relayout", "--pca-dims", "10",
+        "--relayout", "--cluster-dims", "3",
         "--hdbscan-min-samples", "3", "--hdbscan-selection-method", "eom",
         "--label-candidates", str(ROOT / "tests" / "fixtures" / "test-labels.json"),
         "--label-uncertainty-threshold", "0.02",
@@ -190,12 +192,12 @@ def main():
     validate_output(
         OUT_VARIANT,
         args.fixture_size,
-        expected_pca=10,
+        expected_cluster_dims=3,
         vocabulary="imagespace-test-labels-v1",
         min_samples=3,
         selection_method="eom",
     )
-    check(sha256(OUT_A / "data" / "data.bin") != sha256(OUT_VARIANT / "data" / "data.bin"), "PCA flag changes downstream layout bytes")
+    check(sha256(OUT_A / "data" / "data.bin") != sha256(OUT_VARIANT / "data" / "data.bin"), "analysis flags change downstream cluster bytes")
     validate_forced_labels()
 
     run([sys.executable, "-m", "py_compile", "scripts/imagespace.py"])

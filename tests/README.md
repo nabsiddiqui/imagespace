@@ -5,8 +5,8 @@ Two complementary layers verify the pipeline. Both run in CI
 
 ## 1. Network-free numeric suite (`test_pipeline.py`)
 
-Fast unit tests for the dependency-sensitive core of the pipeline: PCA,
-openTSNE, HDBSCAN, k-nearest-neighbors, outlier scoring, image-feature
+Fast unit tests for the dependency-sensitive core of the pipeline: UMAP
+(layout + clustering space), HDBSCAN, cosine k-nearest-neighbors, outlier scoring, image-feature
 extraction, label-vocabulary loading, and the binary/CSV/manifest writers.
 No models are downloaded and no frontend build is required, so the suite runs
 in a second or two and can be exercised across many environments.

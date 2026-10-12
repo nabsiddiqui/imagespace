@@ -5,7 +5,7 @@ ImageSpace — Fast Pipeline for Exploratory Visualization of Image Collections
 Transforms a folder of images into a self-contained, uploadable static site:
   - Viewer app shell (index.html + assets/ + favicon.svg) for the ImageSpace viewer
   - Atlas WebP textures (sprite sheets of thumbnails) under data/
-  - Binary layout data (t-SNE coordinates, atlas positions, cluster IDs) under data/
+  - Binary layout data (UMAP coordinates, atlas positions, cluster IDs) under data/
   - Manifest JSON (metadata for the viewer) under data/
   - Metadata CSV (merged with external metadata if provided) under data/
 
@@ -30,12 +30,13 @@ Install as a command (from this repo):
 Performance (50K images, Apple Silicon, with --hd):
     - Atlas generation (full + preview): ~3-5 min
     - CLIP embeddings (ONNX+CoreML): ~2-3 min
-    - PCA + openTSNE + HDBSCAN: ~1-2 min
+    - UMAP (layout + clustering space) + HDBSCAN: several minutes (slower with --seed,
+      because a fixed seed makes UMAP run single-threaded)
     - Metadata + features: ~1-2 min
     - Total: ~16-40 min (CPU-only CLIP is much slower)
 
 Dependencies:
-    Required: pillow, numpy, scikit-learn, opentsne, hdbscan
+    Required: pillow, numpy, scikit-learn, umap-learn, hdbscan
     Optional: onnxruntime (for CLIP embeddings via ONNX — highly recommended)
               torch, transformers (alternative CLIP backend — slower)
               huggingface_hub (for downloading ONNX model)
@@ -66,10 +67,17 @@ CLIP_IMAGE_SIZE = 224  # CLIP input resolution
 CLIP_DIM = 512  # CLIP ViT-B/32 embedding dimension
 CLIP_MEAN = np.array([0.48145466, 0.4578275, 0.40821073], dtype=np.float32)
 CLIP_STD = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
-TSNE_PERPLEXITY = 30  # openTSNE perplexity
 BATCH_SIZE = 64  # Embedding batch size (larger = faster with ONNX)
-PCA_DIMS = 50  # PCA reduction before t-SNE
-SOFTWARE_VERSION = "1.3.0"
+# UMAP for the 2-D layout (visualization defaults from umap-learn).
+UMAP_LAYOUT_NEIGHBORS = 15
+UMAP_LAYOUT_MIN_DIST = 0.1
+# UMAP for the clustering space (clustering guidance from the umap-learn docs:
+# larger n_neighbors, min_dist 0, a few dimensions rather than 2).
+UMAP_CLUSTER_NEIGHBORS = 30
+UMAP_CLUSTER_MIN_DIST = 0.0
+UMAP_CLUSTER_DIMS = 10
+UMAP_METRIC = "cosine"  # CLIP embeddings are compared by cosine similarity
+SOFTWARE_VERSION = "1.4.0"
 DEFAULT_CLIP_MODEL = "openai/clip-vit-base-patch32"
 DEFAULT_LABEL_PRESET = "art-v1"
 DEFAULT_LABEL_UNCERTAINTY_THRESHOLD = 0.01
@@ -419,52 +427,67 @@ def _extract_clip_torch(images, model_id=DEFAULT_CLIP_MODEL):
 
 
 # ── Stage 4: Dimensionality Reduction + Clustering ───────────
+def _run_umap(embeddings, n_components, n_neighbors, min_dist, seed, label):
+    """Fit UMAP on the CLIP embeddings with cosine distance.
+
+    A fixed seed makes umap-learn deterministic (and single-threaded).
+    """
+    import umap
+
+    print(
+        f"\n  UMAP ({label}): {embeddings.shape[1]}-d → {n_components}-d "
+        f"(n_neighbors={n_neighbors}, min_dist={min_dist}, metric={UMAP_METRIC})..."
+    )
+    start = time.time()
+    reducer = umap.UMAP(
+        n_components=n_components,
+        n_neighbors=n_neighbors,
+        min_dist=min_dist,
+        metric=UMAP_METRIC,
+        init="spectral",
+        random_state=seed,
+    )
+    coords = np.asarray(reducer.fit_transform(embeddings), dtype=np.float64)
+    print(f"  UMAP ({label}): {time.time() - start:.1f}s")
+    return coords
+
+
 def reduce_dimensions(
     embeddings,
     min_cluster_size=50,
-    perplexity=TSNE_PERPLEXITY,
+    layout_neighbors=UMAP_LAYOUT_NEIGHBORS,
     thumb_size=THUMB_SIZE,
     seed=None,
-    pca_dims=PCA_DIMS,
+    cluster_dims=UMAP_CLUSTER_DIMS,
     hdbscan_min_samples=5,
     hdbscan_selection_method="leaf",
+    layout_min_dist=UMAP_LAYOUT_MIN_DIST,
+    cluster_neighbors=UMAP_CLUSTER_NEIGHBORS,
 ):
-    """Run PCA, openTSNE, and HDBSCAN while preserving raw noise labels."""
-    from sklearn.decomposition import PCA
+    """Run UMAP (layout + clustering space) and HDBSCAN, preserving raw noise labels.
 
+    Two UMAP fits run on the raw CLIP embeddings with cosine distance: a 2-D
+    fit for the viewer layout and a low-dimensional fit used only as the
+    space HDBSCAN clusters in.
+    """
     n = len(embeddings)
+    if n < 5:
+        raise ValueError("UMAP requires at least five images")
 
-    # PCA first for faster t-SNE and more stable density estimation.
-    requested_pca_dims = pca_dims
-    pca_dims = min(requested_pca_dims, n - 1, embeddings.shape[1])
-    if pca_dims < 1:
-        raise ValueError("PCA requires at least two images")
-    print(f"\n  PCA: {embeddings.shape[1]}-d → {pca_dims}-d...")
-    start = time.time()
-    pca = PCA(n_components=pca_dims, random_state=seed)
-    embeddings_pca = pca.fit_transform(embeddings)
-    explained_variance = float(pca.explained_variance_ratio_.sum())
-    print(f"  PCA: {time.time() - start:.1f}s ({explained_variance:.1%} variance)")
+    # n_neighbors must be smaller than the number of images; n_components
+    # must leave room for UMAP's spectral initialization.
+    eff_layout_neighbors = max(2, min(layout_neighbors, n - 1))
+    eff_cluster_neighbors = max(2, min(cluster_neighbors, n - 1))
+    eff_cluster_dims = max(1, min(cluster_dims, n - 2))
 
-    # openTSNE (FFT-accelerated, ~10-20x faster than sklearn)
-    effective_perplexity = min(perplexity, max(1, n // 3))
-    print(f"\n  Running openTSNE (n={n}, perplexity={effective_perplexity})...")
-    start = time.time()
-    from openTSNE import TSNE
-
-    tsne = TSNE(
-        n_components=2,
-        perplexity=effective_perplexity,
-        exaggeration=4,
-        initialization="pca",
-        metric="euclidean",
-        neighbors="approx",
-        n_jobs=-1,
-        random_state=seed,
-        verbose=True,
+    layout = _run_umap(
+        embeddings, 2, eff_layout_neighbors, layout_min_dist, seed, "layout"
     )
-    tsne_coords = np.array(tsne.fit(embeddings_pca))
-    print(f"  t-SNE completed in {time.time() - start:.1f}s")
+    cluster_space = _run_umap(
+        embeddings, eff_cluster_dims, eff_cluster_neighbors,
+        UMAP_CLUSTER_MIN_DIST, seed, "clustering space",
+    )
+    tsne_coords = layout  # binary format keeps its historical field name
 
     # Scale to viewer range — ensure enough room for non-overlapping thumbnails
     n = len(tsne_coords)
@@ -480,7 +503,7 @@ def reduce_dimensions(
 
     tsne_coords = scale_coords(tsne_coords, target_side)
 
-    # Preserve raw t-SNE coords (with natural overlap) for the viewer's t-SNE mode
+    # Preserve raw UMAP coords (with natural overlap) for the viewer's UMAP mode
     raw_tsne_coords = tsne_coords.copy()
 
     # Remove overlaps by snapping to nearest unoccupied grid cell
@@ -529,13 +552,13 @@ def reduce_dimensions(
     tsne_coords = result
     print(f"  Overlap removal: {time.time() - start:.1f}s")
 
-    # Clustering: HDBSCAN on PCA embeddings (high-d has better density structure)
-    # Note: clustering on 2D t-SNE coords destroys density → poor clusters.
-    # The 50-d PCA space preserves natural cluster structure for HDBSCAN.
+    # Clustering: HDBSCAN on the low-dimensional UMAP clustering space, which
+    # makes density structure visible without clustering the 2-D layout itself.
     import hdbscan as hdb
 
     print(
-        f"\n  Running HDBSCAN on PCA embeddings (min_cluster_size={min_cluster_size})..."
+        f"\n  Running HDBSCAN on {eff_cluster_dims}-d UMAP space "
+        f"(min_cluster_size={min_cluster_size})..."
     )
     start = time.time()
     clusterer = hdb.HDBSCAN(
@@ -545,7 +568,7 @@ def reduce_dimensions(
         cluster_selection_method=hdbscan_selection_method,
         core_dist_n_jobs=-1,
     )
-    cluster_ids = clusterer.fit_predict(embeddings_pca)
+    cluster_ids = clusterer.fit_predict(cluster_space)
     cluster_probs = clusterer.probabilities_.copy()
     noise_mask = cluster_ids == -1
     n_clusters = len(set(cluster_ids)) - (1 if -1 in cluster_ids else 0)
@@ -562,21 +585,32 @@ def reduce_dimensions(
         tsne_coords.astype(np.float32),
         raw_tsne_coords.astype(np.float32),
         cluster_ids.astype(np.int32),
-        embeddings_pca,
+        cluster_space,
         cluster_probs,
         {
-            "pca": {
-                "requestedDimensions": requested_pca_dims,
-                "dimensions": pca_dims,
-                "explainedVariance": explained_variance,
+            "layout": {
+                "method": "umap",
+                "implementation": "umap-learn",
+                "input": "clip-embedding",
+                "dimensions": 2,
+                "nNeighbors": eff_layout_neighbors,
+                "requestedNNeighbors": layout_neighbors,
+                "minDist": layout_min_dist,
+                "metric": UMAP_METRIC,
+                "initialization": "spectral",
+                "seed": seed,
             },
-            "tsne": {
-                "implementation": "openTSNE",
-                "perplexity": effective_perplexity,
-                "requestedPerplexity": perplexity,
-                "exaggeration": 4,
-                "metric": "euclidean",
-                "initialization": "pca",
+            "clusterSpace": {
+                "method": "umap",
+                "implementation": "umap-learn",
+                "input": "clip-embedding",
+                "dimensions": eff_cluster_dims,
+                "requestedDimensions": cluster_dims,
+                "nNeighbors": eff_cluster_neighbors,
+                "requestedNNeighbors": cluster_neighbors,
+                "minDist": UMAP_CLUSTER_MIN_DIST,
+                "metric": UMAP_METRIC,
+                "initialization": "spectral",
                 "seed": seed,
             },
             "hdbscan": {
@@ -593,23 +627,33 @@ def reduce_dimensions(
 
 
 # ── Stage 4b: k-Nearest Neighbors ────────────────────────────
-def compute_knn(embeddings_pca, k=10):
-    """Compute k-nearest neighbors for each image in PCA space.
+def compute_knn(embeddings, k=10):
+    """Compute k-nearest neighbors for each image in the full CLIP embedding
+    space using cosine distance (1 - cosine similarity).
     Returns (indices, distances) each of shape (n, k)."""
     from sklearn.neighbors import NearestNeighbors
 
     print(
-        f"\n  Computing {k}-nearest neighbors on {embeddings_pca.shape[0]} points ({embeddings_pca.shape[1]}-d)..."
+        f"\n  Computing {k}-nearest neighbors on {embeddings.shape[0]} points "
+        f"({embeddings.shape[1]}-d, cosine)..."
     )
     start = time.time()
+    k = min(k, len(embeddings) - 1)
     nn = NearestNeighbors(
-        n_neighbors=k + 1, algorithm="ball_tree", metric="euclidean", n_jobs=-1
+        n_neighbors=k + 1, algorithm="brute", metric="cosine", n_jobs=-1
     )
-    nn.fit(embeddings_pca)
-    distances, indices = nn.kneighbors(embeddings_pca)
-    # Remove self (index 0 is always self)
-    indices = indices[:, 1:]  # shape (n, k)
-    distances = distances[:, 1:]
+    nn.fit(embeddings)
+    distances, indices = nn.kneighbors(embeddings)
+    # Drop each image's own entry. Exact duplicates can tie with self at
+    # distance 0, so remove self by index rather than assuming column 0.
+    n = len(embeddings)
+    keep_idx = np.empty((n, k), dtype=indices.dtype)
+    keep_dist = np.empty((n, k), dtype=distances.dtype)
+    for i in range(n):
+        mask = indices[i] != i
+        row_idx, row_dist = indices[i][mask][:k], distances[i][mask][:k]
+        keep_idx[i], keep_dist[i] = row_idx, row_dist
+    indices, distances = keep_idx, keep_dist
     print(f"  k-NN: {time.time() - start:.1f}s")
     return indices.astype(np.uint32), distances.astype(np.float32)
 
@@ -1163,8 +1207,20 @@ def main():
         help="HDBSCAN cluster selection method (default: leaf)",
     )
     parser.add_argument(
-        "--pca-dims", type=int, default=PCA_DIMS,
-        help=f"PCA dimensions before t-SNE/HDBSCAN (default: {PCA_DIMS})",
+        "--umap-neighbors", type=int, default=UMAP_LAYOUT_NEIGHBORS,
+        help=f"UMAP n_neighbors for the 2-D layout (default: {UMAP_LAYOUT_NEIGHBORS})",
+    )
+    parser.add_argument(
+        "--umap-min-dist", type=float, default=UMAP_LAYOUT_MIN_DIST,
+        help=f"UMAP min_dist for the 2-D layout (default: {UMAP_LAYOUT_MIN_DIST})",
+    )
+    parser.add_argument(
+        "--cluster-neighbors", type=int, default=UMAP_CLUSTER_NEIGHBORS,
+        help=f"UMAP n_neighbors for the clustering space (default: {UMAP_CLUSTER_NEIGHBORS})",
+    )
+    parser.add_argument(
+        "--cluster-dims", type=int, default=UMAP_CLUSTER_DIMS,
+        help=f"UMAP dimensions of the space HDBSCAN clusters in (default: {UMAP_CLUSTER_DIMS})",
     )
     parser.add_argument(
         "--clip-model", default=DEFAULT_CLIP_MODEL,
@@ -1193,13 +1249,10 @@ def main():
     )
     parser.add_argument("--metadata", help="External metadata CSV to merge")
     parser.add_argument(
-        "--tsne-perplexity", type=int, default=TSNE_PERPLEXITY, help="t-SNE perplexity"
-    )
-    parser.add_argument(
         "--seed",
         type=int,
         default=None,
-        help="Random seed for PCA and openTSNE reproducibility. Default: none "
+        help="Random seed for UMAP reproducibility. Default: none "
              "(fully random each run). Pass a fixed seed (e.g. --seed 42) to "
              "make the layout reproducible.",
     )
@@ -1210,7 +1263,7 @@ def main():
     parser.add_argument(
         "--relayout",
         action="store_true",
-        help="Skip atlas generation + embedding extraction, only re-run t-SNE/HDBSCAN",
+        help="Skip atlas generation, only re-run UMAP/HDBSCAN (reuses --cache-dir embeddings if given)",
     )
     parser.add_argument(
         "--hd",
@@ -1233,8 +1286,12 @@ def main():
              "Useful for relayout/seed-sweep workflows. Default emits a full site.",
     )
     args = parser.parse_args()
-    if args.pca_dims < 1:
-        parser.error("--pca-dims must be at least 1")
+    if args.umap_neighbors < 2 or args.cluster_neighbors < 2:
+        parser.error("--umap-neighbors and --cluster-neighbors must be at least 2")
+    if not 0 <= args.umap_min_dist <= 1:
+        parser.error("--umap-min-dist must be between 0 and 1")
+    if args.cluster_dims < 1:
+        parser.error("--cluster-dims must be at least 1")
     if args.hdbscan_min_samples < 1:
         parser.error("--hdbscan-min-samples must be at least 1")
     if args.min_cluster_size is not None and args.min_cluster_size < 2:
@@ -1403,7 +1460,7 @@ def main():
             print(f"  Cached embeddings to {emb_cache}")
     
     # Stage 4
-    print(f"\n[4/9] PCA → openTSNE → HDBSCAN...")
+    print(f"\n[4/9] UMAP (layout + clustering space) → HDBSCAN...")
     mcs = args.min_cluster_size
     if mcs is None:
         mcs = max(10, min(50, len(images) // 200))
@@ -1412,23 +1469,31 @@ def main():
         tsne_coords,
         raw_tsne_coords,
         cluster_ids,
-        embeddings_pca,
+        _cluster_space,
         cluster_probs,
         analysis,
     ) = reduce_dimensions(
         embeddings,
         mcs,
-        args.tsne_perplexity,
-        args.thumb_size,
-        args.seed,
-        args.pca_dims,
-        args.hdbscan_min_samples,
-        args.hdbscan_selection_method,
+        layout_neighbors=args.umap_neighbors,
+        thumb_size=args.thumb_size,
+        seed=args.seed,
+        cluster_dims=args.cluster_dims,
+        hdbscan_min_samples=args.hdbscan_min_samples,
+        hdbscan_selection_method=args.hdbscan_selection_method,
+        layout_min_dist=args.umap_min_dist,
+        cluster_neighbors=args.cluster_neighbors,
     )
 
-    # Stage 4b: k-NN
+    # Stage 4b: k-NN on the full CLIP embeddings (cosine), independent of UMAP
     print(f"\n[5/9] k-Nearest Neighbors...")
-    knn_indices, knn_distances = compute_knn(embeddings_pca, k=10)
+    knn_indices, knn_distances = compute_knn(embeddings, k=10)
+    analysis["neighbors"] = {
+        "k": int(knn_indices.shape[1]),
+        "space": "clip-embedding",
+        "dimensions": int(embeddings.shape[1]),
+        "metric": "cosine",
+    }
     write_neighbors_bin(str(data_dir), knn_indices, knn_distances)
     outlier_scores = compute_outlier_scores(knn_distances)
 

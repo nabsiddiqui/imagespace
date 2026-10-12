@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/logo.svg" width="100" alt="ImageSpace logo"/>
   <h1>ImageSpace</h1>
-  <strong><a href="https://nabeelsiddiqui.net/imagespace-demo">Live Demo →</a></strong> — 49,585 WikiArt images visualized with CLIP + t-SNE
+  <strong><a href="https://nabeelsiddiqui.net/imagespace-demo">Live Demo →</a></strong> — 49,585 WikiArt images visualized with CLIP + UMAP
   <br/><br/>
   <a href="https://github.com/nabsiddiqui/imagespace/actions/workflows/ci.yml"><img src="https://github.com/nabsiddiqui/imagespace/actions/workflows/ci.yml/badge.svg" alt="CI status"/></a>
 </div>
@@ -28,8 +28,8 @@ Open http://localhost:5174. The generated site does not require Python, Node, a 
 
 ## What It Does
 
-- Lays out images by visual similarity (CLIP embeddings → t-SNE)
-- Clusters them automatically (HDBSCAN) and labels clusters with natural language (CLIP)
+- Lays out images by visual similarity (CLIP embeddings → 2-D UMAP, cosine distance)
+- Clusters them automatically (HDBSCAN on a separate low-dimensional UMAP space) and labels clusters with natural language (CLIP)
 - Lets you switch between scatter, grid, color-sorted, and timeline views
 - Filters by any metadata column (dropdowns) or computed feature (brightness, complexity, etc.)
 - Shows similar images and full metadata in a slide-in detail panel
@@ -118,7 +118,7 @@ imagespace -i /path/to/images/ \
   -o ./output \
   --cache-dir ./emb_cache/
 
-# Relayout only — re-run t-SNE + HDBSCAN without redoing atlas or CLIP (~45s for 50K)
+# Relayout only — re-run UMAP + HDBSCAN without redoing atlas or CLIP
 imagespace -i /path/to/images/ \
   -o ./output \
   --cache-dir ./emb_cache/ \
@@ -149,21 +149,23 @@ imagespace -i /path/to/images/ \
 | `--hd` / `--no-hd` | `--hd` | Generate dual-resolution atlases (64px preview + 128px full). ON by default |
 | `--preview-quality` | 40 | WebP quality for preview atlases (only used with --hd) |
 | `--clip-model` | `openai/clip-vit-base-patch32` | Hugging Face CLIP checkpoint used by both image and label-text encoders |
-| `--pca-dims` | 50 | PCA dimensions before t-SNE and HDBSCAN |
+| `--umap-neighbors` | 15 | UMAP `n_neighbors` for the 2-D layout |
+| `--umap-min-dist` | 0.1 | UMAP `min_dist` for the 2-D layout |
+| `--cluster-neighbors` | 30 | UMAP `n_neighbors` for the clustering space |
+| `--cluster-dims` | 10 | Dimensions of the UMAP space HDBSCAN clusters in (`min_dist` fixed at 0) |
 | `--min-cluster-size` | auto | HDBSCAN minimum cluster size (auto-scales to dataset size; pass a number to override) |
 | `--hdbscan-min-samples` | 5 | HDBSCAN neighborhood conservativeness |
 | `--hdbscan-selection-method` | `leaf` | HDBSCAN selection method: `leaf` or `eom` |
-| `--tsne-perplexity` | 30 | t-SNE perplexity |
 | `--label-candidates` | bundled `art-v1` | Versioned JSON label vocabulary override |
 | `--label-uncertainty-threshold` | 0.01 | Minimum top-1/top-2 score margin for a confident label |
-| `--seed` | none | Random seed for PCA and openTSNE. Default: fully random each run. Pass a fixed seed (e.g. `--seed 42`) for a reproducible layout |
+| `--seed` | none | Random seed for UMAP. Default: fully random each run. Pass a fixed seed (e.g. `--seed 42`) for a reproducible layout; a fixed seed makes UMAP run single-threaded, so it is slower |
 | `--cache-dir` | none | Directory to cache CLIP embeddings (`.npy`). Opt-in; default runs never write it |
-| `--relayout` | false | Skip atlas + CLIP, re-run t-SNE/HDBSCAN only |
+| `--relayout` | false | Skip atlas + CLIP, re-run UMAP/HDBSCAN only |
 | `--data-only` | false | Emit only `data/` (skip the viewer app shell). For relayout/seed-sweep workflows |
 
 ## Methods and provenance
 
-Every run writes `data/analysis_config.json` and repeats that provenance inside `manifest.json`. The record includes the exact CLIP checkpoint and backend, PCA dimensions and explained variance, effective t-SNE settings, seed, HDBSCAN parameters and preserved-noise policy, and label-vocabulary version. The viewer's book icon opens the same record. Cluster label evidence in `cluster_labels.json` and the panel includes the top three candidate scores, score margin, and uncertainty decision.
+Every run writes `data/analysis_config.json` and repeats that provenance inside `manifest.json`. The record includes the exact CLIP checkpoint and backend, the UMAP settings for the layout and for the clustering space, the nearest-neighbor metric (cosine on the full CLIP embeddings), seed, HDBSCAN parameters and preserved-noise policy, and label-vocabulary version. The viewer's book icon opens the same record. Cluster label evidence in `cluster_labels.json` and the panel includes the top three candidate scores, score margin, and uncertainty decision.
 
 ### Noise handling in the viewer
 
@@ -223,9 +225,9 @@ ImageSpace uses grid-snapped layouts (Grid, Color, Timeline views) as a delibera
 
 **Visual clarity.** When exploring 50,000 images, every image is visible and accessible in a grid. No image is hidden behind another. This is critical for research workflows where users need to scan, filter, and identify patterns across an entire collection — not just the images that happen to be on top.
 
-**Predictability.** Grid layouts are deterministic: the same dataset always produces the same layout. Researchers can reproduce views, share screenshots, and reference specific positions. The pipeline exposes `--seed` (no seed by default = random each run); pass a fixed seed (e.g. `--seed 42`) for reproducible PCA and openTSNE layout generation.
+**Predictability.** Grid layouts are deterministic: the same dataset always produces the same layout. Researchers can reproduce views, share screenshots, and reference specific positions. The pipeline exposes `--seed` (no seed by default = random each run); pass a fixed seed (e.g. `--seed 42`) for reproducible UMAP layout generation.
 
-**Tradeoffs.** Grid snapping sacrifices organic, "gallery-wall" aesthetics and the ability to manually arrange images. The t-SNE scatter view provides the organic clustering experience, while grid views prioritize systematic exploration. This separation is intentional — each view mode serves a different analytical purpose.
+**Tradeoffs.** Grid snapping sacrifices organic, "gallery-wall" aesthetics and the ability to manually arrange images. The UMAP scatter view provides the organic clustering experience, while grid views prioritize systematic exploration. This separation is intentional — each view mode serves a different analytical purpose.
 
 ## Dual-Resolution Loading
 

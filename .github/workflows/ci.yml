@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Cross-version robustness evidence: the numeric pipeline (PCA, t-SNE,
+  # Cross-version robustness evidence: the numeric pipeline (UMAP,
   # HDBSCAN, k-NN, feature extraction, binary/CSV writers) must keep working
   # across Python versions and across the scientific-Python dependency stack.
   # These tests are network-free (no model downloads), so they run fast.
