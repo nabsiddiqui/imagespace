@@ -153,7 +153,7 @@ imagespace -i /path/to/images/ \
 | `--umap-min-dist` | 0.1 | UMAP `min_dist` for the 2-D layout |
 | `--cluster-neighbors` | 30 | UMAP `n_neighbors` for the clustering space |
 | `--cluster-dims` | 10 | Dimensions of the UMAP space HDBSCAN clusters in (`min_dist` fixed at 0) |
-| `--min-cluster-size` | auto | HDBSCAN minimum cluster size (auto-scales to dataset size; pass a number to override) |
+| `--min-cluster-size` | auto | HDBSCAN minimum cluster size. Auto = about 1% of the collection, rounded to the nearest 10, minimum 10 (49,585 images → 500). Pass a number to override |
 | `--hdbscan-min-samples` | 5 | HDBSCAN neighborhood conservativeness |
 | `--hdbscan-selection-method` | `leaf` | HDBSCAN selection method: `leaf` or `eom` |
 | `--label-candidates` | bundled `art-v1` | Versioned JSON label vocabulary override |

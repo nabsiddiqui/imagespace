@@ -427,6 +427,12 @@ def _extract_clip_torch(images, model_id=DEFAULT_CLIP_MODEL):
 
 
 # ── Stage 4: Dimensionality Reduction + Clustering ───────────
+def auto_min_cluster_size(n_images):
+    """Default HDBSCAN min_cluster_size: about 1% of the collection, rounded
+    to the nearest 10, never below 10 (49,585 images -> 500)."""
+    return max(10, int(round(n_images / 100, -1)))
+
+
 def _run_umap(embeddings, n_components, n_neighbors, min_dist, seed, label):
     """Fit UMAP on the CLIP embeddings with cosine distance.
 
@@ -1196,7 +1202,8 @@ def main():
     parser.add_argument("--output", "-o", required=True, help="Output directory")
     parser.add_argument(
         "--min-cluster-size", type=int, default=None,
-        help="HDBSCAN min_cluster_size (default: auto-scales to dataset size)",
+        help="HDBSCAN min_cluster_size (default: about 1%% of the collection, "
+             "rounded to the nearest 10, minimum 10)",
     )
     parser.add_argument(
         "--hdbscan-min-samples", type=int, default=5,
@@ -1463,7 +1470,7 @@ def main():
     print(f"\n[4/9] UMAP (layout + clustering space) → HDBSCAN...")
     mcs = args.min_cluster_size
     if mcs is None:
-        mcs = max(10, min(50, len(images) // 200))
+        mcs = auto_min_cluster_size(len(images))
         print(f"  Auto min_cluster_size={mcs} for {len(images)} images")
     (
         tsne_coords,

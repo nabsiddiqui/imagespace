@@ -36,6 +36,13 @@ def test_reduce_dimensions_shapes_and_provenance(ispace, embeddings):
     assert analysis["hdbscan"]["noisePolicy"] == "preserve-unassigned"
 
 
+def test_auto_min_cluster_size_scales_with_collection(ispace):
+    assert ispace.auto_min_cluster_size(48) == 10
+    assert ispace.auto_min_cluster_size(500) == 10
+    assert ispace.auto_min_cluster_size(5000) == 50
+    assert ispace.auto_min_cluster_size(49585) == 500
+
+
 def test_umap_settings_clamped_to_available(ispace, embeddings):
     # Requesting more neighbors/dims than the corpus allows must clamp, not crash.
     _, _, _, space, _, analysis = ispace.reduce_dimensions(
