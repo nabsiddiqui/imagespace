@@ -1,0 +1,254 @@
+{
+  "0": {
+    "label": "Vast Landscapes \u2014 Pastel",
+    "top3": [
+      {
+        "text": "small figures in vast landscape",
+        "score": 0.30442410707473755
+      },
+      {
+        "text": "pastel soft colored painting",
+        "score": 0.28948768973350525
+      },
+      {
+        "text": "rich earth-toned painting",
+        "score": 0.2885599732398987
+      }
+    ],
+    "scoreMargin": 0.0149364173412323,
+    "uncertain": false,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1"
+  },
+  "1": {
+    "label": "Romantic Landscapes",
+    "top3": [
+      {
+        "text": "romantic era landscape",
+        "score": 0.32713764905929565
+      },
+      {
+        "text": "small figures in vast landscape",
+        "score": 0.3213905394077301
+      },
+      {
+        "text": "seascape with ocean and boats",
+        "score": 0.300304114818573
+      }
+    ],
+    "scoreMargin": 0.005747109651565552,
+    "uncertain": true,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1"
+  },
+  "2": {
+    "label": "Portraits \u2014 Baroque",
+    "top3": [
+      {
+        "text": "portrait painting of a person",
+        "score": 0.34836557507514954
+      },
+      {
+        "text": "baroque dramatic painting",
+        "score": 0.2748787999153137
+      },
+      {
+        "text": "close-up face portrait",
+        "score": 0.2743370532989502
+      }
+    ],
+    "scoreMargin": 0.07348677515983582,
+    "uncertain": false,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1"
+  },
+  "3": {
+    "label": "Vast Landscapes \u2014 Romantic Landscapes",
+    "top3": [
+      {
+        "text": "small figures in vast landscape",
+        "score": 0.3207589387893677
+      },
+      {
+        "text": "romantic era landscape",
+        "score": 0.31284183263778687
+      },
+      {
+        "text": "impressionist brushstrokes painting",
+        "score": 0.29222342371940613
+      }
+    ],
+    "scoreMargin": 0.00791710615158081,
+    "uncertain": true,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1"
+  },
+  "4": {
+    "label": "Vast Landscapes \u2014 Cityscapes",
+    "top3": [
+      {
+        "text": "small figures in vast landscape",
+        "score": 0.30593106150627136
+      },
+      {
+        "text": "cityscape with buildings and streets",
+        "score": 0.3023097515106201
+      },
+      {
+        "text": "romantic era landscape",
+        "score": 0.2957364022731781
+      }
+    ],
+    "scoreMargin": 0.003621309995651245,
+    "uncertain": true,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1"
+  },
+  "5": {
+    "label": "Complex Scenes",
+    "top3": [
+      {
+        "text": "complex busy scene with many figures",
+        "score": 0.3314725458621979
+      },
+      {
+        "text": "battle scene with soldiers",
+        "score": 0.32818603515625
+      },
+      {
+        "text": "group of people gathering",
+        "score": 0.3052719831466675
+      }
+    ],
+    "scoreMargin": 0.003286510705947876,
+    "uncertain": true,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1"
+  },
+  "6": {
+    "label": "Baroque",
+    "top3": [
+      {
+        "text": "baroque dramatic painting",
+        "score": 0.3128646910190582
+      },
+      {
+        "text": "religious painting with saints",
+        "score": 0.3105638921260834
+      },
+      {
+        "text": "renaissance classical painting",
+        "score": 0.306879460811615
+      }
+    ],
+    "scoreMargin": 0.0023007988929748535,
+    "uncertain": true,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1"
+  },
+  "7": {
+    "label": "Portraits \u2014 Nudes",
+    "top3": [
+      {
+        "text": "portrait painting of a person",
+        "score": 0.2976348102092743
+      },
+      {
+        "text": "nude figure painting",
+        "score": 0.29197436571121216
+      },
+      {
+        "text": "sketch or drawing on paper",
+        "score": 0.2806876301765442
+      }
+    ],
+    "scoreMargin": 0.005660444498062134,
+    "uncertain": true,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1"
+  },
+  "8": {
+    "label": "Portraits \u2014 Warm-Toned",
+    "top3": [
+      {
+        "text": "portrait painting of a person",
+        "score": 0.32079222798347473
+      },
+      {
+        "text": "golden warm-toned painting",
+        "score": 0.287485271692276
+      },
+      {
+        "text": "impressionist brushstrokes painting",
+        "score": 0.28531530499458313
+      }
+    ],
+    "scoreMargin": 0.03330695629119873,
+    "uncertain": false,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1"
+  },
+  "9": {
+    "label": "Minimalist",
+    "top3": [
+      {
+        "text": "modern minimalist artwork",
+        "score": 0.28261494636535645
+      },
+      {
+        "text": "abstract expressionist painting",
+        "score": 0.2773692309856415
+      },
+      {
+        "text": "rich earth-toned painting",
+        "score": 0.2745334506034851
+      }
+    ],
+    "scoreMargin": 0.005245715379714966,
+    "uncertain": true,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1"
+  },
+  "10": {
+    "label": "Still Life",
+    "top3": [
+      {
+        "text": "still life with flowers and fruit",
+        "score": 0.33455371856689453
+      },
+      {
+        "text": "impressionist brushstrokes painting",
+        "score": 0.28598469495773315
+      },
+      {
+        "text": "red and orange warm painting",
+        "score": 0.28455984592437744
+      }
+    ],
+    "scoreMargin": 0.04856902360916138,
+    "uncertain": false,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1"
+  },
+  "11": {
+    "label": "Abstract Expressionist",
+    "top3": [
+      {
+        "text": "abstract expressionist painting",
+        "score": 0.2824559807777405
+      },
+      {
+        "text": "expressionist distorted painting",
+        "score": 0.28087592124938965
+      },
+      {
+        "text": "small figures in vast landscape",
+        "score": 0.2667951285839081
+      }
+    ],
+    "scoreMargin": 0.00158005952835083,
+    "uncertain": true,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1"
+  }
+}

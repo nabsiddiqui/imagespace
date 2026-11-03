@@ -1,0 +1,501 @@
+id,filename,cluster,timestamp,dominant_color,brightness,complexity,edge_density,outlier_score,cluster_confidence,artist,style,title,width,height
+0,abraham-manievich_autumn-day.jpg,4,,yellow,44.3,87.9,41.4,16.4,100.0,abraham manievich,Expressionism,autumn-day,1993,1382
+1,adolf-fleischmann_harbour-1928.jpg,0,1928,gray,75.3,81.1,34.1,34.8,100.0,adolf fleischmann,Expressionism,harbour-1928,2344,1382
+2,adriaen-van-de-venne_maurice-1567-1625-prince-of-orange-lying-in-state.jpg,-1,1567,orange,32.7,78.6,30.7,47.7,0.0,adriaen van de venne,Baroque,maurice-1567-1625-prince-of-orange-lying-in-state,2367,1382
+3,adriaen-van-ostade_interior-of-a-tavern-with-violin-player.jpg,6,,yellow,22.5,75.4,32.5,37.6,61.4,adriaen van ostade,Baroque,interior-of-a-tavern-with-violin-player,1382,1773
+4,albert-bloch_souvenir-1921.jpg,-1,1921,yellow,33.4,89.8,38.4,30.9,0.0,albert bloch,Expressionism,souvenir-1921,1714,1382
+5,albert-marquet_bouquet-of-flowers-1898.jpg,10,1898,yellow,50.6,92.9,53.7,18.7,100.0,albert marquet,Post Impressionism,bouquet-of-flowers-1898,1382,1781
+6,albrecht-durer_a-sea-monster-bearing-away-a-princess-1528.jpg,-1,1528,gray,79.0,85.3,47.0,27.5,0.0,albrecht durer,Northern Renaissance,a-sea-monster-bearing-away-a-princess-1528,1382,1799
+7,albrecht-durer_apollo-1.jpg,7,,gray,80.2,67.4,21.7,27.0,98.2,albrecht durer,Northern Renaissance,apollo-1,1382,1937
+8,albrecht-durer_apostle.jpg,7,,gray,75.5,63.7,19.6,16.5,100.0,albrecht durer,Northern Renaissance,apostle,1382,2264
+9,albrecht-durer_head-of-the-twelve-year-old-christ.jpg,6,,gray,54.4,76.4,28.7,38.8,95.9,albrecht durer,Northern Renaissance,head-of-the-twelve-year-old-christ,1382,1808
+10,albrecht-durer_holy-family.jpg,6,,gray,72.6,80.4,35.7,29.9,64.6,albrecht durer,Northern Renaissance,holy-family,1382,1876
+11,albrecht-durer_madonna-by-the-wall-1514.jpg,6,1514,gray,52.1,87.3,51.5,29.2,100.0,albrecht durer,Northern Renaissance,madonna-by-the-wall-1514,1382,2084
+12,alexandre-benois_military-parade-of-emperor-paul-in-front-of-mikhailovsky-castle-1907(4).jpg,-1,1907,gray,49.8,79.9,30.8,50.6,0.0,alexandre benois,Art Nouveau Modern,military-parade-of-emperor-paul-in-front-of-mikhailovsky-castle-1907(4),1941,1382
+13,alexey-bogolyubov_bolshaya-neva-1872.jpg,1,1872,yellow,58.6,78.4,22.8,20.9,88.3,alexey bogolyubov,Realism,bolshaya-neva-1872,2188,1382
+14,alfred-sisley_avenue-of-chestnut-trees-near-la-celle-saint-cloud-1865.jpg,3,1865,green,45.5,93.8,34.6,9.7,100.0,alfred sisley,Realism,avenue-of-chestnut-trees-near-la-celle-saint-cloud-1865,2181,1382
+15,alma-woodsey-thomas_elysian-fields-1973.jpg,9,1973,indigo,38.2,53.9,14.7,36.0,100.0,alma woodsey thomas,Color Field Painting,elysian-fields-1973,1946,1382
+16,alphonse-mucha_envisage.jpg,7,,yellow,79.2,56.9,23.5,23.6,79.7,alphonse mucha,Romanticism,envisage,1382,2176
+17,alphonse-mucha_prophetess-1896.jpg,-1,1896,yellow,36.6,90.3,40.8,43.0,0.0,alphonse mucha,Art Nouveau Modern,prophetess-1896,2215,1382
+18,amedeo-modigliani_a-girl-in-yellow-dress-1917.jpg,-1,1917,yellow,41.4,93.4,39.0,17.9,0.0,amedeo modigliani,Expressionism,a-girl-in-yellow-dress-1917,1382,2142
+19,amedeo-modigliani_portrait-of-a-young-girl-louise-1915.jpg,8,1915,yellow,26.4,87.2,35.4,16.2,76.2,amedeo modigliani,Expressionism,portrait-of-a-young-girl-louise-1915,1382,1889
+20,andre-dunoyer-de-segonzac_vase-d-anemones-citrons-et-panier-sur-la-table.jpg,10,,orange,45.6,67.7,22.6,22.0,100.0,andre dunoyer de segonzac,Impressionism,vase-d-anemones-citrons-et-panier-sur-la-table,1889,1382
+21,andrea-del-sarto_assumption-of-the-virgin-1529.jpg,6,1529,yellow,21.2,87.8,40.3,18.3,100.0,andrea del sarto,Mannerism Late Renaissance,assumption-of-the-virgin-1529,1382,2196
+22,andrea-mantegna_adoration-of-the-magi-1500.jpg,6,1500,yellow,23.2,94.7,76.5,36.1,95.0,andrea mantegna,High Renaissance,adoration-of-the-magi-1500,1790,1382
+23,andrea-mantegna_the-house-of-ludovico-gonzaga-bridegroom-decorated-wall-and-his-son-1475.jpg,6,1475,gray,42.4,96.9,73.5,38.1,100.0,andrea mantegna,Early Renaissance,the-house-of-ludovico-gonzaga-bridegroom-decorated-wall-and-his-son-1475,1382,1814
+24,andy-warhol_marylin-red.jpg,9,,red,45.9,79.9,35.7,42.6,72.6,andy warhol,Pop Art,marylin-red,1382,1498
+25,anna-ostroumova-lebedeva_french-embankment-1922.jpg,1,1922,gray,79.5,60.5,22.2,39.5,82.9,anna ostroumova lebedeva,Art Nouveau Modern,french-embankment-1922,1871,1382
+26,anna-ostroumova-lebedeva_st-isaac-s-cathedral-in-a-foggy-day-1922.jpg,1,1922,gray,86.4,44.2,10.5,30.8,86.3,anna ostroumova lebedeva,Art Nouveau Modern,st-isaac-s-cathedral-in-a-foggy-day-1922,1922,1382
+27,anne-truitt_9-jan-73-1973.jpg,9,1973,yellow,19.6,52.2,47.9,6.2,81.0,anne truitt,Color Field Painting,9-jan-73-1973,2141,1382
+28,anne-truitt_catawba-1962.jpg,9,1962,gray,56.3,85.1,38.7,33.9,100.0,anne truitt,Minimalism,catawba-1962,1785,1382
+29,annibale-carracci_sheet-of-caricatures.jpg,7,,gray,86.4,61.2,27.4,27.4,100.0,annibale carracci,Baroque,sheet-of-caricatures,1382,1974
+30,annibale-carracci_sleeping-venus.jpg,6,,yellow,28.9,86.1,46.6,27.9,76.6,annibale carracci,Baroque,sleeping-venus,2432,1382
+31,annibale-carracci_the-virgin-appears-to-st-luke-and-catherine-1592.jpg,6,1592,orange,34.7,87.5,58.6,25.3,100.0,annibale carracci,Baroque,the-virgin-appears-to-st-luke-and-catherine-1592,1382,2377
+32,anthony-van-dyck_james-stuart-duke-of-richmond-and-lennox-with-his-attributes-1634.jpg,2,1634,yellow-green,22.8,74.7,34.6,61.9,58.4,anthony van dyck,Baroque,james-stuart-duke-of-richmond-and-lennox-with-his-attributes-1634,1382,1753
+33,antoine-pesne_portrait-of-frederick-ii.jpg,2,,yellow,33.5,85.5,26.8,39.5,58.4,antoine pesne,Rococo,portrait-of-frederick-ii,1382,1899
+34,antoine-pesne_prince-augustus-william-of-prussia.jpg,2,,yellow,17.0,65.2,19.5,38.1,58.4,antoine pesne,Rococo,prince-augustus-william-of-prussia,1381,1666
+35,arkhip-kuindzhi_landscape-steppe.jpg,0,,gray,60.5,73.9,12.6,18.5,100.0,arkhip kuindzhi,Realism,landscape-steppe,2540,1382
+36,arturo-souto_war-scene-1937.jpg,5,1937,gray,51.6,89.5,36.6,39.0,100.0,arturo souto,Expressionism,war-scene-1937,1794,1382
+37,aubrey-beardsley_sappho.jpg,9,,gray,45.3,75.9,30.6,53.5,50.8,aubrey beardsley,Art Nouveau Modern,sappho,1382,1838
+38,aubrey-beardsley_the-stomach-dance-1893.jpg,-1,1893,gray,70.3,84.5,71.0,39.0,0.0,aubrey beardsley,Art Nouveau Modern,the-stomach-dance-1893,1382,1863
+39,auguste-herbin_dropsgezicht-1911.jpg,-1,1911,gray,43.7,96.1,58.6,28.0,0.0,auguste herbin,Cubism,dropsgezicht-1911,1679,1382
+40,auguste-herbin_notre-dame-de-paris-1903.jpg,-1,1903,gray,52.9,83.9,34.7,61.3,0.0,auguste herbin,Post Impressionism,notre-dame-de-paris-1903,1382,1974
+41,auguste-herbin_portrait-de-jeune-fille-1907.jpg,8,1907,yellow-green,48.0,89.8,43.1,26.4,93.5,auguste herbin,Fauvism,portrait-de-jeune-fille-1907,1382,1771
+42,auguste-rodin_untitled(3).jpg,7,,yellow,86.0,53.2,8.3,7.8,98.5,auguste rodin,Impressionism,untitled(3),1382,1935
+43,balthus_still-life-with-lamp-1958.jpg,-1,1958,yellow,51.9,69.1,21.8,31.7,0.0,balthus,Expressionism,still-life-with-lamp-1958,1801,1382
+44,barnett-newman_eleventh-station-1965.jpg,9,1965,yellow-green,100.0,0.0,0.0,20.7,100.0,barnett newman,Color Field Painting,eleventh-station-1965,1382,1962
+45,barnett-newman_the-blessing-1944.jpg,11,1944,yellow,60.6,85.7,43.3,18.2,91.6,barnett newman,Abstract Expressionism,the-blessing-1944,1382,1785
+46,barnett-newman_voice-of-fire-1967.jpg,9,1967,gray,62.8,70.4,47.7,14.9,100.0,barnett newman,Color Field Painting,voice-of-fire-1967,1382,1760
+47,bartolome-esteban-murillo_st-john-the-baptist-with-a-lamb-1670.jpg,7,1670,gray,72.5,71.6,21.1,32.7,100.0,bartolome esteban murillo,Baroque,st-john-the-baptist-with-a-lamb-1670,1382,2075
+48,bartolome-esteban-murillo_the-return-of-the-prodigal-son-1660.jpg,6,1660,yellow,32.1,89.5,35.5,23.6,78.8,bartolome esteban murillo,Baroque,the-return-of-the-prodigal-son-1660,1796,1382
+49,benozzo-gozzoli_the-dance-of-salome-detail-1462-1.jpg,6,1462,yellow,27.2,87.8,37.7,34.7,78.8,benozzo gozzoli,Early Renaissance,the-dance-of-salome-detail-1462-1,1842,1382
+50,benozzo-gozzoli_the-vigil-of-the-shepherds-detail.jpg,6,,yellow,31.7,83.4,41.9,42.9,63.3,benozzo gozzoli,Early Renaissance,the-vigil-of-the-shepherds-detail,2081,1382
+51,benozzo-gozzoli_trial-by-fire-before-the-sultan.jpg,6,,orange,44.0,86.1,42.1,25.4,100.0,benozzo gozzoli,Early Renaissance,trial-by-fire-before-the-sultan,1382,1498
+52,bernardo-bellotto_view-of-dresden-from-the-right-bank-of-the-elbe-with-the-augustus-bridge-1748.jpg,1,1748,yellow-green,79.3,75.5,28.5,38.2,79.3,bernardo bellotto,Rococo,view-of-dresden-from-the-right-bank-of-the-elbe-with-the-augustus-bridge-1748,2472,1382
+53,berthe-morisot_woman-with-a-fan-aka-head-of-a-girl.jpg,8,,yellow,44.6,90.7,44.1,17.9,100.0,berthe morisot,Impressionism,woman-with-a-fan-aka-head-of-a-girl,1382,1720
+54,betty-parsons_untitled(1).jpg,11,,yellow,49.6,85.0,49.2,0.5,100.0,betty parsons,Abstract Expressionism,untitled(1),1382,1563
+55,billy-apple_the-ship-brighton-beach-sussex-england-1963(1).jpg,9,1963,gray,60.0,73.8,21.2,77.2,52.7,billy apple,Pop Art,the-ship-brighton-beach-sussex-england-1963(1),1407,1382
+56,billy-apple_the-ship-brighton-beach-sussex-england-1963(2).jpg,-1,1963,gray,69.1,78.0,26.4,46.4,0.0,billy apple,Pop Art,the-ship-brighton-beach-sussex-england-1963(2),1382,1382
+57,boris-kustodiev_a-young-merchant-s-wife-1914.jpg,8,1914,gray,77.1,74.0,32.2,37.5,100.0,boris kustodiev,Impressionism,a-young-merchant-s-wife-1914,1382,1847
+58,boris-kustodiev_february-27-1917.jpg,4,1917,gray,67.2,95.2,55.0,48.5,91.1,boris kustodiev,Art Nouveau Modern,february-27-1917,1382,1823
+59,boris-kustodiev_frosty-morning-1913.jpg,4,1913,cyan,66.8,88.1,36.0,33.3,91.1,boris kustodiev,Art Nouveau Modern,frosty-morning-1913,2008,1381
+60,boris-kustodiev_staraya-russa-1921.jpg,-1,1921,yellow,36.9,82.9,33.1,26.3,0.0,boris kustodiev,Realism,staraya-russa-1921,2172,1382
+61,bui-xuan-phai_unknown-title(2).jpg,4,,gray,30.9,66.2,21.1,22.3,100.0,bui xuan phai,Expressionism,unknown-title(2),1857,1382
+62,camille-pissarro_in-the-hospital.jpg,5,,gray,54.0,93.2,52.2,43.9,100.0,camille pissarro,Impressionism,in-the-hospital,1382,1789
+63,camille-pissarro_kensington-gardens.jpg,1,,yellow,80.2,61.4,14.8,24.8,90.4,camille pissarro,Impressionism,kensington-gardens,2159,1382
+64,camille-pissarro_kew-the-path-to-the-main-conservatory.jpg,3,,yellow-green,70.7,89.5,37.4,36.6,100.0,camille pissarro,Pointillism,kew-the-path-to-the-main-conservatory,1697,1382
+65,camille-pissarro_setting-sun-and-fog-eragny-1891.jpg,3,1891,yellow,59.3,82.3,36.9,20.5,100.0,camille pissarro,Pointillism,setting-sun-and-fog-eragny-1891,1653,1382
+66,camille-pissarro_the-red-house-1873.jpg,3,1873,orange,58.5,94.7,42.2,12.0,95.6,camille pissarro,Impressionism,the-red-house-1873,1690,1382
+67,camille-pissarro_the-road-to-l-hermitage-in-snow.jpg,-1,,gray,46.4,98.5,62.7,23.7,0.0,camille pissarro,Impressionism,the-road-to-l-hermitage-in-snow,1382,1710
+68,camille-pissarro_the-wheelbarrow-orchard.jpg,3,,yellow-green,46.6,73.6,22.2,26.7,97.6,camille pissarro,Impressionism,the-wheelbarrow-orchard,1730,1382
+69,caravaggio_boy-bitten-by-a-lizard(1).jpg,-1,,yellow,38.2,83.5,35.7,37.9,0.0,caravaggio,Baroque,boy-bitten-by-a-lizard(1),1382,1799
+70,carlo-crivelli_saint-nicolas.jpg,-1,,yellow,44.8,85.4,46.3,39.0,0.0,carlo crivelli,Early Renaissance,saint-nicolas,1382,4730
+71,carlo-crivelli_virgin-and-child-enthroned-with-saints.jpg,6,,yellow,35.8,92.2,59.3,18.2,100.0,carlo crivelli,Early Renaissance,virgin-and-child-enthroned-with-saints,1388,1382
+72,caspar-david-friedrich_rogen-landscape-in-putbus.jpg,1,,green,68.4,74.5,19.2,18.5,90.4,caspar david friedrich,Romanticism,rogen-landscape-in-putbus,2088,1382
+73,caspar-david-friedrich_view-from-the-artists-studio-window-on-left.jpg,-1,,yellow,55.1,84.1,44.9,37.3,0.0,caspar david friedrich,Romanticism,view-from-the-artists-studio-window-on-left,1382,1864
+74,childe-hassam_building-a-schooner-provincetown.jpg,-1,,yellow,52.8,78.6,31.3,37.2,0.0,childe hassam,Impressionism,building-a-schooner-provincetown,1497,1382
+75,childe-hassam_the-alhambra-aka-summer-palace-of-the-caliphs-granada-spain.jpg,4,,yellow-green,46.9,81.7,35.1,39.8,100.0,childe hassam,Impressionism,the-alhambra-aka-summer-palace-of-the-caliphs-granada-spain,1682,1382
+76,christen-kobke_the-forum-pompeii-with-vesuvius-in-the-distance-1841.jpg,-1,1841,yellow,55.0,96.7,31.6,58.9,0.0,christen kobke,Romanticism,the-forum-pompeii-with-vesuvius-in-the-distance-1841,1715,1382
+77,chronis-botsoglou_untitled-2.jpg,7,,gray,26.1,86.0,36.0,43.8,77.3,chronis botsoglou,Expressionism,untitled-2,1382,2555
+78,claude-monet_a-woman-reading(1).jpg,8,,gray,29.7,90.7,47.3,17.5,100.0,claude monet,Impressionism,a-woman-reading(1),1744,1382
+79,claude-monet_boatyard-near-honfleur.jpg,1,,green,69.9,83.8,30.6,28.8,100.0,claude monet,Impressionism,boatyard-near-honfleur,1950,1382
+80,claude-monet_ice-lock-port-villez.jpg,1,,gray,73.9,78.0,25.5,19.2,100.0,claude monet,Impressionism,ice-lock-port-villez,1759,1382
+81,claude-monet_ships-in-harbor.jpg,1,,gray,55.2,90.2,39.5,39.3,100.0,claude monet,Impressionism,ships-in-harbor,1678,1382
+82,claude-monet_snow-effect-the-boulevard-de-pontoise-at-argenteuil.jpg,4,,yellow-green,47.2,83.2,32.7,19.0,91.1,claude monet,Impressionism,snow-effect-the-boulevard-de-pontoise-at-argenteuil,1865,1382
+83,claude-monet_the-sea-at-saint-adresse.jpg,1,,gray,68.1,75.9,25.1,29.0,100.0,claude monet,Impressionism,the-sea-at-saint-adresse,1924,1382
+84,claude-monet_the-yellow-irises-1917.jpg,-1,1917,yellow-green,29.2,74.1,31.1,27.7,0.0,claude monet,Impressionism,the-yellow-irises-1917,1382,2811
+85,claude-monet_three-pots-of-tulips.jpg,10,,yellow,56.3,84.3,45.2,20.1,100.0,claude monet,Impressionism,three-pots-of-tulips,1382,1947
+86,claude-monet_weeping-willow-1919.jpg,-1,1919,yellow,18.0,75.8,21.1,19.1,0.0,claude monet,Impressionism,weeping-willow-1919,1661,1382
+87,claudio-tozzi_third-world-1973.jpg,9,1973,yellow,37.2,85.2,36.2,60.4,72.6,claudio tozzi,Pop Art,third-world-1973,1948,1382
+88,correggio_adoration-of-the-shepherds-the-holy-night-1522(2).jpg,6,1522,yellow,26.0,63.8,26.0,21.4,78.6,correggio,Mannerism Late Renaissance,adoration-of-the-shepherds-the-holy-night-1522(2),1382,1935
+89,dante-gabriel-rossetti_portrait-of-elizabeth-siddal-1865.jpg,8,1865,yellow,53.9,82.9,30.8,21.8,79.5,dante gabriel rossetti,Romanticism,portrait-of-elizabeth-siddal-1865,1382,1857
+90,david-burliuk_dniester-river-rapids.jpg,-1,,orange,36.7,93.7,47.1,18.0,0.0,david burliuk,Fauvism,dniester-river-rapids,1945,1382
+91,david-burliuk_horses-1908.jpg,-1,1908,orange,33.7,87.9,50.1,19.8,0.0,david burliuk,Fauvism,horses-1908,1658,1382
+92,david-wilkie_the-bag-piper-1813.jpg,2,1813,orange,13.8,61.4,20.1,57.3,58.4,david wilkie,Romanticism,the-bag-piper-1813,1382,1881
+93,diego-rivera_portrait-of-oscar-miestchaninoff-1913.jpg,7,1913,yellow,28.4,83.6,32.1,33.4,86.8,diego rivera,Cubism,portrait-of-oscar-miestchaninoff-1913,1382,1702
+94,dimitris-mytaras_studio-1993.jpg,11,1993,gray,27.1,85.2,49.2,12.3,100.0,dimitris mytaras,Expressionism,studio-1993,1382,1621
+95,dmitry-levitzky_natalia-borshchova-1776.jpg,2,1776,yellow,12.4,72.2,20.2,51.8,58.4,dmitry levitzky,Rococo,natalia-borshchova-1776,1382,2077
+96,dosso-dossi_allegory-of-music-1522.jpg,6,1522,yellow,23.9,91.8,61.1,35.1,74.5,dosso dossi,High Renaissance,allegory-of-music-1522,1449,1382
+97,edgar-degas_mme-jacques-fourchy-1883.jpg,7,1883,yellow,98.6,49.2,21.1,45.3,95.3,edgar degas,Impressionism,mme-jacques-fourchy-1883,1382,2093
+98,edgar-degas_slippers-of-ballerina.jpg,-1,,yellow,61.1,91.4,44.8,50.0,0.0,edgar degas,Impressionism,slippers-of-ballerina,2527,1382
+99,edgar-degas_the-rehearsal-1877.jpg,8,1877,yellow,32.1,82.5,34.6,36.5,88.2,edgar degas,Impressionism,the-rehearsal-1877,2014,1382
+100,edgar-degas_three-dancers-in-yellow-skirts.jpg,7,,gray,61.2,86.1,45.4,27.2,94.0,edgar degas,Impressionism,three-dancers-in-yellow-skirts,1382,1828
+101,edgar-degas_woman-putting-on-her-gloves.jpg,8,,yellow,34.6,89.1,42.1,19.4,89.9,edgar degas,Impressionism,woman-putting-on-her-gloves,1382,1903
+102,edmund-charles-tarbell_in-a-garden-1890.jpg,8,1890,yellow,41.7,86.6,34.8,30.0,94.8,edmund charles tarbell,Impressionism,in-a-garden-1890,1592,1382
+103,edouard-manet_a-bar-at-the-folies-bergere-1882-1.jpg,8,1882,yellow,40.0,97.8,67.1,41.9,82.2,edouard manet,Impressionism,a-bar-at-the-folies-bergere-1882-1,1842,1382
+104,edouard-manet_portrait-of-eva-gonzales-1870.jpg,8,1870,orange,37.2,98.1,49.4,30.0,71.6,edouard manet,Realism,portrait-of-eva-gonzales-1870,1382,2002
+105,edouard-manet_self-portrait-with-a-palette-1879(1).jpg,2,1879,orange,31.8,85.8,31.2,37.2,100.0,edouard manet,Impressionism,self-portrait-with-a-palette-1879(1),1382,1718
+106,edouard-manet_young-woman-in-the-garden-1882.jpg,8,1882,yellow,59.0,75.1,24.7,18.8,100.0,edouard manet,Impressionism,young-woman-in-the-garden-1882,1382,1791
+107,edouard-vuillard_romain-coolus-writer-in-la-revuew-blanche.jpg,8,,yellow,62.0,93.5,35.0,16.1,89.9,edouard vuillard,Post Impressionism,romain-coolus-writer-in-la-revuew-blanche,1481,1381
+108,eduardo-paolozzi_it-s-a-psychological-fact-pleasure-helps-your-disposition-1948.jpg,9,1948,orange,69.6,89.0,50.7,78.9,72.6,eduardo paolozzi,Pop Art,it-s-a-psychological-fact-pleasure-helps-your-disposition-1948,1382,2032
+109,edvard-munch_red-and-white-1900.jpg,-1,1900,orange,26.1,92.3,41.0,30.6,0.0,edvard munch,Expressionism,red-and-white-1900,1777,1381
+110,edvard-munch_the-women-1895.jpg,7,1895,yellow,58.5,98.3,67.6,21.8,94.1,edvard munch,Expressionism,the-women-1895,1766,1382
+111,edward-burne-jones_george-howard.jpg,2,,gray,63.7,87.4,38.6,53.6,78.6,edward burne jones,Romanticism,george-howard,1382,1975
+112,edward-hopper_american-village.jpg,4,,gray,37.0,90.2,36.2,44.4,91.1,edward hopper,New Realism,american-village,2025,1381
+113,edwin-henry-landseer_royal-sports-on-hill-and-loch.jpg,6,,yellow,45.5,96.3,54.2,41.2,78.8,edwin henry landseer,Romanticism,royal-sports-on-hill-and-loch,2590,1382
+114,egon-schiele_seated-child-1918.jpg,8,1918,yellow,33.4,84.7,37.2,28.8,85.1,egon schiele,Expressionism,seated-child-1918,1382,2008
+115,el-greco_st-francis-s-vision-of-the-flaming-torch.jpg,6,,yellow,21.8,91.6,52.7,29.9,100.0,el greco,Mannerism Late Renaissance,st-francis-s-vision-of-the-flaming-torch,1382,2204
+116,ellsworth-kelly_summer-blue-curve-1984.jpg,-1,1984,gray,76.3,80.6,42.0,42.5,0.0,ellsworth kelly,Pop Art,summer-blue-curve-1984,1930,1382
+117,ernst-ludwig-kirchner_the-soldier-bath.jpg,-1,,yellow,41.0,85.5,58.4,27.8,0.0,ernst ludwig kirchner,Expressionism,the-soldier-bath,1498,1382
+118,ernst-ludwig-kirchner_villa-in-dresden.jpg,-1,,yellow,45.6,81.7,38.4,22.7,0.0,ernst ludwig kirchner,Expressionism,villa-in-dresden,1835,1382
+119,eugene-boudin_laundresses-on-the-banks-of-the-touques-1886.jpg,1,1886,gray,66.3,90.1,41.4,34.8,83.9,eugene boudin,Impressionism,laundresses-on-the-banks-of-the-touques-1886,1846,1382
+120,eugene-boudin_le-havre-francais-tower.jpg,1,,orange,58.3,85.6,28.2,23.5,81.2,eugene boudin,Realism,le-havre-francais-tower,2075,1382
+121,federico-zandomeneghi_woman-with-bouquet.jpg,8,,yellow,52.0,89.6,44.2,29.7,89.5,federico zandomeneghi,Impressionism,woman-with-bouquet,1382,1688
+122,felicien-rops_the-sacrifice-from-the-satanic-ones.jpg,7,,gray,71.1,86.1,41.9,18.0,94.1,felicien rops,Symbolism,the-sacrifice-from-the-satanic-ones,1382,2153
+123,ferdinand-hodler_adoration.jpg,7,,yellow-green,58.7,86.3,48.3,21.3,94.1,ferdinand hodler,Symbolism,adoration,1382,3278
+124,ferdinand-hodler_lake-geneva-with-savoyerbergen.jpg,-1,,gray,55.4,72.1,23.6,29.5,0.0,ferdinand hodler,Symbolism,lake-geneva-with-savoyerbergen,1886,1382
+125,fernand-khnopff_aktstudie-1912.jpg,7,1912,yellow,83.8,34.5,6.8,19.3,95.4,fernand khnopff,Symbolism,aktstudie-1912,1382,2334
+126,fernand-leger_coffee.jpg,-1,,yellow,89.4,37.4,9.6,28.7,0.0,fernand leger,Naive Art Primitivism,coffee,1382,1843
+127,fernando-botero_man-and-horse.jpg,-1,,yellow,41.1,92.4,38.6,48.5,0.0,fernando botero,Naive Art Primitivism,man-and-horse,1382,1974
+128,fikret-mualla-saygi_unknown-title-14.jpg,-1,,green,55.1,82.4,45.0,32.2,0.0,fikret mualla saygi,Fauvism,unknown-title-14,1804,1382
+129,fikret-mualla-saygi_unknown-title-5.jpg,11,,indigo,41.1,61.0,23.2,25.3,83.1,fikret mualla saygi,Fauvism,unknown-title-5,1727,1382
+130,filipp-malyavin_whirlwind-1906.jpg,9,1906,orange,15.9,62.5,21.3,17.0,61.7,filipp malyavin,Art Nouveau Modern,whirlwind-1906,2554,1382
+131,francis-picabia_still-life.jpg,10,,yellow,44.2,94.8,56.3,18.3,100.0,francis picabia,Expressionism,still-life,1382,1946
+132,francisco-goya_and-they-still-won-t-go-1799.jpg,-1,1799,gray,58.6,80.6,58.0,31.0,0.0,francisco goya,Romanticism,and-they-still-won-t-go-1799,1382,2032
+133,francisco-goya_majas-on-a-balcony.jpg,-1,,yellow,17.0,81.8,44.0,46.3,0.0,francisco goya,Romanticism,majas-on-a-balcony,1382,2159
+134,francisco-goya_those-specks-of-dust-1799.jpg,-1,1799,gray,68.6,74.6,53.6,31.4,0.0,francisco goya,Romanticism,those-specks-of-dust-1799,1382,2032
+135,frank-lobdell_15-april-1962-1962.jpg,11,1962,yellow,72.7,56.3,14.7,11.2,79.3,frank lobdell,Abstract Expressionism,15-april-1962-1962,1382,1583
+136,frank-stella_jasper-s-dilemma-1972.jpg,9,1972,gray,75.5,60.9,26.8,28.6,92.5,frank stella,Color Field Painting,jasper-s-dilemma-1972,1905,1382
+137,frans-hals_dorothea-berck-1644.jpg,2,1644,yellow,27.8,83.3,36.8,56.6,58.4,frans hals,Baroque,dorothea-berck-1644,1382,1669
+138,frans-hals_herman-langelius.jpg,2,,yellow,18.2,60.4,22.1,63.2,58.4,frans hals,Baroque,herman-langelius,1382,1801
+139,fyodor-rokotov_portrait-of-count-g-g-orlov-1763.jpg,2,1763,yellow,21.1,78.7,30.5,55.5,58.4,fyodor rokotov,Rococo,portrait-of-count-g-g-orlov-1763,1382,1750
+140,fyodor-rokotov_portrait-of-n-e-struisky.jpg,2,,yellow,22.9,58.6,15.8,43.1,75.4,fyodor rokotov,Rococo,portrait-of-n-e-struisky,1382,1820
+141,gene-davis_composition-i-1949.jpg,9,1949,gray,69.8,57.9,17.6,21.4,80.2,gene davis,Abstract Expressionism,composition-i-1949,1690,1382
+142,gene-davis_triple-jump-1962.jpg,9,1962,orange,58.4,88.5,66.1,11.2,100.0,gene davis,Color Field Painting,triple-jump-1962,2779,1382
+143,genevieve-asse_atlantique-v.jpg,9,,indigo,54.4,28.2,2.8,21.2,74.1,genevieve asse,Minimalism,atlantique-v,1422,1382
+144,genevieve-asse_ouverture-de-la-nuit-1973.jpg,9,1973,blue,41.7,74.9,18.6,11.0,72.4,genevieve asse,Minimalism,ouverture-de-la-nuit-1973,1382,1403
+145,genevieve-asse_transparence-1980.jpg,9,1980,gray,83.6,37.1,5.8,32.5,98.2,genevieve asse,Minimalism,transparence-1980,2067,1382
+146,george-frederick-watts_nude-studies-of-long-mary(1).jpg,7,,yellow,54.5,64.4,18.9,6.8,100.0,george frederick watts,Symbolism,nude-studies-of-long-mary(1),1382,2214
+147,george-morland_sea-coast-scene-smugglers-1793.jpg,1,1793,gray,44.4,87.8,28.9,36.3,93.3,george morland,Rococo,sea-coast-scene-smugglers-1793,1575,1382
+148,georges-braque_anemones-1924.jpg,-1,1924,yellow,34.7,90.6,54.7,22.5,0.0,georges braque,Expressionism,anemones-1924,1514,1382
+149,georges-seurat_suburb-1882.jpg,3,1882,gray,53.6,87.3,29.9,18.6,85.9,georges seurat,Pointillism,suburb-1882,1771,1382
+150,gerard-david_the-virgin-of-the-annunciation.jpg,6,,yellow,29.9,90.3,45.8,30.7,82.4,gerard david,Northern Renaissance,the-virgin-of-the-annunciation,1382,4125
+151,gerard-sekoto_self-portrait-1947.jpg,8,1947,yellow-green,39.4,78.8,30.4,38.1,60.5,gerard sekoto,Expressionism,self-portrait-1947,1382,1810
+152,gerrit-dou_burgomaster-hasselaar-and-his-wife.jpg,6,,yellow,18.5,76.1,35.7,36.2,62.1,gerrit dou,Baroque,burgomaster-hasselaar-and-his-wife,1382,1687
+153,gerrit-dou_portrait-of-an-old-woman-reading.jpg,6,,yellow,15.3,77.2,40.6,49.1,100.0,gerrit dou,Baroque,portrait-of-an-old-woman-reading,1382,2073
+154,gheorghe-tattarescu_ion-gr-di-teanu.jpg,2,,yellow,20.7,81.3,26.4,59.8,69.6,gheorghe tattarescu,Romanticism,ion-gr-di-teanu,1382,1645
+155,giovanni-battista-tiepolo_alexander-the-great-and-campaspe-in-the-studio-of-apelles.jpg,6,,yellow,8.6,76.1,32.0,15.5,78.8,giovanni battista tiepolo,Rococo,alexander-the-great-and-campaspe-in-the-studio-of-apelles,1790,1382
+156,giovanni-boldini_lady-wearing-a-straw-bonnet-morning-promenade-1905.jpg,-1,1905,yellow,23.8,70.8,21.1,25.0,0.0,giovanni boldini,Impressionism,lady-wearing-a-straw-bonnet-morning-promenade-1905,1382,1806
+157,giovanni-boldini_place-clichy-1874.jpg,1,1874,gray,58.2,75.8,24.6,30.7,78.8,giovanni boldini,Realism,place-clichy-1874,2064,1382
+158,giovanni-boldini_the-black-sash-1905.jpg,8,1905,yellow,39.3,86.4,36.3,28.8,65.9,giovanni boldini,Realism,the-black-sash-1905,1382,2986
+159,grandma-moses_not_detected_251621.jpg,-1,1621,gray,69.4,91.6,51.2,64.8,0.0,grandma moses,Naive Art Primitivism,not_detected_251621,1760,1382
+160,gregoire-boonzaier_after-the-rain-cape-town.jpg,4,,yellow-green,70.9,78.5,22.9,27.9,91.1,gregoire boonzaier,Impressionism,after-the-rain-cape-town,2263,1382
+161,gustav-klimt_design-for-a-theater-curtain.jpg,6,,yellow,51.6,82.9,37.8,25.5,64.0,gustav klimt,Art Nouveau Modern,design-for-a-theater-curtain,1382,1751
+162,gustav-klimt_the-sunflower-1907.jpg,-1,1907,green,31.8,74.6,23.1,31.1,0.0,gustav klimt,Art Nouveau Modern,the-sunflower-1907,1382,1941
+163,gustave-caillebotte_regatta-at-argenteuil-1893.jpg,1,1893,gray,55.3,88.7,30.1,22.5,100.0,gustave caillebotte,Impressionism,regatta-at-argenteuil-1893,1382,1900
+164,gustave-caillebotte_the-briard-plain.jpg,3,,yellow,74.2,79.7,19.6,10.8,100.0,gustave caillebotte,Impressionism,the-briard-plain,1954,1382
+165,gustave-courbet_the-white-sail-1877.jpg,1,1877,indigo,27.3,79.2,27.3,21.0,100.0,gustave courbet,Realism,the-white-sail-1877,2419,1382
+166,gustave-dore_battle-of-lepanto-in-1571-1877.jpg,5,1571,gray,50.8,100.0,62.7,45.8,100.0,gustave dore,Romanticism,battle-of-lepanto-in-1571-1877,1382,1851
+167,gustave-dore_crystalline-heaven.jpg,-1,,gray,67.2,78.8,42.9,33.6,0.0,gustave dore,Romanticism,crystalline-heaven,1382,1780
+168,gustave-dore_satan-shown-as-the-fallen-angel-after-having-been-smitten.jpg,-1,,gray,42.8,90.1,37.7,42.3,0.0,gustave dore,Romanticism,satan-shown-as-the-fallen-angel-after-having-been-smitten,1382,1722
+169,gustave-dore_the-marriage-in-cana.jpg,5,,gray,60.7,94.1,47.9,38.2,100.0,gustave dore,Romanticism,the-marriage-in-cana,1382,1860
+170,gustave-dore_the-tree.jpg,5,,gray,62.5,83.9,50.8,35.4,100.0,gustave dore,Romanticism,the-tree,1382,1802
+171,gustave-moreau_abduction-of-the-young-venetian-woman-by-cypriot-pirates-1851.jpg,6,1851,yellow,34.9,89.6,39.8,23.4,76.6,gustave moreau,Romanticism,abduction-of-the-young-venetian-woman-by-cypriot-pirates-1851,1382,1710
+172,gustave-moreau_the-song-of-songs-1893.jpg,-1,1893,yellow,39.5,92.4,42.0,27.3,0.0,gustave moreau,Symbolism,the-song-of-songs-1893,1382,2704
+173,gustave-moreau_the-victorious-sphinx-1886.jpg,-1,1886,yellow,42.7,96.8,48.6,26.5,0.0,gustave moreau,Symbolism,the-victorious-sphinx-1886,1382,2527
+174,guy-rose_carmel-shore-1919-1.jpg,1,1919,green,63.2,89.8,51.7,17.7,100.0,guy rose,Impressionism,carmel-shore-1919-1,1708,1382
+175,hans-holbein-the-younger_portrait-of-jakob-meyer-zum-hasen-mayor-of-basel-1528.jpg,2,1528,yellow,69.3,72.6,17.8,52.5,57.2,hans holbein the younger,Northern Renaissance,portrait-of-jakob-meyer-zum-hasen-mayor-of-basel-1528,1382,1952
+176,hans-memling_angel-holding-an-olive-branch-1480.jpg,6,1480,yellow,45.2,93.8,59.4,34.6,100.0,hans memling,Northern Renaissance,angel-holding-an-olive-branch-1480,1382,2126
+177,harry-clarke_the-year-s-at-the-spring-1920-7.jpg,-1,1920,gray,68.3,74.1,52.5,63.0,0.0,harry clarke,Symbolism,the-year-s-at-the-spring-1920-7,2672,1381
+178,helen-frankenthaler_southern-exposure-2005.jpg,9,2005,yellow,67.6,57.1,8.9,0.2,74.3,helen frankenthaler,Color Field Painting,southern-exposure-2005,1741,1382
+179,helen-frankenthaler_untitled-1984.jpg,9,1984,gray,73.6,52.5,14.7,17.7,97.7,helen frankenthaler,Abstract Expressionism,untitled-1984,1919,1382
+180,henri-de-toulouse-lautrec_louis-pascal-1892.jpg,2,1892,gray,37.3,85.7,30.4,36.4,100.0,henri de toulouse lautrec,Post Impressionism,louis-pascal-1892,1382,2113
+181,henri-fantin-latour_bathers-i.jpg,-1,,yellow-green,26.2,89.7,35.6,29.7,0.0,henri fantin latour,Symbolism,bathers-i,1382,2354
+182,henri-fantin-latour_still-life-flowers-bowl-of-fruit-and-pitcher-1865.jpg,10,1865,yellow,47.6,84.9,31.5,18.8,100.0,henri fantin latour,Realism,still-life-flowers-bowl-of-fruit-and-pitcher-1865,1720,1382
+183,henri-fantin-latour_truth-1891.jpg,-1,1891,yellow-green,27.3,90.0,47.7,18.2,0.0,henri fantin latour,Symbolism,truth-1891,1382,1743
+184,henri-matisse_nude-s-back-1918.jpg,7,1918,gray,44.0,97.4,66.8,20.6,81.9,henri matisse,Post Impressionism,nude-s-back-1918,1382,1870
+185,henri-matisse_seated-figure-tan-room-1918.jpg,7,1918,yellow,51.9,86.1,43.5,33.0,79.7,henri matisse,Expressionism,seated-figure-tan-room-1918,1382,1721
+186,henry-herbert-la-thangue_farm-near-horsey-norfolk-1885.jpg,3,1885,yellow-green,51.6,69.3,22.5,6.8,100.0,henry herbert la thangue,Impressionism,farm-near-horsey-norfolk-1885,1863,1382
+187,henry-herbert-la-thangue_gathering-oranges-1929.jpg,3,1929,yellow-green,40.3,83.5,34.1,26.8,94.6,henry herbert la thangue,Impressionism,gathering-oranges-1929,1553,1382
+188,henry-raeburn_portrait-of-francis-and-his-wife-eliza-dundas-cumming.jpg,8,,yellow,9.6,59.6,32.1,52.0,65.0,henry raeburn,Romanticism,portrait-of-francis-and-his-wife-eliza-dundas-cumming,1908,1382
+189,hieronymus-bosch_haywain-1502-1.jpg,6,1502,yellow,37.6,92.3,53.4,45.6,67.0,hieronymus bosch,Northern Renaissance,haywain-1502-1,1382,1838
+190,hieronymus-bosch_the-temptation-of-st-anthony.jpg,6,,yellow-green,55.0,93.0,60.1,39.7,57.6,hieronymus bosch,Northern Renaissance,the-temptation-of-st-anthony,1382,1960
+191,hiro-yamagata_not-detected-272397.jpg,9,,gray,44.1,98.7,62.4,100.0,72.6,hiro yamagata,Pop Art,not-detected-272397,1682,1382
+192,hoca-ali-riza_unknown-title(5).jpg,1,,gray,60.7,91.2,44.0,24.4,93.3,hoca ali riza,Impressionism,unknown-title(5),2265,1381
+193,howard-hodgkin_moroccan-door-1991.jpg,9,1991,indigo,27.9,94.6,87.0,32.1,100.0,howard hodgkin,Color Field Painting,moroccan-door-1991,1998,1382
+194,hubert-robert_imaginary-view-of-rome-with-the-horse-tamer-of-the-monte-cavallo-and-a-church-1786.jpg,1,1786,yellow-green,42.8,92.3,37.4,57.0,81.2,hubert robert,Rococo,imaginary-view-of-rome-with-the-horse-tamer-of-the-monte-cavallo-and-a-church-1786,1382,2106
+195,ilya-mashkov_view-of-nervi.jpg,4,,gray,49.2,91.3,45.6,18.7,100.0,ilya mashkov,Post Impressionism,view-of-nervi,2073,1382
+196,ilya-repin_old-woman.jpg,8,,green,47.5,91.8,45.0,29.8,91.7,ilya repin,Realism,old-woman,1382,2166
+197,ilya-repin_portrait-of-a-p-bogolyubov-1882.jpg,2,1882,green,22.1,74.3,38.6,50.3,100.0,ilya repin,Realism,portrait-of-a-p-bogolyubov-1882,1382,1721
+198,ilya-repin_portrait-of-ivan-ivanovich-shamshin-1902.jpg,2,1902,gray,14.7,66.4,35.6,34.5,100.0,ilya repin,Realism,portrait-of-ivan-ivanovich-shamshin-1902,1382,1847
+199,ilya-repin_portrait-of-painter-and-sculptor-mikhail-osipovich-mikeshin-1888.jpg,2,1888,gray,31.6,67.4,22.3,29.2,100.0,ilya repin,Realism,portrait-of-painter-and-sculptor-mikhail-osipovich-mikeshin-1888,1382,1706
+200,ilya-repin_the-concert-in-the-assembly-of-nobility-1888.jpg,-1,1888,gray,61.4,96.6,49.5,31.5,0.0,ilya repin,Realism,the-concert-in-the-assembly-of-nobility-1888,1977,1382
+201,imi-knoebel_weiss-und-schwarz-3-2009.jpg,9,2009,gray,73.4,78.5,40.6,15.9,96.9,imi knoebel,Minimalism,weiss-und-schwarz-3-2009,1614,1382
+202,ion-pacea_2-mai-beach.jpg,0,,teal,62.7,78.7,28.1,12.7,100.0,ion pacea,Fauvism,2-mai-beach,2026,1382
+203,ion-pacea_falez-la-vama-veche.jpg,0,,yellow-green,90.8,63.7,20.6,26.8,100.0,ion pacea,Post Impressionism,falez-la-vama-veche,1382,1776
+204,ion-tuculescu_winter-on-the-street.jpg,4,,yellow,30.9,81.8,34.7,23.6,91.1,ion tuculescu,Expressionism,winter-on-the-street,1783,1382
+205,isaac-levitan_bright-sunny-day.jpg,3,,gray,54.6,84.9,31.7,9.9,100.0,isaac levitan,Realism,bright-sunny-day,3030,1382
+206,isaac-levitan_october-autumn-1891.jpg,3,1891,yellow-green,49.8,88.3,22.1,8.6,100.0,isaac levitan,Realism,october-autumn-1891,1977,1382
+207,isaac-levitan_river-in-the-forest-1886.jpg,3,1886,gray,54.2,96.8,39.9,22.8,93.7,isaac levitan,Realism,river-in-the-forest-1886,2362,1382
+208,ivan-aivazovsky_on-the-island-of-crete-1867.jpg,1,1867,yellow,41.6,94.6,28.9,34.2,93.3,ivan aivazovsky,Romanticism,on-the-island-of-crete-1867,1767,1382
+209,ivan-aivazovsky_surf-1888.jpg,-1,1888,gray,41.4,89.5,18.7,32.9,0.0,ivan aivazovsky,Romanticism,surf-1888,1382,2103
+210,ivan-aivazovsky_view-of-amalfi-1865.jpg,1,1865,gray,67.1,83.8,23.5,36.0,93.3,ivan aivazovsky,Romanticism,view-of-amalfi-1865,1895,1382
+211,ivan-albright_view-from-room-603-watergate-washington-d-c-1974.jpg,-1,1974,gray,39.1,63.0,23.2,24.8,0.0,ivan albright,Impressionism,view-from-room-603-watergate-washington-d-c-1974,1766,1382
+212,ivan-bilibin_illustration-for-a-poem-walls-of-cain-by-vyacheslav-ivanov-1906.jpg,-1,1906,gray,56.5,94.8,76.7,34.6,0.0,ivan bilibin,Art Nouveau Modern,illustration-for-a-poem-walls-of-cain-by-vyacheslav-ivanov-1906,3211,1382
+213,ivan-bilibin_illustration-for-the-russian-fairy-story-maria-morevna-1900(1).jpg,-1,1900,yellow-green,80.6,76.3,40.5,86.2,0.0,ivan bilibin,Art Nouveau Modern,illustration-for-the-russian-fairy-story-maria-morevna-1900(1),1382,1785
+214,ivan-kramskoy_portrait-of-prince-pavel-ivanovich-lieven-1879.jpg,2,1879,gray,19.7,57.4,19.2,48.3,95.6,ivan kramskoy,Realism,portrait-of-prince-pavel-ivanovich-lieven-1879,1382,2019
+215,ivan-kramskoy_portrait-of-the-artist-ilya-repin.jpg,2,,gray,20.9,66.3,18.0,45.6,90.8,ivan kramskoy,Realism,portrait-of-the-artist-ilya-repin,1382,2051
+216,ivan-shishkin_peasant-and-peddler-1855.jpg,-1,1855,gray,54.2,90.0,56.0,43.2,0.0,ivan shishkin,Realism,peasant-and-peddler-1855,1382,1860
+217,ivan-shishkin_pine-forest-1885-1.jpg,-1,1885,yellow,21.7,75.8,25.6,30.6,0.0,ivan shishkin,Realism,pine-forest-1885-1,1979,1382
+218,jackson-pollock_number-32-1950.jpg,9,1950,yellow-green,48.2,85.8,56.9,25.2,57.5,jackson pollock,Action painting,number-32-1950,2363,1382
+219,jacopo-pontormo_st-julian.jpg,-1,,yellow,42.9,69.4,28.1,39.4,0.0,jacopo pontormo,Mannerism Late Renaissance,st-julian,1382,3204
+220,jacopo-pontormo_vertumnus-and-pomona.jpg,6,,yellow,55.3,80.8,41.2,47.5,61.4,jacopo pontormo,Mannerism Late Renaissance,vertumnus-and-pomona,2480,1382
+221,james-tissot_barrabbas-illustration-from-the-life-of-our-lord-jesus-christ-1894.jpg,-1,1894,yellow,30.5,68.1,24.0,46.7,0.0,james tissot,Realism,barrabbas-illustration-from-the-life-of-our-lord-jesus-christ-1894,1405,1382
+222,james-tissot_quiet.jpg,8,,yellow,30.8,94.5,50.5,35.1,82.1,james tissot,Realism,quiet,1752,1382
+223,james-tissot_statesmen-no-1280.jpg,7,,yellow,59.7,64.2,31.1,37.8,95.0,james tissot,Realism,statesmen-no-1280,1382,2252
+224,jamie-wyeth_orca-1990.jpg,7,1990,yellow-green,41.8,86.7,48.4,61.9,93.1,jamie wyeth,Contemporary Realism,orca-1990,1382,1819
+225,jan-matejko_mieszko-ii-lambert.jpg,-1,,gray,54.3,89.1,48.9,50.9,0.0,jan matejko,Romanticism,mieszko-ii-lambert,1382,1876
+226,jan-sluyters_moon-night.jpg,0,,gray,35.5,67.8,21.6,31.1,100.0,jan sluyters,Expressionism,moon-night,1382,1767
+227,jan-steen_wedding-feast-at-cana-1672.jpg,6,1672,yellow,10.6,65.0,27.4,29.4,69.6,jan steen,Baroque,wedding-feast-at-cana-1672,1806,1382
+228,jan-van-eyck_madonna-from-the-inn-s-hall-1433.jpg,6,1433,orange,16.6,76.3,32.3,23.0,100.0,jan van eyck,Northern Renaissance,madonna-from-the-inn-s-hall-1433,1382,1896
+229,jean-baptiste-simeon-chardin_the-kitchen-maid.jpg,-1,,yellow,30.2,95.0,45.1,53.5,0.0,jean baptiste simeon chardin,Baroque,the-kitchen-maid,1382,1832
+230,jean-fouquet_etienne-chevalier-1410-74-and-his-patron-paying-homage-to-the-virgin-and-child-1460.jpg,6,1410,yellow,44.1,78.3,33.5,22.0,88.6,jean fouquet,Northern Renaissance,etienne-chevalier-1410-74-and-his-patron-paying-homage-to-the-virgin-and-child-1460,1382,1930
+231,jean-honore-fragonard_the-stolen-kiss-1788.jpg,-1,1788,yellow,14.5,77.4,29.7,40.8,0.0,jean honore fragonard,Rococo,the-stolen-kiss-1788,1680,1382
+232,jean-hugo_untitled-1947.jpg,9,1947,gray,66.4,70.1,47.3,63.0,59.6,jean hugo,Fauvism,untitled-1947,1382,1387
+233,jean-paul-lemieux_le-cheval-blanc-1984.jpg,-1,1984,gray,62.9,81.0,33.5,23.3,0.0,jean paul lemieux,Expressionism,le-cheval-blanc-1984,1779,1382
+234,joe-goode_untitled-torn-sky-1970.jpg,9,1970,magenta,64.5,35.4,3.2,26.1,92.5,joe goode,Color Field Painting,untitled-torn-sky-1970,1877,1382
+235,johan-hendrik-weissenbruch_at-elshout-sun-1854.jpg,1,1854,gray,53.6,98.5,43.2,19.7,93.3,johan hendrik weissenbruch,Realism,at-elshout-sun-1854,1843,1382
+236,johan-hendrik-weissenbruch_milking-cows-underneath-the-willows.jpg,3,,yellow-green,28.9,72.0,27.6,15.0,96.9,johan hendrik weissenbruch,Realism,milking-cows-underneath-the-willows,1382,2242
+237,john-crome_the-lime-kiln-1806.jpg,1,1806,yellow,38.4,93.0,31.2,25.2,90.4,john crome,Romanticism,the-lime-kiln-1806,2028,1382
+238,john-everett-millais_the-royalist.jpg,8,,yellow-green,23.5,85.2,39.8,49.7,82.4,john everett millais,Romanticism,the-royalist,1382,2056
+239,john-henry-twachtman_abandoned-mill.jpg,-1,,yellow-green,73.7,81.9,39.4,29.7,0.0,john henry twachtman,Impressionism,abandoned-mill,1382,1841
+240,john-henry-twachtman_bridge-in-winter.jpg,3,,yellow,80.7,69.6,23.1,21.4,100.0,john henry twachtman,Impressionism,bridge-in-winter,1382,1388
+241,john-lewis-krimmel_4th-of-july-1819-in-philadelphia.jpg,-1,1819,yellow,52.1,93.4,39.3,55.3,0.0,john lewis krimmel,Realism,4th-of-july-1819-in-philadelphia,2398,1382
+242,john-miller_cornish-beach.jpg,0,,gray,56.8,49.6,7.1,22.0,100.0,john miller,Contemporary Realism,cornish-beach,1382,1424
+243,john-singer-sargent_emily-sargent.jpg,8,,yellow,24.5,84.1,33.2,32.0,71.6,john singer sargent,Realism,emily-sargent,1382,1780
+244,john-singer-sargent_i-gesuati.jpg,-1,,gray,71.0,94.2,50.2,33.0,0.0,john singer sargent,Impressionism,i-gesuati,1382,1798
+245,john-singer-sargent_under-the-rialto-bridge.jpg,-1,,yellow-green,42.3,94.1,41.8,32.9,0.0,john singer sargent,Impressionism,under-the-rialto-bridge,2407,1382
+246,john-william-waterhouse_juliet.jpg,8,,orange,56.4,89.3,45.1,34.7,67.5,john william waterhouse,Romanticism,juliet,1382,2020
+247,jorge-martins_eros-crom-tico-1964.jpg,9,1964,gray,59.7,82.4,36.2,43.2,82.6,jorge martins,Pop Art,eros-crom-tico-1964,1382,1929
+248,joshua-reynolds_lady-delm-and-her-children-1780.jpg,-1,1780,orange,25.5,84.9,46.2,42.0,0.0,joshua reynolds,Rococo,lady-delm-and-her-children-1780,1382,2025
+249,jules-cheret_folies-berg-res-emilienne-d-alen-on-1900.jpg,7,1900,yellow,66.6,88.9,58.2,85.5,94.1,jules cheret,Art Nouveau Modern,folies-berg-res-emilienne-d-alen-on-1900,1382,2002
+250,jules-pascin_the-circus-1910.jpg,-1,1910,yellow,42.8,86.3,40.0,31.4,0.0,jules pascin,Expressionism,the-circus-1910,1586,1382
+251,julio-gonzalez_nu-assis-de-dos-1927.jpg,9,1927,gray,52.6,72.6,58.7,27.6,60.2,julio gonzalez,Cubism,nu-assis-de-dos-1927,1382,1592
+252,jury-annenkov_illustration-to-aleksander-blok-s-poem-the-twelve-1918-3.jpg,-1,1918,yellow,86.4,53.7,17.2,29.5,0.0,jury annenkov,Naive Art Primitivism,illustration-to-aleksander-blok-s-poem-the-twelve-1918-3,1382,1636
+253,jury-annenkov_self-portrait-1910.jpg,2,1910,gray,31.6,83.8,30.3,32.7,85.5,jury annenkov,Symbolism,self-portrait-1910,1382,1426
+254,karl-bodmer_landscape-with-buffalo-on-the-upper-missouri-1833.jpg,1,1833,yellow,51.5,98.1,41.8,31.0,90.4,karl bodmer,Romanticism,landscape-with-buffalo-on-the-upper-missouri-1833,1741,1382
+255,karl-bodmer_scalp-dance-of-the-minatarres-1832.jpg,5,1832,yellow,63.2,85.2,39.4,44.3,100.0,karl bodmer,Romanticism,scalp-dance-of-the-minatarres-1832,1382,1900
+256,kateryna-bilokur_self-portrait-1955.jpg,7,1955,gray,73.9,81.6,37.3,71.9,81.0,kateryna bilokur,Naive Art Primitivism,self-portrait-1955,1382,2107
+257,katsushika-hokusai_the-big-wave.jpg,-1,,yellow,74.3,77.7,35.9,35.0,0.0,katsushika hokusai,Ukiyo e,the-big-wave,1879,1382
+258,kazimir-malevich_portrait-of-a-record-setter-in-work-productivity-1932-1.jpg,2,1932,gray,59.0,87.5,46.4,46.3,100.0,kazimir malevich,Realism,portrait-of-a-record-setter-in-work-productivity-1932-1,1382,1638
+259,kazuo-nakamura_untitled-2-potted-plants.jpg,11,,teal,42.5,90.2,42.6,19.7,87.1,kazuo nakamura,Post Impressionism,untitled-2-potted-plants,1382,1696
+260,keith-haring_pop-shop-iii-1989.jpg,9,1989,green,49.9,98.3,100.0,59.7,72.6,keith haring,Pop Art,pop-shop-iii-1989,1783,1382
+261,konrad-witz_presentation-of-cardinal-de-mies-to-the-virgin.jpg,6,,yellow,50.1,97.7,47.1,26.5,73.5,konrad witz,Northern Renaissance,presentation-of-cardinal-de-mies-to-the-virgin,1672,1382
+262,konstantin-bogaevsky_rocky-seashore-1926.jpg,-1,1926,gray,62.0,78.5,18.7,27.1,0.0,konstantin bogaevsky,Symbolism,rocky-seashore-1926,2366,1381
+263,konstantin-bogaevsky_romantic-landscape-on-the-seashore.jpg,-1,,gray,60.4,80.4,28.3,23.3,0.0,konstantin bogaevsky,Realism,romantic-landscape-on-the-seashore,2008,1381
+264,konstantin-korovin_kustarnaya-ulitsa-1900.jpg,-1,1900,orange,84.9,80.1,41.4,53.9,0.0,konstantin korovin,Art Nouveau Modern,kustarnaya-ulitsa-1900,3796,1382
+265,konstantin-korovin_paris-1907.jpg,-1,1907,yellow,24.5,79.9,29.6,43.5,0.0,konstantin korovin,Impressionism,paris-1907,2014,1382
+266,konstantin-korovin_paris-kafe-1.jpg,-1,,yellow-green,49.4,82.9,33.9,35.9,0.0,konstantin korovin,Impressionism,paris-kafe-1,1382,1669
+267,konstantin-korovin_portrait-of-a-woman-1912.jpg,8,1912,yellow,34.9,84.4,33.1,14.1,89.9,konstantin korovin,Impressionism,portrait-of-a-woman-1912,1382,1821
+268,konstantin-makovsky_sewer.jpg,-1,,red,24.4,84.6,29.0,53.0,0.0,konstantin makovsky,Romanticism,sewer,1734,1382
+269,kuzma-petrov-vodkin_model-1907.jpg,7,1907,gray,79.9,57.2,21.2,13.1,100.0,kuzma petrov vodkin,Symbolism,model-1907,1382,3589
+270,kuzma-petrov-vodkin_vasya-1922.jpg,-1,1922,yellow,30.9,66.6,18.8,55.6,0.0,kuzma petrov vodkin,Symbolism,vasya-1922,1938,1382
+271,lajos-tihanyi_self-portrait-1915.jpg,8,1915,yellow,26.8,81.1,35.9,38.3,60.5,lajos tihanyi,Expressionism,self-portrait-1915,1382,2056
+272,leon-bakst_the-carnival-chiarina-1910.jpg,7,1910,gray,64.9,78.5,39.0,46.0,80.6,leon bakst,Art Nouveau Modern,the-carnival-chiarina-1910,1382,1821
+273,leonardo-da-vinci_cannon-foundry-1487.jpg,5,1487,yellow,78.7,72.2,29.9,34.7,100.0,leonardo da vinci,Early Renaissance,cannon-foundry-1487,1382,1784
+274,leonardo-da-vinci_salvator-mundi-1500.jpg,6,1500,yellow,14.7,64.4,18.3,48.4,100.0,leonardo da vinci,High Renaissance,salvator-mundi-1500,1382,2029
+275,leroy-neiman_frank-sinatra-duets-1994.jpg,-1,1994,yellow,64.2,82.0,35.3,51.2,0.0,leroy neiman,Pop Art,frank-sinatra-duets-1994,1498,1382
+276,lorenzo-lotto_madonna-with-st-roch-and-st-sebastian.jpg,6,,yellow,32.7,92.6,60.4,21.0,86.6,lorenzo lotto,High Renaissance,madonna-with-st-roch-and-st-sebastian,1826,1382
+277,louis-valtat_woman-in-a-wheelchair-1903.jpg,8,1903,yellow,55.2,89.3,37.4,14.2,87.7,louis valtat,Fauvism,woman-in-a-wheelchair-1903,1787,1382
+278,lovis-corinth_the-deposition-1895.jpg,6,1895,yellow,31.4,87.6,35.8,37.4,77.1,lovis corinth,Symbolism,the-deposition-1895,1639,1382
+279,lucian-freud_robert-fellowes.jpg,-1,,yellow,37.6,88.2,38.0,70.8,0.0,lucian freud,Expressionism,robert-fellowes,1382,1632
+280,lucian-grigorescu_balcic.jpg,4,,yellow-green,71.1,86.1,37.8,9.1,100.0,lucian grigorescu,Impressionism,balcic,1683,1382
+281,lyonel-feininger_railroad-viaduct-die-eisenbahnbr-cke-1919.jpg,-1,1919,yellow-green,64.5,92.1,84.2,32.9,0.0,lyonel feininger,Naive Art Primitivism,railroad-viaduct-die-eisenbahnbr-cke-1919,1736,1382
+282,m.-h.-maxy_electric-madonna-1926.jpg,11,1926,yellow,21.8,87.5,48.3,20.7,76.9,m. h. maxy,Cubism,electric-madonna-1926,1382,2139
+283,m.c.-escher_not_detected_204650.jpg,-1,,gray,44.7,93.6,69.8,40.5,0.0,m.c. escher,Cubism,not_detected_204650,2631,1382
+284,marc-chagall_blue-horse-with-the-couple-1982.jpg,-1,1982,yellow,73.9,68.0,23.0,35.0,0.0,marc chagall,Naive Art Primitivism,blue-horse-with-the-couple-1982,1382,1885
+285,marc-chagall_bushes-and-angel-sketch-to-vitrage-in-chapelle-des-cordeliers-in-sarrebourg-1976.jpg,11,1976,yellow,85.4,40.5,14.0,61.2,99.3,marc chagall,Naive Art Primitivism,bushes-and-angel-sketch-to-vitrage-in-chapelle-des-cordeliers-in-sarrebourg-1976,1396,1382
+286,marc-chagall_samuel-is-pouring-anointing-oil-to-saul-s-head-in-sign-of-coronation-him-as-king-of-israel-i.jpg,-1,,yellow,59.8,82.4,32.9,38.8,0.0,marc chagall,Naive Art Primitivism,samuel-is-pouring-anointing-oil-to-saul-s-head-in-sign-of-coronation-him-as-king-of-israel-i,1382,2033
+287,marc-chagall_weeping-of-jeremiah-1956.jpg,-1,1956,yellow,29.8,84.2,43.9,37.9,0.0,marc chagall,Naive Art Primitivism,weeping-of-jeremiah-1956,1382,1903
+288,marcel-duchamp_paradise-adam-and-eve.jpg,7,,yellow,27.1,83.3,48.0,25.3,82.9,marcel duchamp,Post Impressionism,paradise-adam-and-eve,1556,1382
+289,margareta-sterian_balcic.jpg,-1,,gray,55.0,97.7,52.4,19.4,0.0,margareta sterian,Expressionism,balcic,2238,1382
+290,maria-primachenko_a-fish-king-has-caught-a-hoopoe-and-is-full-of-joy-1983.jpg,-1,1983,gray,38.2,68.8,21.5,43.7,0.0,maria primachenko,Naive Art Primitivism,a-fish-king-has-caught-a-hoopoe-and-is-full-of-joy-1983,1898,1382
+291,maria-primachenko_fairy-bird-peacock-1936.jpg,-1,1936,yellow,58.4,93.7,66.5,35.0,0.0,maria primachenko,Naive Art Primitivism,fairy-bird-peacock-1936,1974,1382
+292,marie-laurencin_self-portrait-1906.jpg,8,1906,yellow-green,70.1,75.8,25.4,53.7,60.5,marie laurencin,Expressionism,self-portrait-1906,1382,2173
+293,martin-schongauer_study-of-peonies.jpg,10,,yellow,78.4,80.7,45.6,51.6,100.0,martin schongauer,Northern Renaissance,study-of-peonies,1799,1382
+294,martiros-saryan_banks-of-the-river-zangu-near-yerevan-1930.jpg,4,1930,gray,44.8,80.3,38.1,31.8,92.8,martiros saryan,Post Impressionism,banks-of-the-river-zangu-near-yerevan-1930,1730,1382
+295,martiros-saryan_blue-pitcher-1910.jpg,11,1910,yellow,53.2,86.9,45.9,29.9,76.4,martiros saryan,Naive Art Primitivism,blue-pitcher-1910,1382,1478
+296,martiros-saryan_landscape-shirak-1962.jpg,-1,1962,yellow,53.0,75.4,24.6,14.0,0.0,martiros saryan,Symbolism,landscape-shirak-1962,2008,1382
+297,martiros-saryan_plowing-1929.jpg,-1,1929,gray,61.5,88.6,61.1,53.3,0.0,martiros saryan,Expressionism,plowing-1929,2039,1382
+298,martiros-saryan_to-the-spring-1909.jpg,-1,1909,yellow-green,40.3,90.8,46.1,27.6,0.0,martiros saryan,Expressionism,to-the-spring-1909,1382,1494
+299,mary-cassatt_little-girl-in-a-red-beret-1898.jpg,8,1898,yellow-green,37.5,88.5,34.3,17.3,100.0,mary cassatt,Impressionism,little-girl-in-a-red-beret-1898,1882,1382
+300,mary-cassatt_mother-and-child-in-a-boat.jpg,8,,yellow,45.6,93.6,39.0,27.5,64.3,mary cassatt,Impressionism,mother-and-child-in-a-boat,1382,2026
+301,mary-cassatt_portrait-of-a-young-girl-simone.jpg,-1,,yellow,57.2,82.4,38.6,37.1,0.0,mary cassatt,Impressionism,portrait-of-a-young-girl-simone,1382,1747
+302,mary-cassatt_portrait-of-alexander-j-cassatt-1880.jpg,2,1880,yellow-green,47.3,94.6,39.9,32.2,100.0,mary cassatt,Impressionism,portrait-of-alexander-j-cassatt-1880,1954,1382
+303,maurice-denis_games-in-the-sand-also-known-as-beach-with-fighters.jpg,-1,,yellow-green,58.6,82.1,41.3,37.6,0.0,maurice denis,Post Impressionism,games-in-the-sand-also-known-as-beach-with-fighters,2218,1382
+304,maurice-denis_noli-me-tangere.jpg,-1,,yellow,52.4,78.1,33.9,32.1,0.0,maurice denis,Symbolism,noli-me-tangere,1382,1924
+305,maurice-prendergast_dieppe.jpg,1,,gray,55.6,91.9,41.2,29.0,86.8,maurice prendergast,Impressionism,dieppe,1382,1910
+306,maurice-prendergast_montparnasse-1907.jpg,-1,1907,yellow,51.7,85.6,40.6,43.8,0.0,maurice prendergast,Post Impressionism,montparnasse-1907,1990,1382
+307,max-beckmann_the-little-fish-1933.jpg,-1,1933,yellow,61.4,97.6,61.6,36.4,0.0,max beckmann,Expressionism,the-little-fish-1933,1382,1652
+308,may-wilson_untitled-broom.jpg,9,,gray,70.7,90.9,33.9,41.5,100.0,may wilson,Pop Art,untitled-broom,1382,7500
+309,medi-wechsler-dinu_night-and-day.jpg,7,,yellow,78.4,79.6,31.5,18.2,94.1,medi wechsler dinu,Expressionism,night-and-day,1951,1382
+310,meijer-de-haan_self-portrait-in-breton-costume-1889.jpg,-1,1889,orange,30.2,84.4,37.6,41.3,0.0,meijer de haan,Post Impressionism,self-portrait-in-breton-costume-1889,1382,1907
+311,mikalojus-ciurlionis_winter-v-1907.jpg,11,1907,yellow,58.1,70.5,23.2,19.2,91.6,mikalojus ciurlionis,Symbolism,winter-v-1907,1382,1660
+312,mikhail-nesterov_holy-equal-to-the-apostles-olga-1927.jpg,-1,1927,gray,44.3,83.8,36.0,37.3,0.0,mikhail nesterov,Symbolism,holy-equal-to-the-apostles-olga-1927,1382,2100
+313,mikhail-nesterov_self-portrait-1928.jpg,2,1928,yellow-green,33.3,76.5,27.3,42.2,100.0,mikhail nesterov,Realism,self-portrait-1928,1382,1841
+314,miklos-barabas_standing-portrait-of-l-szl-teleki-1861.jpg,2,1861,yellow,36.0,78.3,39.1,53.5,58.4,miklos barabas,Romanticism,standing-portrait-of-l-szl-teleki-1861,1382,2225
+315,morris-louis_where-1960.jpg,9,1960,yellow,61.2,89.6,62.6,41.7,100.0,morris louis,Color Field Painting,where-1960,1968,1382
+316,mostafa-dashti_untitled-2011.jpg,9,2011,gray,31.2,71.3,28.3,22.9,74.3,mostafa dashti,Abstract Expressionism,untitled-2011,1930,1382
+317,nicholas-roerich_archangel-michael-1907.jpg,-1,1907,yellow,44.6,91.8,50.8,31.2,0.0,nicholas roerich,Art Nouveau Modern,archangel-michael-1907,1382,3140
+318,nicholas-roerich_babariha.jpg,7,,gray,72.1,82.1,37.2,42.5,79.9,nicholas roerich,Art Nouveau Modern,babariha,1382,1573
+319,nicholas-roerich_devassari-abuntu-with-birds-1906.jpg,-1,1906,gray,59.0,86.6,42.2,29.8,0.0,nicholas roerich,Art Nouveau Modern,devassari-abuntu-with-birds-1906,1382,1565
+320,nicholas-roerich_glow-1931.jpg,-1,1931,red,36.0,77.1,24.9,35.1,0.0,nicholas roerich,Symbolism,glow-1931,2189,1382
+321,nicholas-roerich_himalayas-monastery.jpg,0,,purple,45.8,78.7,22.5,32.3,100.0,nicholas roerich,Symbolism,himalayas-monastery,2100,1382
+322,nicholas-roerich_oze-1912-1.jpg,7,1912,red,68.7,86.1,31.2,27.5,81.8,nicholas roerich,Art Nouveau Modern,oze-1912-1,1382,2183
+323,nicholas-roerich_queen-anna-s-tower-1913-1.jpg,-1,1913,gray,89.2,70.8,31.3,25.3,0.0,nicholas roerich,Art Nouveau Modern,queen-anna-s-tower-1913-1,1382,1946
+324,nicholas-roerich_sanctuaries-and-citadels-1925-7.jpg,-1,1925,yellow,52.8,64.3,17.6,22.1,0.0,nicholas roerich,Symbolism,sanctuaries-and-citadels-1925-7,1868,1382
+325,nicholas-roerich_the-ruins-of-the-buildings-and-rocky-caves-anasazi-culture-canyon-tyuoni-1922.jpg,-1,1922,gray,83.4,63.8,23.3,29.9,0.0,nicholas roerich,Symbolism,the-ruins-of-the-buildings-and-rocky-caves-anasazi-culture-canyon-tyuoni-1922,2123,1382
+326,nicholas-roerich_toghrak-dong.jpg,0,,blue,70.7,73.5,29.4,32.3,100.0,nicholas roerich,Symbolism,toghrak-dong,1717,1382
+327,nicolae-grigorescu_catinca.jpg,8,,yellow,25.8,79.9,35.8,31.7,81.5,nicolae grigorescu,Realism,catinca,1382,2015
+328,nikolai-ge_not_detected_252978.jpg,6,,yellow,17.0,84.2,35.5,30.1,56.6,nikolai ge,Realism,not_detected_252978,2133,1381
+329,nikolay-bogdanov-belsky_still-life-2.jpg,10,,yellow,48.1,89.6,45.2,33.9,86.2,nikolay bogdanov belsky,Realism,still-life-2,1704,1382
+330,nikolay-bogdanov-belsky_summer-day.jpg,-1,,yellow-green,36.7,86.6,41.3,51.0,0.0,nikolay bogdanov belsky,Impressionism,summer-day,1382,1702
+331,odilon-redon_aged-angel.jpg,6,,yellow,32.5,86.8,26.9,31.8,74.5,odilon redon,Symbolism,aged-angel,1382,1987
+332,odilon-redon_different-peoples-inhabit-the-countries-of-the-ocean-plate-23-1896.jpg,-1,1896,gray,38.9,64.9,55.7,23.0,0.0,odilon redon,Symbolism,different-peoples-inhabit-the-countries-of-the-ocean-plate-23-1896,1382,1856
+333,odilon-redon_flowers-in-a-vase-with-one-handle.jpg,10,,yellow-green,63.7,81.0,29.8,22.9,100.0,odilon redon,Realism,flowers-in-a-vase-with-one-handle,1382,1765
+334,odilon-redon_the-wheel-of-fortune.jpg,7,,yellow,41.6,82.6,37.5,10.7,94.1,odilon redon,Symbolism,the-wheel-of-fortune,1382,3937
+335,odilon-redon_woman-in-profile-under-a-gothic-arch-1.jpg,11,,yellow,37.3,89.5,39.1,25.5,85.8,odilon redon,Symbolism,woman-in-profile-under-a-gothic-arch-1,1382,1827
+336,odilon-redon_woman-in-red.jpg,-1,,yellow,47.4,86.9,36.0,17.7,0.0,odilon redon,Symbolism,woman-in-red,1382,1796
+337,oskar-kokoschka_self-portrait-of-a-degenerate-artist-1937.jpg,-1,1937,gray,36.9,84.8,39.5,36.8,0.0,oskar kokoschka,Expressionism,self-portrait-of-a-degenerate-artist-1937,1382,1999
+338,pablo-picasso_fruit-in-a-vase-1909.jpg,10,1909,yellow,38.7,89.0,42.6,25.1,73.4,pablo picasso,Cubism,fruit-in-a-vase-1909,1382,1760
+339,pablo-picasso_group-of-poor-people-1903.jpg,7,1903,yellow-green,44.5,79.8,34.7,22.0,92.1,pablo picasso,Expressionism,group-of-poor-people-1903,1382,2274
+340,pablo-picasso_guitar-on-pedestal-1920-1.jpg,11,1920,yellow,35.1,96.7,80.5,16.9,100.0,pablo picasso,Cubism,guitar-on-pedestal-1920-1,1382,1868
+341,pablo-picasso_portrait-of-pierre-auguste-renoir-1919.jpg,7,1919,yellow,70.1,83.8,29.8,29.1,100.0,pablo picasso,Expressionism,portrait-of-pierre-auguste-renoir-1919,1382,1727
+342,pablo-picasso_portrait-of-the-artist-1903.jpg,2,1903,yellow,73.3,76.4,28.7,31.9,39.2,pablo picasso,Post Impressionism,portrait-of-the-artist-1903,1382,2008
+343,pablo-picasso_reclining-nude-fernande-1906.jpg,-1,1906,yellow,65.1,82.5,34.0,23.0,0.0,pablo picasso,Post Impressionism,reclining-nude-fernande-1906,1807,1381
+344,pablo-picasso_seated-harlequin.jpg,7,,orange,30.0,64.0,17.6,26.4,94.1,pablo picasso,Post Impressionism,seated-harlequin,1382,1935
+345,pablo-picasso_still-life-1922.jpg,11,1922,orange,24.9,87.1,49.7,10.5,100.0,pablo picasso,Cubism,still-life-1922,1711,1382
+346,pablo-picasso_still-life-on-the-dresser-1955.jpg,11,1955,yellow,51.4,97.3,68.9,33.0,100.0,pablo picasso,Naive Art Primitivism,still-life-on-the-dresser-1955,3396,1382
+347,pablo-picasso_the-greedy-1901.jpg,8,1901,blue,39.8,91.9,39.2,51.7,78.6,pablo picasso,Expressionism,the-greedy-1901,1382,1900
+348,paul-bril_landscape-with-stag-hunt-1595.jpg,-1,1595,gray,22.0,88.0,52.7,33.7,0.0,paul bril,Baroque,landscape-with-stag-hunt-1595,1847,1382
+349,paul-cezanne_bather-with-outstreched-arms.jpg,7,,gray,52.1,83.2,29.6,45.6,94.1,paul cezanne,Impressionism,bather-with-outstreched-arms,1382,1702
+350,paul-cezanne_bathers-in-front-of-a-tend.jpg,-1,,yellow-green,61.8,89.3,59.8,24.1,0.0,paul cezanne,Post Impressionism,bathers-in-front-of-a-tend,1825,1382
+351,paul-cezanne_bathers.jpg,-1,,gray,58.7,84.6,56.2,18.7,0.0,paul cezanne,Impressionism,bathers,1709,1382
+352,paul-cezanne_gardanne-horizontal-view.jpg,4,,yellow-green,36.4,82.8,31.3,20.7,100.0,paul cezanne,Post Impressionism,gardanne-horizontal-view,2159,1382
+353,paul-cezanne_still-life-with-fruit-geraniums-stock-1894.jpg,10,1894,green,31.7,85.6,37.3,18.8,100.0,paul cezanne,Post Impressionism,still-life-with-fruit-geraniums-stock-1894,1759,1382
+354,paul-cezanne_trees-and-houses-1886.jpg,3,1886,yellow,38.3,86.4,39.9,8.2,85.1,paul cezanne,Post Impressionism,trees-and-houses-1886,1877,1382
+355,paul-gauguin_dogs-running-through-a-field-1888.jpg,3,1888,yellow,44.7,87.4,32.4,6.9,100.0,paul gauguin,Post Impressionism,dogs-running-through-a-field-1888,1382,1779
+356,paul-gauguin_landscape-of-brittany-1888.jpg,3,1888,yellow,41.1,88.4,37.4,21.8,95.6,paul gauguin,Post Impressionism,landscape-of-brittany-1888,1808,1382
+357,paul-gauguin_meadow-at-the-banks-of-aven-1888.jpg,3,1888,yellow-green,47.4,89.5,45.0,15.0,97.6,paul gauguin,Post Impressionism,meadow-at-the-banks-of-aven-1888,1650,1382
+358,paul-gauguin_portrait-of-claude-antoine-charles-favre-1877.jpg,2,1877,orange,17.1,69.5,25.6,50.3,100.0,paul gauguin,Impressionism,portrait-of-claude-antoine-charles-favre-1877,1382,1680
+359,paul-gauguin_taperaa-mahana-1892.jpg,-1,1892,yellow,44.0,88.5,41.8,33.8,0.0,paul gauguin,Post Impressionism,taperaa-mahana-1892,1862,1382
+360,paul-gauguin_tomatoes-and-a-pewter-tankard-on-a-table-1883.jpg,10,1883,gray,43.1,88.7,44.2,26.1,100.0,paul gauguin,Impressionism,tomatoes-and-a-pewter-tankard-on-a-table-1883,1675,1382
+361,paul-jenkins_not_detected_235694.jpg,9,,orange,38.1,95.7,49.1,13.0,71.4,paul jenkins,Abstract Expressionism,not_detected_235694,1845,1382
+362,paul-klee_fruits-on-red-1930(1).jpg,11,1930,yellow,55.2,60.6,20.6,13.5,100.0,paul klee,Expressionism,fruits-on-red-1930(1),1382,1832
+363,paul-klee_legend-of-the-nile-1937(1).jpg,11,1937,gray,56.6,90.2,55.5,12.9,100.0,paul klee,Expressionism,legend-of-the-nile-1937(1),1382,1566
+364,paul-klee_struck-from-the-list-1933.jpg,11,1933,yellow,32.7,77.5,30.1,9.5,100.0,paul klee,Expressionism,struck-from-the-list-1933,1382,1806
+365,paul-mathiopoulos_lady-with-a-long-coat.jpg,-1,,yellow,19.4,74.7,20.2,19.5,0.0,paul mathiopoulos,Art Nouveau Modern,lady-with-a-long-coat,1382,3457
+366,paul-signac_marseille-an-old-port-1906.jpg,1,1906,gray,59.8,70.9,9.9,23.7,88.6,paul signac,Pointillism,marseille-an-old-port-1906,1744,1382
+367,paul-signac_river-s-edge-the-siene-at-herblay-1889.jpg,1,1889,purple,69.6,76.8,18.2,23.8,93.3,paul signac,Pointillism,river-s-edge-the-siene-at-herblay-1889,2317,1382
+368,paul-signac_the-seine-near-sevres.jpg,-1,,yellow,76.5,43.8,12.9,28.2,0.0,paul signac,Impressionism,the-seine-near-sevres,1907,1382
+369,paula-modersohn-becker_young-girl-with-straw-hat-and-a-flower-in-her-hand-1902.jpg,8,1902,yellow,65.5,75.4,24.6,19.0,84.4,paula modersohn becker,Expressionism,young-girl-with-straw-hat-and-a-flower-in-her-hand-1902,1382,1448
+370,peder-severin-kroyer_interior-with-the-artist-s-wife-marie-kr-yer-1889.jpg,8,1889,gray,32.7,94.6,41.9,29.1,80.3,peder severin kroyer,Impressionism,interior-with-the-artist-s-wife-marie-kr-yer-1889,1382,2003
+371,pedro-calapez_escala-de-cor-05-2009.jpg,9,2009,yellow,61.0,87.3,69.9,10.9,100.0,pedro calapez,Color Field Painting,escala-de-cor-05-2009,1382,2081
+372,pericles-pantazis_supreme-court-1880.jpg,-1,1880,gray,56.4,66.1,14.4,19.7,0.0,pericles pantazis,Impressionism,supreme-court-1880,1929,1382
+373,periklis-vyzantios_a-horse-drawn-carriage.jpg,-1,,yellow,51.8,89.5,30.4,46.1,0.0,periklis vyzantios,Post Impressionism,a-horse-drawn-carriage,1772,1382
+374,perle-fine_cool-series-no-22-wide-u-1963.jpg,9,1963,gray,69.9,68.5,38.2,0.0,73.2,perle fine,Color Field Painting,cool-series-no-22-wide-u-1963,1661,1382
+375,peter-max_love-1969.jpg,9,1969,yellow,64.2,84.5,37.6,37.2,72.1,peter max,Pop Art,love-1969,1382,2062
+376,peter-paul-rubens_nicolas-trigault-1.jpg,7,,yellow-green,74.1,71.0,25.8,21.4,100.0,peter paul rubens,Baroque,nicolas-trigault-1,1382,2391
+377,peter-paul-rubens_st-george-with-st-maurus-and-papianus.jpg,6,,yellow,26.5,81.4,48.6,21.3,100.0,peter paul rubens,Baroque,st-george-with-st-maurus-and-papianus,1382,2290
+378,peter-paul-rubens_the-drunken-silenus.jpg,6,,yellow,19.8,86.6,39.1,22.9,70.4,peter paul rubens,Baroque,the-drunken-silenus,2073,1382
+379,philip-de-laszlo_the-son-of-the-artist-1917.jpg,-1,1917,gray,28.7,84.6,33.4,61.7,0.0,philip de laszlo,Impressionism,the-son-of-the-artist-1917,1382,1764
+380,philip-guston_to-b-w-t.jpg,9,,yellow,64.7,82.8,20.1,4.6,52.6,philip guston,Abstract Expressionism,to-b-w-t,1496,1382
+381,piero-della-francesca_madonna-of-senigallia-with-child-and-two-angels(1).jpg,6,,gray,32.9,79.2,33.2,30.8,85.9,piero della francesca,Early Renaissance,madonna-of-senigallia-with-child-and-two-angels(1),1382,1574
+382,piero-della-francesca_sigismondo-malatesta-1451(1).jpg,-1,1451,yellow,14.8,79.9,25.0,52.3,0.0,piero della francesca,Early Renaissance,sigismondo-malatesta-1451(1),1382,1804
+383,pierre-auguste-renoir_andree-in-blue-andree-heurschling.jpg,8,,orange,44.9,84.7,37.4,11.3,100.0,pierre auguste renoir,Impressionism,andree-in-blue-andree-heurschling,1736,1382
+384,pierre-auguste-renoir_blond-bather-1881.jpg,8,1881,yellow-green,69.3,86.7,37.3,14.9,84.2,pierre auguste renoir,Impressionism,blond-bather-1881,1382,1804
+385,pierre-auguste-renoir_gabrielle-1.jpg,8,,yellow,43.2,86.0,35.0,20.0,77.7,pierre auguste renoir,Impressionism,gabrielle-1,1382,1934
+386,pierre-auguste-renoir_girl-and-cat-1882.jpg,8,1882,yellow,30.5,89.5,52.3,20.4,100.0,pierre auguste renoir,Impressionism,girl-and-cat-1882,1382,1755
+387,pierre-auguste-renoir_girls-at-the-piano-1892-1.jpg,8,1892,yellow,47.5,86.7,42.9,32.3,94.8,pierre auguste renoir,Impressionism,girls-at-the-piano-1892-1,1382,2017
+388,pierre-auguste-renoir_house-on-the-river.jpg,-1,,gray,62.7,86.0,31.5,10.9,0.0,pierre auguste renoir,Impressionism,house-on-the-river,2001,1382
+389,pierre-auguste-renoir_nude-girl-reclining-1917.jpg,-1,1917,yellow,51.1,81.6,33.4,22.4,0.0,pierre auguste renoir,Impressionism,nude-girl-reclining-1917,2392,1382
+390,pierre-auguste-renoir_portrait-of-a-young-woman-1887.jpg,8,1887,yellow,41.6,87.3,30.8,18.0,82.4,pierre auguste renoir,Impressionism,portrait-of-a-young-woman-1887,1382,1791
+391,pierre-auguste-renoir_woman-and-child-1.jpg,-1,,yellow,48.9,94.2,43.8,30.2,0.0,pierre auguste renoir,Impressionism,woman-and-child-1,1382,1660
+392,pierre-auguste-renoir_young-spanish-woman-with-a-guitar-1898.jpg,8,1898,yellow,35.5,84.1,37.9,48.7,78.8,pierre auguste renoir,Impressionism,young-spanish-woman-with-a-guitar-1898,1636,1382
+393,pierre-auguste-renoir_young-woman-with-a-dog-1876.jpg,8,1876,yellow,54.2,79.7,29.8,20.3,100.0,pierre auguste renoir,Impressionism,young-woman-with-a-dog-1876,1382,1685
+394,pierre-bonnard_claude-terrasse-at-the-piano.jpg,8,,yellow,20.6,77.3,31.0,18.7,73.1,pierre bonnard,Post Impressionism,claude-terrasse-at-the-piano,1448,1382
+395,pierre-bonnard_landing-stage-1939.jpg,1,1939,indigo,64.5,76.2,23.9,20.9,100.0,pierre bonnard,Post Impressionism,landing-stage-1939,1846,1382
+396,pierre-bonnard_the-lodge-1908.jpg,8,1908,orange,23.3,83.6,51.4,25.0,89.9,pierre bonnard,Post Impressionism,the-lodge-1908,1866,1382
+397,pierre-paul-prudhon_the-king-of-rome-1811.jpg,-1,1811,yellow,26.6,82.0,32.5,50.5,0.0,pierre paul prudhon,Romanticism,the-king-of-rome-1811,1695,1382
+398,pieter-bruegel-the-elder_faith.jpg,-1,,gray,59.4,86.8,46.9,32.1,0.0,pieter bruegel the elder,Northern Renaissance,faith,1804,1382
+399,pieter-bruegel-the-elder_last-judgment.jpg,5,,gray,61.5,83.7,48.4,35.0,100.0,pieter bruegel the elder,Northern Renaissance,last-judgment,1783,1382
+400,pietro-perugino_saints-rocco-and-romanee-in-the-view-of-the-town-deruta-1478.jpg,6,1478,yellow,32.0,85.7,40.4,38.5,69.1,pietro perugino,Early Renaissance,saints-rocco-and-romanee-in-the-view-of-the-town-deruta-1478,1382,2010
+401,pyotr-konchalovsky_blossoming-garden-1930.jpg,-1,1930,gray,56.5,80.2,26.2,17.8,0.0,pyotr konchalovsky,Post Impressionism,blossoming-garden-1930,1839,1382
+402,pyotr-konchalovsky_landscape-at-siena-1912.jpg,4,1912,yellow,28.3,83.6,39.6,11.4,100.0,pyotr konchalovsky,Expressionism,landscape-at-siena-1912,1949,1382
+403,pyotr-konchalovsky_landscape-with-the-railway-1935.jpg,-1,1935,yellow,52.6,85.9,32.1,10.1,0.0,pyotr konchalovsky,Post Impressionism,landscape-with-the-railway-1935,1829,1382
+404,pyotr-konchalovsky_noon-1933.jpg,3,1933,yellow-green,29.5,81.7,33.1,6.1,92.9,pyotr konchalovsky,Realism,noon-1933,1388,1382
+405,pyotr-konchalovsky_novgorod-kremlin-detinets-1925.jpg,1,1925,yellow-green,65.3,85.9,40.7,32.9,93.3,pyotr konchalovsky,Post Impressionism,novgorod-kremlin-detinets-1925,1837,1382
+406,pyotr-konchalovsky_novgorod-kukui-tower-1928-2.jpg,4,1928,gray,47.4,89.2,35.2,27.0,100.0,pyotr konchalovsky,Post Impressionism,novgorod-kukui-tower-1928-2,1382,1645
+407,pyotr-konchalovsky_portrait-of-director-vsevolod-emilievich-meyerhold-1938.jpg,-1,1938,yellow,40.5,83.3,39.8,41.5,0.0,pyotr konchalovsky,Fauvism,portrait-of-director-vsevolod-emilievich-meyerhold-1938,1382,1545
+408,pyotr-konchalovsky_silver-poplar-trees-1919.jpg,-1,1919,teal,49.3,77.6,35.8,14.1,0.0,pyotr konchalovsky,Post Impressionism,silver-poplar-trees-1919,1382,1713
+409,raoul-dufy_the-port-of-martigues.jpg,1,,blue,40.1,75.0,32.3,26.4,100.0,raoul dufy,Impressionism,the-port-of-martigues,1675,1382
+410,raoul-ubac_t-te-lev-e-1982.jpg,9,1982,yellow-green,65.0,28.1,27.9,29.1,65.1,raoul ubac,Abstract Expressionism,t-te-lev-e-1982,1382,2001
+411,raphael-kirchner_deadly-sins-1.jpg,7,,yellow,93.8,34.6,7.9,22.2,90.0,raphael kirchner,Art Nouveau Modern,deadly-sins-1,1382,2136
+412,raphael-kirchner_geisha.jpg,-1,,yellow,75.0,71.4,27.1,49.2,0.0,raphael kirchner,Art Nouveau Modern,geisha,1382,2182
+413,raphael-kirchner_nude-drawings-14.jpg,-1,,yellow,76.9,48.6,10.9,34.0,0.0,raphael kirchner,Art Nouveau Modern,nude-drawings-14,1382,2236
+414,ray-parker_untitled-1967-1.jpg,9,1967,indigo,46.5,55.6,34.2,30.9,86.4,ray parker,Color Field Painting,untitled-1967-1,1730,1382
+415,rembrandt_death-of-the-virgin.jpg,5,,gray,56.1,90.4,46.0,27.8,100.0,rembrandt,Baroque,death-of-the-virgin,1382,1713
+416,rembrandt_polander-leaning-on-a-stick-1632.jpg,7,1632,gray,83.5,62.1,27.8,21.2,100.0,rembrandt,Baroque,polander-leaning-on-a-stick-1632,1382,2400
+417,rembrandt_standing-beggar-turned-to-the-right-1629.jpg,7,1629,yellow,72.9,59.9,19.8,14.1,100.0,rembrandt,Baroque,standing-beggar-turned-to-the-right-1629,1382,2338
+418,richard-diebenkorn_ocean-park-no-19.jpg,11,,gray,46.3,84.1,46.8,10.8,100.0,richard diebenkorn,Color Field Painting,ocean-park-no-19,1382,1726
+419,richard-gerstl_ernst-diez-1907(1).jpg,7,1907,gray,51.3,90.3,52.0,24.1,80.2,richard gerstl,Expressionism,ernst-diez-1907(1),1382,3617
+420,richard-gerstl_portrait-of-henryka-cohn-1908.jpg,8,1908,gray,45.5,95.6,48.8,24.6,100.0,richard gerstl,Art Nouveau Modern,portrait-of-henryka-cohn-1908,1382,1873
+421,richard-hamilton_just-what-is-it-that-makes-today-s-homes-so-different-1992.jpg,9,1992,gray,61.3,97.5,60.3,87.6,72.6,richard hamilton,Pop Art,just-what-is-it-that-makes-today-s-homes-so-different-1992,1985,1382
+422,richard-hamilton_marcel-duchamp-1968.jpg,9,1968,gray,56.0,88.4,55.5,61.5,72.6,richard hamilton,Pop Art,marcel-duchamp-1968,1382,1823
+423,richard-tuttle_20-pearls-a-2007.jpg,9,2007,yellow-green,92.3,34.4,9.7,45.5,92.6,richard tuttle,Minimalism,20-pearls-a-2007,1449,1382
+424,robert-indiana_hope-2008.jpg,9,2008,magenta,76.6,61.2,90.8,81.7,56.6,robert indiana,Pop Art,hope-2008,1382,1382
+425,robert-julian-onderdonk_bluebonnet-field-1912.jpg,3,1912,gray,43.0,91.3,28.8,22.2,100.0,robert julian onderdonk,Impressionism,bluebonnet-field-1912,2045,1382
+426,robert-julian-onderdonk_old-live-oak-tree-and-bluebonnets-on-the-west-texas-military-grounds-san-antonio-1920.jpg,3,1920,gray,27.5,76.7,32.4,32.4,98.8,robert julian onderdonk,Impressionism,old-live-oak-tree-and-bluebonnets-on-the-west-texas-military-grounds-san-antonio-1920,1829,1381
+427,roger-fry_beaumes.jpg,4,,yellow,50.7,94.2,53.0,17.8,100.0,roger fry,Post Impressionism,beaumes,1900,1382
+428,roy-lichtenstein_stepping-out-1978.jpg,11,1978,yellow-green,56.7,97.8,72.4,41.0,100.0,roy lichtenstein,Pop Art,stepping-out-1978,1382,1700
+429,salvador-dali_rhinocerotic-figures.jpg,9,,yellow-green,76.5,86.2,51.4,14.1,68.2,salvador dali,Abstract Expressionism,rhinocerotic-figures,1530,1382
+430,salvador-dali_the-queen-of-the-butterflies.jpg,-1,,yellow-green,73.8,73.5,34.6,38.4,0.0,salvador dali,Expressionism,the-queen-of-the-butterflies,1382,1719
+431,salvador-dali_view-of-pubol.jpg,-1,,gray,41.8,86.7,45.1,18.7,0.0,salvador dali,Expressionism,view-of-pubol,2825,1382
+432,salvador-dali_wheat-ear.jpg,-1,,yellow,7.1,27.0,6.3,36.6,0.0,salvador dali,Realism,wheat-ear,1382,2381
+433,sam-francis_untitled-blue-green-1958.jpg,9,1958,green,41.2,65.4,25.5,28.8,100.0,sam francis,Color Field Painting,untitled-blue-green-1958,1672,1382
+434,sam-francis_untitled-from-pasadena-box-1963-1.jpg,9,1963,yellow,70.6,82.2,52.2,8.9,85.3,sam francis,Abstract Expressionism,untitled-from-pasadena-box-1963-1,2056,1382
+435,sam-francis_untitled-sfe-046.jpg,9,,orange,83.9,70.4,68.1,30.7,64.8,sam francis,Abstract Expressionism,untitled-sfe-046,1382,2124
+436,saul-steinberg_i-do-i-have-i-am-1971.jpg,9,1971,yellow,74.7,89.2,47.2,46.1,68.7,saul steinberg,Expressionism,i-do-i-have-i-am-1971,1382,2236
+437,sergey-solomko_banquet.jpg,6,,yellow,48.2,96.6,50.0,37.3,64.6,sergey solomko,Art Nouveau Modern,banquet,1381,2177
+438,sergey-solomko_lady-with-peacock.jpg,-1,,yellow,47.5,91.0,49.1,41.6,0.0,sergey solomko,Art Nouveau Modern,lady-with-peacock,1382,2100
+439,sergey-solomko_young-woman-in-hat.jpg,8,,orange,52.7,92.3,46.1,43.8,82.4,sergey solomko,Art Nouveau Modern,young-woman-in-hat,1382,1883
+440,sir-lawrence-alma-tadema_dr-washington-epps-my-doctor-1885.jpg,2,1885,yellow,46.9,92.0,54.6,63.5,100.0,sir lawrence alma tadema,Romanticism,dr-washington-epps-my-doctor-1885,1382,1586
+441,sir-lawrence-alma-tadema_sappho-and-alcaeus-1881.jpg,-1,1881,yellow,52.9,94.5,54.2,41.3,0.0,sir lawrence alma tadema,Romanticism,sappho-and-alcaeus-1881,2308,1382
+442,suzanne-valadon_nudes-1919.jpg,7,1919,green,41.1,89.1,44.6,29.3,94.1,suzanne valadon,Post Impressionism,nudes-1919,1382,1999
+443,taras-shevchenko_holy-cross-monastery-in-poltava-1845.jpg,1,1845,yellow-green,91.5,59.5,17.5,37.1,90.4,taras shevchenko,Romanticism,holy-cross-monastery-in-poltava-1845,1783,1382
+444,tarsila-do-amaral_an-angler-1925.jpg,-1,1925,gray,50.4,86.6,52.2,45.9,0.0,tarsila do amaral,Naive Art Primitivism,an-angler-1925,1656,1382
+445,theo-van-doesburg_krishna-playing-a-flute-1916.jpg,7,1916,yellow-green,84.1,56.2,18.3,29.4,91.3,theo van doesburg,Expressionism,krishna-playing-a-flute-1916,3903,1382
+446,theo-van-rysselberghe_portrait-of-helene-and-michette-guinotte-1901.jpg,8,1901,indigo,57.4,88.2,43.3,26.8,100.0,theo van rysselberghe,Pointillism,portrait-of-helene-and-michette-guinotte-1901,1382,1666
+447,theo-van-rysselberghe_spaarnwoude-island-1883.jpg,1,1883,yellow,54.7,87.4,28.5,22.9,89.6,theo van rysselberghe,Impressionism,spaarnwoude-island-1883,3414,1382
+448,theo-van-rysselberghe_the-pointe-de-per-kiridec-at-roscoff.jpg,1,,yellow-green,69.7,89.1,28.0,33.5,100.0,theo van rysselberghe,Pointillism,the-pointe-de-per-kiridec-at-roscoff,2186,1382
+449,theodore-rousseau_normandy-farms-1867.jpg,1,1867,yellow,22.8,78.9,27.5,15.9,90.4,theodore rousseau,Realism,normandy-farms-1867,2132,1382
+450,theodoros-stamos_double-green-sun-box-1967.jpg,9,1967,yellow-green,63.6,75.9,38.0,17.6,99.7,theodoros stamos,Color Field Painting,double-green-sun-box-1967,6374,1382
+451,theodoros-stamos_purple-color-field-with-two-green-lines.jpg,9,,orange,52.6,44.0,3.9,5.3,70.4,theodoros stamos,Color Field Painting,purple-color-field-with-two-green-lines,1382,1614
+452,thomas-cole_falls-at-catskill-1829.jpg,-1,1829,gray,52.8,98.2,45.2,40.0,0.0,thomas cole,Romanticism,falls-at-catskill-1829,1382,1724
+453,thomas-gainsborough_john-campbell-4th-duke-of-argyll.jpg,2,,yellow,13.9,70.6,22.1,48.4,58.4,thomas gainsborough,Rococo,john-campbell-4th-duke-of-argyll,1382,2124
+454,tony-smith_the-elevens-are-up-1963.jpg,9,1963,green,34.4,89.1,43.9,65.2,95.6,tony smith,Minimalism,the-elevens-are-up-1963,1382,2073
+455,tsukioka-yoshitoshi_a-young-woman-from-kansei-period-playing-with-her-cat.jpg,-1,,yellow,51.7,82.7,33.3,39.8,0.0,tsukioka yoshitoshi,Ukiyo e,a-young-woman-from-kansei-period-playing-with-her-cat,1382,1994
+456,utagawa-kunisada_snowy-landscape-with-a-woman-brandishing-a-broom-and-a-man-holding-an-umbrella.jpg,-1,,gray,51.7,88.8,53.2,42.6,0.0,utagawa kunisada,Ukiyo e,snowy-landscape-with-a-woman-brandishing-a-broom-and-a-man-holding-an-umbrella,2739,1381
+457,utagawa-kuniyoshi_suikoden-series-2.jpg,-1,,yellow,39.7,83.4,46.3,31.2,0.0,utagawa kuniyoshi,Ukiyo e,suikoden-series-2,1382,2071
+458,utagawa-kuniyoshi_the-actor-16.jpg,-1,,orange,43.6,92.5,48.0,43.0,0.0,utagawa kuniyoshi,Ukiyo e,the-actor-16,1382,1983
+459,vasile-dobrian_the-waves-of-migrating-birds-have-darkened-the-infinity-from-the-autumn-series.jpg,11,,gray,73.1,53.1,38.5,40.0,90.1,vasile dobrian,Abstract Expressionism,the-waves-of-migrating-birds-have-darkened-the-infinity-from-the-autumn-series,1382,1677
+460,vasile-popescu_little-house-in-predeal-1942.jpg,4,1942,green,60.9,76.8,29.4,14.7,100.0,vasile popescu,Impressionism,little-house-in-predeal-1942,1903,1382
+461,vasily-perov_last-tavern-at-town-gate-1868.jpg,4,1868,gray,36.5,90.4,33.2,40.4,91.1,vasily perov,Realism,last-tavern-at-town-gate-1868,1778,1382
+462,vasily-surikov_venice-saint-mark-s-basilica-1884.jpg,-1,1884,gray,75.7,63.3,17.0,50.4,0.0,vasily surikov,Realism,venice-saint-mark-s-basilica-1884,2006,1381
+463,vasily-surikov_yermak-s-conquest-of-siberia-study-3.jpg,-1,,yellow,73.8,57.8,20.4,37.4,0.0,vasily surikov,Realism,yermak-s-conquest-of-siberia-study-3,2181,1382
+464,vasily-tropinin_tropinin-anna-ivanovna-1810.jpg,-1,1810,orange,54.0,73.5,27.8,44.6,0.0,vasily tropinin,Romanticism,tropinin-anna-ivanovna-1810,1382,1648
+465,vicente-manansala_planting-rice-1967.jpg,-1,1967,gray,33.8,95.4,57.2,27.0,0.0,vicente manansala,Cubism,planting-rice-1967,1382,1871
+466,viktor-vasnetsov_bajarmaland.jpg,3,,gray,27.5,83.0,30.8,33.3,86.1,viktor vasnetsov,Realism,bajarmaland,1943,1382
+467,viktor-vasnetsov_crucified-christ-1896.jpg,6,1896,yellow,38.7,84.7,37.2,49.1,76.6,viktor vasnetsov,Symbolism,crucified-christ-1896,2588,1382
+468,vilmos-aba-novak_market-of-ceramics.jpg,-1,,orange,45.1,88.7,52.4,36.9,0.0,vilmos aba novak,Expressionism,market-of-ceramics,2002,1382
+469,vincent-van-gogh_a-woman-walking-in-garden-1887(1).jpg,-1,1887,yellow-green,48.8,64.4,17.6,27.8,0.0,vincent van gogh,Post Impressionism,a-woman-walking-in-garden-1887(1),1697,1382
+470,vincent-van-gogh_banks-of-the-seine-in-the-spring-1887(1).jpg,0,1887,yellow,41.9,88.8,38.9,20.1,100.0,vincent van gogh,Post Impressionism,banks-of-the-seine-in-the-spring-1887(1),1673,1382
+471,vincent-van-gogh_digger-1882-2(1).jpg,7,1882,yellow,57.0,89.3,53.5,26.4,100.0,vincent van gogh,Realism,digger-1882-2(1),1382,2303
+472,vincent-van-gogh_head-of-a-man-with-cap-1885(1).jpg,7,1885,yellow,71.6,63.8,26.0,22.8,100.0,vincent van gogh,Realism,head-of-a-man-with-cap-1885(1),1382,2399
+473,vincent-van-gogh_landscape-in-drenthe-1883.jpg,3,1883,yellow-green,61.7,90.3,29.0,16.0,88.4,vincent van gogh,Realism,landscape-in-drenthe-1883,1875,1382
+474,vincent-van-gogh_le-moulin-de-la-gallette-1887.jpg,3,1887,green,48.7,84.5,31.0,24.4,86.7,vincent van gogh,Post Impressionism,le-moulin-de-la-gallette-1887,1382,1700
+475,vincent-van-gogh_old-street-the-paddemoes-1882.jpg,-1,1882,yellow,60.3,89.5,41.4,41.1,0.0,vincent van gogh,Realism,old-street-the-paddemoes-1882,1693,1382
+476,vincent-van-gogh_orphans-1882.jpg,5,1882,yellow-green,74.0,78.4,31.8,51.8,100.0,vincent van gogh,Realism,orphans-1882,2253,1382
+477,vincent-van-gogh_seated-nude-after-bargues-1890.jpg,7,1890,gray,80.6,56.6,10.1,8.4,100.0,vincent van gogh,Realism,seated-nude-after-bargues-1890,1381,2275
+478,vincent-van-gogh_the-bench-1882.jpg,0,1882,yellow,64.5,83.5,39.7,27.4,100.0,vincent van gogh,Realism,the-bench-1882,2126,1382
+479,vincent-van-gogh_treetop-seen-against-the-wall-of-the-asylum-1889.jpg,7,1889,yellow,74.3,81.0,38.6,23.3,77.6,vincent van gogh,Post Impressionism,treetop-seen-against-the-wall-of-the-asylum-1889,1382,1894
+480,vincent-van-gogh_vase-with-red-gladioli-1886-1.jpg,10,1886,orange,17.8,86.8,48.0,16.5,100.0,vincent van gogh,Post Impressionism,vase-with-red-gladioli-1886-1,1382,2709
+481,vincent-van-gogh_woman-with-baby-on-her-lap-half-length-1883.jpg,7,1883,gray,28.4,90.1,55.0,38.9,80.1,vincent van gogh,Realism,woman-with-baby-on-her-lap-half-length-1883,1382,2112
+482,viorel-marginean_unknown-title-7.jpg,11,,yellow,40.8,66.6,25.4,12.5,90.3,viorel marginean,Fauvism,unknown-title-7,1382,3323
+483,vladimir-borovikovsky_the-nativity-of-christ.jpg,6,,yellow,9.0,65.9,28.4,38.1,64.1,vladimir borovikovsky,Rococo,the-nativity-of-christ,1819,1382
+484,vladimir-tatlin_relief.jpg,-1,,yellow,44.9,78.6,38.0,24.7,0.0,vladimir tatlin,Cubism,relief,1382,1629
+485,walter-sickert_home-life.jpg,-1,,yellow,41.8,88.2,45.3,41.7,0.0,walter sickert,Impressionism,home-life,1382,1920
+486,willem-kalf_still-life-with-fruit-glassware-and-a-wanli-bowl-1659.jpg,-1,1659,gray,0.0,42.4,12.1,34.8,0.0,willem kalf,Baroque,still-life-with-fruit-glassware-and-a-wanli-bowl-1659,1382,1584
+487,william-adolphe-bouguereau_lambs-1897.jpg,-1,1897,yellow,37.3,96.9,47.5,28.1,0.0,william adolphe bouguereau,Realism,lambs-1897,1382,2765
+488,william-adolphe-bouguereau_priestess-1902.jpg,-1,1902,orange,62.1,97.8,47.5,40.5,0.0,william adolphe bouguereau,Realism,priestess-1902,1382,3182
+489,william-baziotes_red-wall-1961.jpg,-1,1961,yellow,70.6,68.7,24.7,19.7,0.0,william baziotes,Abstract Expressionism,red-wall-1961,1676,1382
+490,william-h.-johnson_going-to-church-1941.jpg,-1,1941,yellow,53.8,81.9,35.1,41.0,0.0,william h. johnson,Naive Art Primitivism,going-to-church-1941,1842,1382
+491,william-hogarth_the-graham-children-1742.jpg,2,1742,orange,42.9,94.6,62.8,45.1,38.7,william hogarth,Rococo,the-graham-children-1742,1835,1382
+492,william-james-glackens_the-artist-s-wife-knitting-1920.jpg,8,1920,yellow,55.6,79.4,31.7,16.8,89.9,william james glackens,Impressionism,the-artist-s-wife-knitting-1920,1665,1382
+493,william-shayer_at-the-bell-inn-cadnam-new-forest.jpg,-1,,yellow,29.8,90.7,57.7,32.7,0.0,william shayer,Romanticism,at-the-bell-inn-cadnam-new-forest,1824,1382
+494,william-turner_death-on-a-pale-horse-1830.jpg,-1,1830,yellow,47.4,97.2,29.5,27.8,0.0,william turner,Romanticism,death-on-a-pale-horse-1830,1730,1382
+495,william-turner_peace.jpg,1,,gray,49.2,96.9,45.9,33.6,92.2,william turner,Romanticism,peace,1382,1406
+496,yiannis-moralis_summer-1968.jpg,9,1968,gray,74.0,85.8,76.7,20.7,65.7,yiannis moralis,Expressionism,summer-1968,1382,2000
+497,yiannis-tsaroychis_landscape-of-olympia-1934.jpg,11,1934,yellow,49.1,87.5,53.2,13.9,83.1,yiannis tsaroychis,Cubism,landscape-of-olympia-1934,1956,1382
+498,yiannis-tsaroychis_rocks-with-two-sailors-1966.jpg,-1,1966,yellow,59.6,49.0,9.6,31.7,0.0,yiannis tsaroychis,Naive Art Primitivism,rocks-with-two-sailors-1966,2194,1382
+499,zinaida-serebriakova_self-portrait-in-red-1921.jpg,8,1921,orange,18.8,64.0,21.6,31.9,76.2,zinaida serebriakova,Expressionism,self-portrait-in-red-1921,1382,1736

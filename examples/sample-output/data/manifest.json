@@ -1,0 +1,76 @@
+{
+  "count": 500,
+  "atlasCount": 1,
+  "thumbSize": 128,
+  "atlasSize": 4096,
+  "bytesPerImage": 28,
+  "version": 3,
+  "atlasFormat": "webp",
+  "provenance": {
+    "schemaVersion": 1,
+    "software": {
+      "name": "ImageSpace",
+      "version": "1.4.0"
+    },
+    "corpus": {
+      "imageCount": 500,
+      "fingerprint": "7aa1f4de901ade982fc26b5929eb3a67d678cd13f1c45050aa2fbedf28c63afe"
+    },
+    "embedding": {
+      "modelId": "openai/clip-vit-base-patch32",
+      "backend": "onnxruntime",
+      "dimensions": 512
+    },
+    "layout": {
+      "method": "umap",
+      "implementation": "umap-learn",
+      "input": "clip-embedding",
+      "dimensions": 2,
+      "nNeighbors": 15,
+      "requestedNNeighbors": 15,
+      "minDist": 0.1,
+      "metric": "cosine",
+      "initialization": "spectral",
+      "seed": 42
+    },
+    "clusterSpace": {
+      "method": "umap",
+      "implementation": "umap-learn",
+      "input": "clip-embedding",
+      "dimensions": 10,
+      "requestedDimensions": 10,
+      "nNeighbors": 30,
+      "requestedNNeighbors": 30,
+      "minDist": 0.0,
+      "metric": "cosine",
+      "initialization": "spectral",
+      "seed": 42
+    },
+    "hdbscan": {
+      "minClusterSize": 10,
+      "minSamples": 5,
+      "selectionMethod": "leaf",
+      "metric": "euclidean",
+      "noisePolicy": "preserve-unassigned",
+      "noiseLabel": -1,
+      "noiseCount": 153
+    },
+    "neighbors": {
+      "k": 10,
+      "space": "clip-embedding",
+      "dimensions": 512,
+      "metric": "cosine"
+    },
+    "labels": {
+      "modelId": "openai/clip-vit-base-patch32",
+      "vocabularyId": "imagespace-art-v1",
+      "vocabularyVersion": 1,
+      "candidateCount": 40,
+      "uncertaintyThreshold": 0.01,
+      "topCandidatesStored": 3
+    }
+  },
+  "hasPreviewAtlases": true,
+  "previewThumbSize": 64,
+  "previewAtlasCount": 1
+}

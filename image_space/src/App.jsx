@@ -10,6 +10,14 @@ import {
 const THUMB_SIZE = 64;
 const ATLAS_SIZE = 4096;
 const SPATIAL_CELL_SIZE = 120;
+// Display names for computed scores, shared by the range sliders and the detail panel.
+const SCORE_LABELS = {
+  brightness: 'Brightness',
+  complexity: 'Complexity',
+  edge_density: 'Edge Density',
+  outlier_score: 'Uniqueness',
+  cluster_confidence: 'Cluster Fit',
+};
 
 // BASE_URL is './' (relative) — built dist/ works at any URL without configuration.
 const BASE = import.meta.env.BASE_URL;
@@ -1557,14 +1565,7 @@ export default function App() {
         }
       }
       if (hasValue && max > min) {
-        const labels = {
-          brightness: 'Brightness',
-          complexity: 'Complexity',
-          edge_density: 'Edge Density',
-          outlier_score: 'Uniqueness',
-          cluster_confidence: 'Cluster Fit',
-        };
-        opts[col] = { min: Math.floor(min), max: Math.ceil(max), label: labels[col] || col };
+        opts[col] = { min: Math.floor(min), max: Math.ceil(max), label: SCORE_LABELS[col] || col };
       }
     }
     return opts;
@@ -2183,7 +2184,7 @@ export default function App() {
                     : []),
                 ].map(([k, v]) => (
                   <div key={k} className="flex justify-between items-baseline border-b border-rp-hlMed/50 pb-1.5">
-                    <span className="text-[10px] font-semibold text-rp-muted uppercase">{k}</span>
+                    <span className="text-[10px] font-semibold text-rp-muted uppercase">{SCORE_LABELS[k] || k}</span>
                     <span className="text-xs font-bold text-rp-text font-mono">{v}</span>
                   </div>
                 ))}

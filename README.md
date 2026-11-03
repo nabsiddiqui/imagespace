@@ -1,9 +1,7 @@
 <div align="center">
   <img src="assets/logo.svg" width="100" alt="ImageSpace logo"/>
   <h1>ImageSpace</h1>
-  <strong><a href="https://nabeelsiddiqui.net/imagespace-demo">Live Demo →</a></strong> — 49,585 WikiArt images visualized with CLIP + UMAP
-  <br/><br/>
-  <a href="https://github.com/nabsiddiqui/imagespace/actions/workflows/ci.yml"><img src="https://github.com/nabsiddiqui/imagespace/actions/workflows/ci.yml/badge.svg" alt="CI status"/></a>
+  <strong><a href="#explore-without-installing">Explore the bundled sample →</a></strong> — 500 WikiArt images visualized with CLIP + UMAP
 </div>
 
 ---
@@ -16,22 +14,24 @@ An interactive browser-based tool for exploring large image collections. Point i
 
 ## Explore without installing
 
-Open the [live demo](https://nabeelsiddiqui.net/imagespace-demo) to use ImageSpace immediately. To run the repository checkout without installing the `imagespace` command, install the dependencies in any environment and invoke the script directly:
+A finished interface, generated from the 500 bundled sample images (`test-data/`, `--seed 42`), is included in [`examples/sample-output/`](examples/sample-output). Viewing it requires no ImageSpace installation and no Python packages, only a browser and a simple local web server. Python's built-in server works:
 
 ```bash
-python3 scripts/imagespace.py -i test-data -o ./output \
-  --metadata test-data/metadata.csv --seed 42
-python3 -m http.server 5174 -d ./output
+python3 -m http.server 5174 -d examples/sample-output
 ```
 
-Open http://localhost:5174. The generated site does not require Python, Node, a database, or a network connection after its assets have loaded.
+Open http://localhost:5174. Do not open `index.html` directly: browsers block the local file requests the viewer needs, which produces a blank page. The site needs no database or server-side code, so the same folder can also be uploaded to any static host.
+
+A larger [live demo](https://nabeelsiddiqui.net/imagespace-demo) shows 49,585 WikiArt images.
+
+To regenerate the sample yourself, see [Process your own images](#process-your-own-images).
 
 ## What It Does
 
 - Lays out images by visual similarity (CLIP embeddings → 2-D UMAP, cosine distance)
 - Clusters them automatically (HDBSCAN on a separate low-dimensional UMAP space) and labels clusters with natural language (CLIP)
-- Lets you switch between scatter, grid, color-sorted, and timeline views
-- Filters by any metadata column (dropdowns) or computed feature (brightness, complexity, etc.)
+- Lets you switch between five views: UMAP scatter (default), Snap (overlap-free), Grid, Color, and Timeline
+- Filters by categorical metadata columns (dropdowns) and by computed scores (range sliders for brightness, complexity, edge density, Uniqueness, and Cluster Fit)
 - Shows similar images and full metadata in a slide-in detail panel
 - Preserves HDBSCAN noise as unassigned and hides it by default, with a one-click toggle to reveal it in a distinct duotone tint
 - Renders 50,000 images at ~30 FPS in a browser via PixiJS WebGL
@@ -215,19 +215,18 @@ pytest
 
 Continuous integration runs the unit suite across Python 3.10–3.12 and against the oldest supported dependency versions, and rebuilds the viewer, so the pipeline is verified to keep working as its dependencies change. See [`tests/README.md`](tests/README.md) for the full layout.
 
-## Why Grid Snapping Is the Default
+## View Modes
 
-ImageSpace uses grid-snapped layouts (Grid, Color, Timeline views) as a deliberate design decision — not a limitation. Here's why:
+The viewer opens on the **UMAP** scatter, which places each image at its raw 2-D UMAP coordinates. Images closer to their cluster's center are drawn on top, so overlapping regions show their most typical members first. The other four views rearrange the same images:
 
-**Performance.** Grid layouts produce perfectly predictable sprite positions. The renderer never needs to resolve overlaps, recompute z-indices, or run collision detection. On a 50K-image dataset, this means stable 30 FPS even on mid-range hardware. Freeform overlapping layouts would require per-frame depth sorting and occlusion calculations that scale poorly.
+- **Snap:** the UMAP layout with overlaps removed. Each image moves to the nearest free grid cell, working outward from the center, so every image is visible while neighborhoods stay roughly in place.
+- **Grid:** images in discovery order (subfolders first, files sorted within each folder). With a flat folder of files named `artist_title.jpg`, this produces an alphabetical arrangement by artist.
+- **Color:** images sorted by the hue of each thumbnail's average color, then by lightness.
+- **Timeline:** images sorted by year, with undated images first. Years come from EXIF `DateTimeOriginal` or a year in the filename.
 
-**Mobile scalability.** Mobile browsers operate under severe memory constraints (~1–2 GB usable for a single tab). Grid snapping guarantees every sprite occupies a fixed-size cell, enabling efficient spatial hashing (O(1) hover lookup), predictable GPU memory usage, and no layout thrashing. Overlapping images would force costly reflows and z-index recalculations that frequently trigger WebGL context loss on mobile devices.
+Hotspot selection, filters, and the Noise toggle apply in all five views. UMAP and Snap dim non-matching images; Grid, Color, and Timeline hide them.
 
-**Visual clarity.** When exploring 50,000 images, every image is visible and accessible in a grid. No image is hidden behind another. This is critical for research workflows where users need to scan, filter, and identify patterns across an entire collection — not just the images that happen to be on top.
-
-**Predictability.** Grid layouts are deterministic: the same dataset always produces the same layout. Researchers can reproduce views, share screenshots, and reference specific positions. The pipeline exposes `--seed` (no seed by default = random each run); pass a fixed seed (e.g. `--seed 42`) for reproducible UMAP layout generation.
-
-**Tradeoffs.** Grid snapping sacrifices organic, "gallery-wall" aesthetics and the ability to manually arrange images. The UMAP scatter view provides the organic clustering experience, while grid views prioritize systematic exploration. This separation is intentional — each view mode serves a different analytical purpose.
+**Reproducibility.** UMAP is random unless seeded (no seed by default). Pass a fixed seed (e.g. `--seed 42`) for reproducible layouts; seeding makes UMAP single-threaded.
 
 ## Dual-Resolution Loading
 
@@ -251,7 +250,7 @@ imagespace -i /path/to/images/ -o ./output --no-hd
 
 ## Metadata Format
 
-Your metadata CSV must have a `filename` column matching image filenames. All other columns become available as filters in the viewer automatically — categorical columns get dropdown checkboxes, numeric columns get range sliders.
+Your metadata CSV must have a `filename` column matching image filenames. Non-numeric columns with at most 200 distinct values become dropdown filters in the viewer automatically (`id`, `filename`, `timestamp`, `width`, and `height` are skipped). High-cardinality columns such as `artist` or `title` still appear in the detail panel. Numeric metadata columns are not filterable; range sliders are provided only for the computed scores below.
 
 ```csv
 filename,artist,style,title

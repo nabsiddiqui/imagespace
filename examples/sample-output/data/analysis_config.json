@@ -1,0 +1,64 @@
+{
+  "clusterSpace": {
+    "dimensions": 10,
+    "implementation": "umap-learn",
+    "initialization": "spectral",
+    "input": "clip-embedding",
+    "method": "umap",
+    "metric": "cosine",
+    "minDist": 0.0,
+    "nNeighbors": 30,
+    "requestedDimensions": 10,
+    "requestedNNeighbors": 30,
+    "seed": 42
+  },
+  "corpus": {
+    "fingerprint": "7aa1f4de901ade982fc26b5929eb3a67d678cd13f1c45050aa2fbedf28c63afe",
+    "imageCount": 500
+  },
+  "embedding": {
+    "backend": "onnxruntime",
+    "dimensions": 512,
+    "modelId": "openai/clip-vit-base-patch32"
+  },
+  "hdbscan": {
+    "metric": "euclidean",
+    "minClusterSize": 10,
+    "minSamples": 5,
+    "noiseCount": 153,
+    "noiseLabel": -1,
+    "noisePolicy": "preserve-unassigned",
+    "selectionMethod": "leaf"
+  },
+  "labels": {
+    "candidateCount": 40,
+    "modelId": "openai/clip-vit-base-patch32",
+    "topCandidatesStored": 3,
+    "uncertaintyThreshold": 0.01,
+    "vocabularyId": "imagespace-art-v1",
+    "vocabularyVersion": 1
+  },
+  "layout": {
+    "dimensions": 2,
+    "implementation": "umap-learn",
+    "initialization": "spectral",
+    "input": "clip-embedding",
+    "method": "umap",
+    "metric": "cosine",
+    "minDist": 0.1,
+    "nNeighbors": 15,
+    "requestedNNeighbors": 15,
+    "seed": 42
+  },
+  "neighbors": {
+    "dimensions": 512,
+    "k": 10,
+    "metric": "cosine",
+    "space": "clip-embedding"
+  },
+  "schemaVersion": 1,
+  "software": {
+    "name": "ImageSpace",
+    "version": "1.4.0"
+  }
+}
