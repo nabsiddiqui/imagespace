@@ -1,7 +1,7 @@
 # ImageSpace tests
 
-Two complementary layers verify the pipeline. Both run in CI
-(`.github/workflows/ci.yml`).
+Two complementary layers verify the pipeline. The unit suite runs in CI
+(`.github/workflows/ci.yml`); the end-to-end contract runs locally.
 
 ## 1. Network-free numeric suite (`test_pipeline.py`)
 
@@ -29,9 +29,10 @@ software and its dependencies change over time.
 
 ## 2. End-to-end acceptance contract (`run_checks.py`)
 
-A single command that runs the whole pipeline on the bundled 500-image WikiArt
-sample and asserts stronger, integration-level invariants: two seeded runs are
-**byte-identical**, provenance/manifest records agree, HDBSCAN noise is
+A single command that runs the whole pipeline on the first 48 images of the
+bundled WikiArt sample (`--fixture-size`) and asserts stronger, integration-level
+invariants: a seeded run and a seeded `--relayout` from the cached embeddings
+produce **byte-identical** layouts, provenance/manifest records agree, HDBSCAN noise is
 preserved and encoded consistently across CSV and binary, cluster labels carry
 top-3 evidence, the frontend bundle builds and wires up the Methods panel, and
 the wheel ships the bundled label vocabulary.
