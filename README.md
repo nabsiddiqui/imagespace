@@ -34,7 +34,7 @@ To regenerate the sample yourself, see [Process your own images](#process-your-o
 - Filters by categorical metadata columns (dropdowns) and by computed scores (range sliders for brightness, complexity, edge density, Uniqueness, and Cluster Fit)
 - Shows similar images and full metadata in a slide-in detail panel
 - Preserves HDBSCAN noise as unassigned and hides it by default, with a one-click toggle to reveal it in a distinct duotone tint
-- Renders 50,000 images at ~30 FPS in a browser via PixiJS WebGL
+- Renders tens of thousands of images in a browser via PixiJS WebGL
 
 ### Process your own images
 

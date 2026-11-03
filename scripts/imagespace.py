@@ -27,13 +27,14 @@ Usage:
 Install as a command (from this repo):
     pip install .
 
-Performance (50K images, Apple Silicon, with --hd):
-    - Atlas generation (full + preview): ~3-5 min
-    - CLIP embeddings (ONNX+CoreML): ~2-3 min
-    - UMAP (layout + clustering space) + HDBSCAN: several minutes (slower with --seed,
-      because a fixed seed makes UMAP run single-threaded)
-    - Metadata + features: ~1-2 min
-    - Total: ~16-40 min (CPU-only CLIP is much slower)
+Performance (one measured run: 49,585 images, Apple Silicon, --hd, --seed 42):
+    - Atlas generation (full + preview): ~14 min
+    - CLIP embeddings (ONNX+CoreML): ~19 min
+    - UMAP (layout + clustering space) + HDBSCAN: ~1 min (a fixed seed makes UMAP
+      run single-threaded)
+    - Nearest neighbors: <1 min
+    - Colors + image features: ~14 min
+    - Total: ~48 min (CPU-only CLIP is much slower; --relayout from a cache is faster)
 
 Dependencies:
     Required: pillow, numpy, scikit-learn, umap-learn, hdbscan
@@ -1278,7 +1279,7 @@ def main():
         default=True,
         help="Generate dual-resolution atlases: 64px previews load first, then 128px HD "
              "swaps in on desktop/tablet (phones stay on previews). ON by default; "
-             "pass --no-hd for single-resolution output (thumb-size 64).",
+             "pass --no-hd for single-resolution output at --thumb-size.",
     )
     parser.add_argument(
         "--preview-quality",
