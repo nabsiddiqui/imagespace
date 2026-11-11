@@ -10,6 +10,9 @@ import {
 const THUMB_SIZE = 64;
 const ATLAS_SIZE = 4096;
 const SPATIAL_CELL_SIZE = 120;
+// Deepest zoom allowed (world-to-screen scale). The zoom readout is relative to
+// this, so the limit reads as 100%. Beyond it thumbnails would only get blurrier.
+const MAX_ZOOM = 0.8;
 // Display names for computed scores, shared by the range sliders and the detail panel.
 const SCORE_LABELS = {
   brightness: 'Brightness',
@@ -61,27 +64,44 @@ const ImageSpaceLogo = ({ size = 40 }) => (
   </svg>
 );
 
+/* Live readout (zoom %, FPS) that polls on its own timer, so only this text
+   node re-renders instead of the whole App. */
+const LiveValue = ({ read, interval = 200 }) => {
+  const readRef = useRef(read);
+  readRef.current = read;
+  const [value, setValue] = useState(() => read());
+  useEffect(() => {
+    const id = setInterval(() => setValue(readRef.current()), interval);
+    return () => clearInterval(id);
+  }, [interval]);
+  return value;
+};
+
 /* ── Detail Panel Thumbnail (proper hooks instead of createRef+setTimeout) ── */
-const DetailThumb = React.memo(({ point, atlasTextures, displaySize = 256 }) => {
+// `res` is the point's current source size; it changes when its atlas is swapped
+// between preview and full resolution, which makes the memoised thumb redraw.
+const DetailThumb = React.memo(({ point, atlasTextures, displaySize = 128, res, className = 'rounded-xl border border-rp-hlMed mx-auto bg-rp-hlLow' }) => {
   const canvasRef = useRef(null);
+  // Backing store in device pixels (capped at 2x) so small thumbs stay sharp on HiDPI.
+  const px = Math.round(displaySize * Math.min(2, window.devicePixelRatio || 1));
   useEffect(() => {
     if (!point) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const tex = atlasTextures[point.ai];
+    const tex = atlasTextures?.[point.ai];
     if (!tex) return;
-    const src = tex.source.resource;
+    const src = tex.source?.resource;
     if (!src) return;
-    ctx.clearRect(0, 0, displaySize, displaySize);
-    ctx.drawImage(src, point.drawU, point.drawV, point.drawSize, point.drawSize, 0, 0, displaySize, displaySize);
-  }, [point?.ai, point?.drawU, point?.drawV, point?.drawSize, displaySize]);
+    ctx.clearRect(0, 0, px, px);
+    ctx.drawImage(src, point.drawU, point.drawV, point.drawSize, point.drawSize, 0, 0, px, px);
+  }, [point?.ai, point?.drawU, point?.drawV, point?.drawSize, px]);
   return (
     <canvas
       ref={canvasRef}
-      width={displaySize}
-      height={displaySize}
-      className="rounded-xl border border-rp-hlMed mx-auto bg-rp-hlLow"
+      width={px}
+      height={px}
+      className={className}
       style={{ width: displaySize, height: displaySize, imageRendering: 'auto' }}
     />
   );
@@ -124,28 +144,27 @@ function computeLayout(allPoints, mode, visibleSet, thumbSize = THUMB_SIZE, nois
 
   // Visibility: in stable modes dim non-visible, in other modes hide them.
   // Hide mode always removes raw HDBSCAN noise, even when no other filter is active.
+  syncNoiseLayer(noiseDisplay);
   if (hasFilter) {
     for (const p of allPoints) {
-      applyNoiseFilter(p.sprite, isNoisePoint(p), noiseDisplay);
       if (noiseDisplay === 'hide' && isNoisePoint(p)) {
-        p.sprite.alpha = 0;
+        setAlpha(p.sprite, 0);
       } else if (visibleSet.has(p.id)) {
-        p.sprite.alpha = 1;
+        setAlpha(p.sprite, 1);
         p.sprite.tint = pointTint(p, noiseDisplay);
       } else if (isStableLayout) {
         // Dim but don't hide in stable-layout views
-        p.sprite.alpha = 0.12;
+        setAlpha(p.sprite, 0.12);
         p.sprite.tint = 0xcccccc;
       } else {
-        p.sprite.alpha = 0;
+        setAlpha(p.sprite, 0);
         p.targetX = p.sprite.x;
         p.targetY = p.sprite.y;
       }
     }
   } else {
     for (const p of allPoints) {
-      applyNoiseFilter(p.sprite, isNoisePoint(p), noiseDisplay);
-      p.sprite.alpha = noiseDisplay === 'hide' && isNoisePoint(p) ? 0 : 1;
+      setAlpha(p.sprite, noiseDisplay === 'hide' && isNoisePoint(p) ? 0 : 1);
       p.sprite.tint = pointTint(p, noiseDisplay);
     }
   }
@@ -257,22 +276,28 @@ const NOISE_CLUSTER_ID = 65535;
 const NOISE_COLOR = '#9893a5';
 const NOISE_TINT = 0x9893a5;
 const isNoisePoint = (point) => point.cluster === NOISE_CLUSTER_ID;
-// Shared greyscale ColorMatrixFilter, assigned once PIXI loads (see PixiJS boot).
-// Reused across every noise sprite so shown-noise renders true black-and-white
-// against the full-color clustered images.
+// Shared duotone ColorMatrixFilter, assigned once PIXI loads (see PixiJS boot).
+// It is applied ONCE to the noise layer (a container holding every noise sprite),
+// never per sprite: a filter on each of ~27K sprites means ~27K render passes per
+// frame and freezes the viewer.
 let noiseGreyFilter = null;
+let noiseLayer = null;
 // When the greyscale filter is available, noise uses a clean white tint and the
 // filter supplies the desaturation. Before it loads, fall back to a grey multiply.
 const pointTint = (point) => {
   if (!isNoisePoint(point)) return 0xffffff;
   return noiseGreyFilter ? 0xffffff : NOISE_TINT;
 };
-// Toggle the greyscale filter on a sprite based on its noise state + display policy.
-const applyNoiseFilter = (sprite, isNoise, noiseDisplay) => {
-  const shouldGrey = !!(isNoise && noiseDisplay !== 'hide' && noiseGreyFilter);
-  const hasGrey = !!(sprite.filters && sprite.filters.length);
-  if (shouldGrey === hasGrey) return;
-  sprite.filters = shouldGrey ? [noiseGreyFilter] : null;
+// Set a sprite's alpha; fully transparent sprites are also marked invisible so the
+// renderer skips them instead of drawing them. `alpha === 0` still means hidden.
+const setAlpha = (sprite, alpha) => {
+  sprite.alpha = alpha;
+  sprite.visible = alpha > 0;
+};
+// Show or hide the whole noise layer. Hidden noise is skipped by the renderer
+// entirely instead of being drawn as thousands of fully transparent sprites.
+const syncNoiseLayer = (noiseDisplay) => {
+  if (noiseLayer) noiseLayer.visible = noiseDisplay !== 'hide';
 };
 
 /* ── Clusters ──────────────────────── */
@@ -355,7 +380,8 @@ async function computeAvgColors(points, atlasTextures, thumbSize, onProgress) {
     const src = atlasTextures[p.ai]?.source?.resource;
     if (!src) { p.avgHue = 0; p.avgSat = 0; p.avgLum = 0.5; continue; }
     try {
-      ctx.drawImage(src, p.u, p.v, thumbSize, thumbSize, 0, 0, 1, 1);
+      // drawU/drawV/drawSize always match whichever atlas (preview or full) is loaded
+      ctx.drawImage(src, p.drawU ?? p.u, p.drawV ?? p.v, p.drawSize ?? thumbSize, p.drawSize ?? thumbSize, 0, 0, 1, 1);
       const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
       const rn = r / 255, gn = g / 255, bn = b / 255;
       const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
@@ -392,11 +418,10 @@ export default function App() {
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState('tsne');
   const [statusMsg, setStatusMsg] = useState('Preparing...');
-  const [zoomLevel, setZoomLevel] = useState(1);
   const [hotspots, setHotspots] = useState([]);
+  const [visibleCount, setVisibleCount] = useState(null); // images passing the current filters (null = all)
   const [showHotspots, setShowHotspots] = useState(true);
   const [activeHotspot, setActiveHotspot] = useState(null);
-  const [hoveredHotspot, setHoveredHotspot] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [showMethods, setShowMethods] = useState(false);
   const [analysisConfig, setAnalysisConfig] = useState(null);
@@ -422,10 +447,14 @@ export default function App() {
   const atlasFormatRef = useRef('jpg');               // atlas file extension
   const atlasSizeRef = useRef(ATLAS_SIZE);            // atlas pixel dimensions
   const atlasTexturesRef = useRef(null);             // loaded atlas textures array
-  const neighborsRef = useRef(null);                  // k-NN data: { k, indices: Uint32Array[], distances: Float32Array[] }
+  const neighborsRef = useRef(null);                  // k-NN data: { k, count, ids: Uint32Array, dists: Float32Array } (interleaved views)
   const minimapRef = useRef(null);                    // minimap canvas element
   const minimapDataRef = useRef(null);                // { minX, minY, rangeX, rangeY, dots: [{nx, ny}] }
   const [minimapReady, setMinimapReady] = useState(false); // triggers minimap draw
+
+  // Open detail-panel item, readable from the PixiJS side (its atlas is kept at full resolution).
+  const selectedItemRef = useRef(null);
+  selectedItemRef.current = showDetailPanel ? selectedItem : null;
 
   /* Standalone minimap renderer — runs independently of PixiJS ticker */
   useEffect(() => {
@@ -543,6 +572,7 @@ export default function App() {
   /* ── Recompute layout with current filters ── */
   const relayout = (mode, visSet) => {
     visibleSetRef.current = visSet;
+    setVisibleCount(visSet ? visSet.size : null); // state, so the filter count re-renders by itself
 
     // Toggle sortableChildren — only needed for t-SNE z-depth ordering.
     // Sorting 50K children per frame is expensive; disable for flat modes.
@@ -550,21 +580,34 @@ export default function App() {
     if (container) {
       const needsSort = mode === 'tsne';
       if (container.sortableChildren !== needsSort) container.sortableChildren = needsSort;
-      // Uncache texture before animation starts (positions will change)
-      if (container._cacheAsTextureEnabled) {
-        container.cacheAsTexture(false);
-        container._cacheAsTextureEnabled = false;
+      // Uncache textures before animation starts (positions will change)
+      for (const c of [container, noiseLayer]) {
+        if (c?._cacheAsTextureEnabled) {
+          c.cacheAsTexture(false);
+          c._cacheAsTextureEnabled = false;
+        }
       }
     }
 
     computeLayout(pointsRef.current, mode, visSet, thumbSizeRef.current, noiseDisplayRef.current);
 
-    // Mark all points as moving so the animation ticker picks them up
+    // Hand only the points that actually have somewhere to go to the animation
+    // ticker. A filter or hotspot click in a stable layout moves nothing, so it
+    // no longer re-animates the whole collection.
     const app = appRef.current;
     if (app?._movingSet) {
       for (const p of pointsRef.current) {
-        app._movingSet.add(p.id);
+        if (!p) continue;
+        const dx = p.targetX - p.sprite.x;
+        const dy = p.targetY - p.sprite.y;
+        if (dx * dx + dy * dy > 0.25) {
+          app._movingSet.add(p.id);
+        } else if (dx !== 0 || dy !== 0) {
+          p.sprite.x = p.x = p.targetX;
+          p.sprite.y = p.y = p.targetY;
+        }
       }
+      app._spatialDirty = true; // lets the ticker finish up even when nothing moved
     }
 
     // Compute timeline mapping
@@ -613,7 +656,7 @@ export default function App() {
           const scaleY = vp.screenHeight / h;
           let scale = Math.min(scaleX, scaleY);
 
-          vp.setZoom(scale, true);
+          vp.setZoom(Math.min(scale, MAX_ZOOM), true);
           vp.moveCenter(cx, cy);
         } else {
           vp.fit();
@@ -669,6 +712,8 @@ export default function App() {
     let handleWheel = null;
     let pixiRef = null;          // holds PIXI module for cleanup
     let atlasUrls = [];          // tracks loaded atlas URLs for Assets.unload
+    const ownedTextures = new Set(); // cropped/scaled atlas textures created here (not Assets-managed)
+    let hdTimer = null;          // interval driving on-demand full-resolution loading
 
     async function start() {
       try {
@@ -698,6 +743,7 @@ export default function App() {
             lr * d[2], lg * d[2], lb * d[2], 0, lo[2],
             0, 0, 0, 1, 0,
           ];
+          noiseGreyFilter.resolution = 'inherit'; // match the canvas so noise stays sharp on HiDPI
         }
 
         setStatusMsg('Initialising renderer...');
@@ -709,9 +755,11 @@ export default function App() {
           resizeTo: window,
           resolution: isMobile ? MOBILE_MAX_DPR : (window.devicePixelRatio || 1),
           autoDensity: true,
-          // Mobile: force WebGL (stable, has context loss recovery).
-          // Desktop: let PixiJS auto-select WebGPU if available (2-4× faster rendering).
-          ...(isMobile && { preference: 'webgl' }),
+          // WebGL everywhere by default (PixiJS's own default; stable, with context-loss
+          // recovery). Desktop can opt in to WebGPU for testing with ?renderer=webgpu.
+          ...(isMobile
+            ? { preference: 'webgl' }
+            : (new URLSearchParams(window.location.search).get('renderer') === 'webgpu' && { preference: 'webgpu' })),
         });
         if (isCancelled) { app.destroy(false, { children: true, texture: true }); return; }
         appRef.current = app;
@@ -725,7 +773,7 @@ export default function App() {
         });
         viewportRef.current = viewport;
         app.stage.addChild(viewport);
-        viewport.drag().pinch().wheel().decelerate();
+        viewport.drag().pinch().wheel().decelerate().clampZoom({ maxScale: MAX_ZOOM });
         viewport.moveCenter(0, 0);
 
         /* Load data */
@@ -754,6 +802,20 @@ export default function App() {
         setStatusMsg(`Loading ${manifest.atlasCount} atlas textures...`);
 
         const fmt = manifest.atlasFormat || 'jpg';
+
+        /* Noise layer: sits beneath the clustered sprites (noise already had the
+           lowest z-order) and carries the single shared duotone filter. */
+        const noiseContainer = new PIXI.Container();
+        noiseContainer.interactiveChildren = false;
+        noiseContainer.eventMode = 'none';
+        noiseContainer.isRenderGroup = true;
+        noiseContainer.filters = [noiseGreyFilter];
+        // Fixed (huge) filter area: skips measuring every child each frame; the
+        // filter system clips it to the screen.
+        noiseContainer.filterArea = new PIXI.Rectangle(-1e6, -1e6, 2e6, 2e6);
+        viewport.addChild(noiseContainer);
+        if (!isCancelled) noiseLayer = noiseContainer;
+        syncNoiseLayer(noiseDisplayRef.current);
 
         /* Create the sprite container upfront */
         const container = new PIXI.Container();
@@ -835,7 +897,7 @@ export default function App() {
             const h = maxY - minY + pad;
             const scaleX = viewport.screenWidth / w;
             const scaleY = viewport.screenHeight / h;
-            viewport.setZoom(Math.min(scaleX, scaleY), true);
+            viewport.setZoom(Math.min(scaleX, scaleY, MAX_ZOOM), true);
             viewport.moveCenter((minX + maxX) / 2, (minY + maxY) / 2);
           }
         }
@@ -896,30 +958,86 @@ export default function App() {
         setLoadPhase('preview');
         setLoadProgress(0);
 
-        async function loadAtlasAndCreateSprites(atlasIdx) {
-          let atlasUrl;
-          if (usePreview) {
-            atlasUrl = `${BASE}data/atlas_${atlasIdx}_preview.webp`;
-          } else {
-            atlasUrl = `${BASE}data/atlas_${atlasIdx}.${fmt}`;
+        /* Start the optional side files now so they download alongside the atlases
+           instead of after them. They are processed once the sprites exist. */
+        const csvPromise = fetch(`${BASE}data/metadata.csv`)
+          .then(r => (r.ok ? r.text() : null)).catch(() => null);
+        const nnPromise = fetch(`${BASE}data/neighbors.bin`)
+          .then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+
+        /* Preview atlas files are as large as the full atlases (e.g. 4096x4096) but
+           only their top-left region holds thumbnails. Work out the used region per
+           atlas so only that part is kept in memory. */
+        const previewExtent = usePreview ? pointsByAtlas.map((ids) => {
+          let w = 0, h = 0;
+          for (const i of ids) {
+            const pd = allPointData[i];
+            const right = (pd.u_preview ?? pd.u) + previewThumbSize;
+            const bottom = (pd.v_preview ?? pd.v) + previewThumbSize;
+            if (right > w) w = right;
+            if (bottom > h) h = bottom;
+          }
+          return { w, h };
+        }) : null;
+
+        const baseUrlOf = (atlasIdx) => (usePreview
+          ? `${BASE}data/atlas_${atlasIdx}_preview.webp`
+          : `${BASE}data/atlas_${atlasIdx}.${fmt}`);
+
+        /* Load an atlas at its base level (preview when available), cropped to the
+           used region and, on phones, downscaled. */
+        async function loadBaseTexture(atlasIdx) {
+          const atlasUrl = baseUrlOf(atlasIdx);
+          let tex = await PIXI.Assets.load(atlasUrl);
+          if (isCancelled) return null;
+          const src = tex.source;
+          const ext = previewExtent?.[atlasIdx];
+          const cropW = ext && ext.w > 0 ? Math.min(src.width, ext.w) : src.width;
+          const cropH = ext && ext.h > 0 ? Math.min(src.height, ext.h) : src.height;
+          const needsCrop = cropW < src.width || cropH < src.height;
+          if (atlasScale < 1 || needsCrop) {
+            try {
+              let resource;
+              if (atlasScale === 1 && typeof createImageBitmap === 'function') {
+                resource = await createImageBitmap(src.resource, 0, 0, cropW, cropH);
+              } else {
+                resource = document.createElement('canvas');
+                resource.width = Math.max(1, Math.round(cropW * atlasScale));
+                resource.height = Math.max(1, Math.round(cropH * atlasScale));
+                resource.getContext('2d').drawImage(src.resource, 0, 0, cropW, cropH, 0, 0, resource.width, resource.height);
+              }
+              await PIXI.Assets.unload(atlasUrl);
+              tex = PIXI.Texture.from(resource);
+              ownedTextures.add(tex);
+              return tex;
+            } catch (_) {
+              if (atlasScale < 1) throw _; // phone coordinates assume the downscaled atlas
+              /* otherwise fall through and keep the uncropped atlas */
+            }
           }
           atlasUrls.push(atlasUrl);
-          let tex = await PIXI.Assets.load(atlasUrl);
-          if (isCancelled) return;
+          return tex;
+        }
 
-          if (atlasScale < 1) {
-            const src = tex.source;
-            const sw = src.width, sh = src.height;
-            const dw = Math.round(sw * atlasScale), dh = Math.round(sh * atlasScale);
-            const offscreen = document.createElement('canvas');
-            offscreen.width = dw;
-            offscreen.height = dh;
-            const ctx2d = offscreen.getContext('2d');
-            ctx2d.drawImage(src.resource, 0, 0, dw, dh);
-            await PIXI.Assets.unload(atlasUrl);
-            atlasUrls = atlasUrls.filter(u => u !== atlasUrl);
-            tex = PIXI.Texture.from(offscreen);
-          }
+        /* Free a base-level atlas texture from loadBaseTexture(). */
+        function releaseBaseTexture(tex, atlasIdx) {
+          if (!tex) return;
+          try {
+            if (ownedTextures.delete(tex)) {
+              const resource = tex.source?.resource;
+              tex.destroy(true);
+              resource?.close?.();
+            } else {
+              const url = baseUrlOf(atlasIdx);
+              atlasUrls = atlasUrls.filter(u => u !== url);
+              PIXI.Assets.unload(url);
+            }
+          } catch (_) { /* already released */ }
+        }
+
+        async function loadAtlasAndCreateSprites(atlasIdx) {
+          const tex = await loadBaseTexture(atlasIdx);
+          if (isCancelled || !tex) return;
           atlasTextures[atlasIdx] = tex;
           atlasTexturesRef.current = atlasTextures;
 
@@ -948,14 +1066,13 @@ export default function App() {
             // Apply the current noise-display policy at creation so the default
             // (hide) takes effect on first paint, before any relayout runs.
             if (noiseDisplayRef.current === 'hide' && spriteIsNoise) {
-              sprite.alpha = 0;
+              setAlpha(sprite, 0);
             }
-            applyNoiseFilter(sprite, spriteIsNoise, noiseDisplayRef.current);
             if (usePreview) {
               sprite.width = currentThumbSize;
               sprite.height = currentThumbSize;
             }
-            container.addChild(sprite);
+            (spriteIsNoise ? noiseContainer : container).addChild(sprite);
 
             const drawU = usePreview ? (pd.u_preview ?? pd.u) : pd.u;
             const drawV = usePreview ? (pd.v_preview ?? pd.v) : pd.v;
@@ -967,6 +1084,8 @@ export default function App() {
               tsneX: pd.tsneX, tsneY: pd.tsneY,
               targetX: initX, targetY: initY,
               ai: pd.ai, u: pd.u * atlasScale, v: pd.v * atlasScale, sprite,
+              pu: (pd.u_preview ?? pd.u) * atlasScale, pv: (pd.v_preview ?? pd.v) * atlasScale,
+              baseScale: sprite.scale.x, // resting scale; hover enlarges relative to this
               drawU: drawU * atlasScale, drawV: drawV * atlasScale, drawSize: drawSize * atlasScale,
               ...(pd.cluster !== undefined && { cluster: pd.cluster }),
             };
@@ -1004,63 +1123,131 @@ export default function App() {
           await Promise.all(workers);
         }
         if (isCancelled) return;
-        setLoadPhase(isPhone || !usePreview ? 'done' : 'hd');
+        setLoadPhase('done');
         setLoadProgress(0);
 
+        /* Full-resolution atlases load ON DEMAND. An atlas is upgraded only while
+           the view is zoomed in far enough for the preview to look soft AND some of
+           its images are on screen (or one is open in the detail panel). Atlases
+           that have left the view are swapped back to their preview once more than
+           HD_KEEP are loaded. At the overview zoom nothing full-resolution is held,
+           so GPU memory stays a fraction of loading every atlas up front. */
         if (usePreview && !isPhone) {
-          (async () => {
-            const HD_CONCURRENCY = 2;
-            let hdNextIdx = 0;
-            const hdCompletedAtlases = new Set();
+          const fullUrlOf = (atlasIdx) => `${BASE}data/atlas_${atlasIdx}.${fmt}`;
+          const atlasCount = manifest.atlasCount;
+          const isHD = new Uint8Array(atlasCount);
+          const lastNeeded = new Float64Array(atlasCount);
+          const counts = new Uint32Array(atlasCount);
+          const busy = new Set();          // atlases mid-swap
+          let hdCount = 0;
+          const HD_PARALLEL = 2;           // simultaneous swaps
+          const HD_KEEP = isMobile ? 4 : 12; // full-res atlases kept warm after leaving the view
+          const HD_GRACE_MS = 8000;        // minimum time out of view before a swap back
+          const previewSize = previewThumbSize * atlasScale;
 
-            async function upgradeAtlasToFull(atlasIdx) {
-              const previewUrl = `${BASE}data/atlas_${atlasIdx}_preview.webp`;
-              const fullUrl = `${BASE}data/atlas_${atlasIdx}.${fmt}`;
-              const fullTex = await PIXI.Assets.load(fullUrl);
-              if (isCancelled) return;
-
+          const swapAtlas = async (atlasIdx, toHD) => {
+            busy.add(atlasIdx);
+            try {
+              const newTex = toHD ? await PIXI.Assets.load(fullUrlOf(atlasIdx)) : await loadBaseTexture(atlasIdx);
+              if (isCancelled || !newTex) return;
+              if (toHD) atlasUrls.push(fullUrlOf(atlasIdx));
+              const size = toHD ? currentThumbSize : previewSize;
               for (const i of pointsByAtlas[atlasIdx]) {
                 const p = pointsRef.current[i];
                 if (!p) continue;
-                const frame = new PIXI.Rectangle(
-                  p.u, p.v,
-                  currentThumbSize, currentThumbSize
-                );
-                p.sprite.texture = new PIXI.Texture({ source: fullTex.source, frame });
+                const u = toHD ? p.u : p.pu;
+                const v = toHD ? p.v : p.pv;
+                const oldSpriteTex = p.sprite.texture;
+                p.sprite.texture = new PIXI.Texture({ source: newTex.source, frame: new PIXI.Rectangle(u, v, size, size) });
+                oldSpriteTex.destroy(false);
                 p.sprite.width = currentThumbSize;
                 p.sprite.height = currentThumbSize;
-                p.drawU = p.u;
-                p.drawV = p.v;
-                p.drawSize = currentThumbSize;
+                p.baseScale = p.sprite.scale.x;
+                p.drawU = u;
+                p.drawV = v;
+                p.drawSize = size;
               }
+              const oldTex = atlasTextures[atlasIdx];
+              atlasTextures[atlasIdx] = newTex;
+              isHD[atlasIdx] = toHD ? 1 : 0;
+              hdCount += toHD ? 1 : -1;
 
-              atlasTextures[atlasIdx] = fullTex;
-              hdCompletedAtlases.add(atlasIdx);
-              const hdProgress = Math.round((hdCompletedAtlases.size / manifest.atlasCount) * 100);
-              setLoadProgress(hdProgress);
-              setStatusMsg(`Upgrading Image Resolutions ${hdCompletedAtlases.size}/${manifest.atlasCount}`);
+              // Refresh anything that baked the old texture in.
+              for (const c of [containerRef.current, noiseLayer]) {
+                if (c?._cacheAsTextureEnabled) { try { c.updateCacheTexture(); } catch (_) {} }
+              }
+              if (selectedItemRef.current) setStats(s => ({ ...s })); // redraw open detail-panel thumbnails
 
-              requestAnimationFrame(() => {
-                PIXI.Assets.unload(previewUrl);
-              });
+              // Let one frame draw with the new texture before freeing the old one.
+              // The atlas stays `busy` until then so it cannot be re-requested mid-release.
+              await new Promise(r => requestAnimationFrame(r));
+              if (isCancelled) return;
+              if (toHD) {
+                releaseBaseTexture(oldTex, atlasIdx);
+              } else {
+                atlasUrls = atlasUrls.filter(u => u !== fullUrlOf(atlasIdx));
+                PIXI.Assets.unload(fullUrlOf(atlasIdx));
+              }
+            } catch (_) {
+              /* network or decode failure: keep the current texture and retry on a later tick */
+            } finally {
+              busy.delete(atlasIdx);
             }
+          };
 
-            async function hdWorker() {
-              while (hdNextIdx < manifest.atlasCount && !isCancelled) {
-                const idx = hdNextIdx++;
-                await upgradeAtlasToFull(idx);
+          const hdPolicy = () => {
+            if (isCancelled) return;
+            const now = performance.now();
+            // Zoomed in = a thumbnail covers more device pixels than the preview has.
+            const devicePx = viewport.scale.x * (app.renderer.resolution || 1) * currentThumbSize;
+            counts.fill(0);
+            if (devicePx > previewSize * 1.15) {
+              const pad = currentThumbSize;
+              const l = viewport.left - pad, r = viewport.right + pad;
+              const t = viewport.top - pad, b = viewport.bottom + pad;
+              for (const p of pointsRef.current) {
+                // hidden and dimmed (filtered-out) images do not need full resolution
+                if (!p || p.sprite.alpha < 0.5 || p.x < l || p.x > r || p.y < t || p.y > b) continue;
+                counts[p.ai]++;
               }
             }
-            const hdWorkers = [];
-            for (let w = 0; w < Math.min(HD_CONCURRENCY, manifest.atlasCount); w++) {
-              hdWorkers.push(hdWorker());
+            const sel = selectedItemRef.current;
+            const selPoint = sel ? pointsRef.current[sel.id] : null;
+            if (selPoint) {
+              // The open detail panel gets full resolution first, then its neighbors.
+              counts[selPoint.ai] += 1e6;
+              const nn = neighborsRef.current;
+              if (nn && sel.id < nn.count) {
+                const base = sel.id * nn.k * 2;
+                for (let j = 0; j < nn.k; j++) {
+                  const np = pointsRef.current[nn.ids[base + j * 2]];
+                  if (np) counts[np.ai] += 1e3;
+                }
+              }
             }
-            await Promise.all(hdWorkers);
-            if (!isCancelled) {
-              setLoadPhase('done');
-              setStatusMsg('High-res ready');
+
+            const wanted = [];
+            for (let a = 0; a < atlasCount; a++) {
+              if (counts[a] === 0) continue;
+              lastNeeded[a] = now;
+              if (!isHD[a] && !busy.has(a)) wanted.push(a);
             }
-          })();
+            wanted.sort((a, b) => counts[b] - counts[a]); // most-visible atlases first
+            for (const a of wanted) {
+              if (busy.size >= HD_PARALLEL) break;
+              swapAtlas(a, true);
+            }
+
+            if (busy.size < HD_PARALLEL && hdCount > HD_KEEP) {
+              let oldest = -1;
+              for (let a = 0; a < atlasCount; a++) {
+                if (!isHD[a] || busy.has(a) || counts[a] > 0 || now - lastNeeded[a] < HD_GRACE_MS) continue;
+                if (oldest < 0 || lastNeeded[a] < lastNeeded[oldest]) oldest = a;
+              }
+              if (oldest >= 0) swapAtlas(oldest, false);
+            }
+          };
+          hdTimer = setInterval(hdPolicy, 300);
         }
 
         const scaledThumbSize = usePreview ? previewThumbSize * atlasScale : currentThumbSize * atlasScale;
@@ -1074,12 +1261,13 @@ export default function App() {
           await computeAvgColors(pointsRef.current, atlasTextures, scaledThumbSize, () => {});
         })();
 
-        /* Load metadata CSV (optional) */
+        /* Metadata CSV + neighbors (both optional). Their downloads started with the
+           atlases (csvPromise / nnPromise); they are processed in the background so
+           the ticker, hover and click handlers below are wired up without waiting. */
+        (async () => {
         try {
-          setStatusMsg('Loading metadata...');
-          const csvRes = await fetch(`${BASE}data/metadata.csv`);
-          if (csvRes.ok) {
-            const csvText = await csvRes.text();
+          const csvText = await csvPromise;
+          if (csvText && !isCancelled) {
             // RFC 4180 CSV line parser — handles quoted fields with commas and escaped quotes ("")
             const parseCSVLine = (line) => {
               const fields = [];
@@ -1163,28 +1351,24 @@ export default function App() {
 
         /* Load k-NN neighbors data (optional) */
         try {
-          setStatusMsg('Loading neighbor data...');
-          const nnRes = await fetch(`${BASE}data/neighbors.bin`);
-          if (nnRes.ok) {
-            const nnBuf = await nnRes.arrayBuffer();
+          const nnBuf = await nnPromise;
+          if (nnBuf && !isCancelled) {
             const nnView = new DataView(nnBuf);
             const nnCount = nnView.getUint32(0, true);
             const nnK = nnView.getUint32(4, true);
-            const indices = new Array(nnCount);
-            const distances = new Array(nnCount);
-            let offset = 8;
-            for (let i = 0; i < nnCount; i++) {
-              indices[i] = new Uint32Array(nnK);
-              distances[i] = new Float32Array(nnK);
-              for (let j = 0; j < nnK; j++) {
-                indices[i][j] = nnView.getUint32(offset, true);
-                distances[i][j] = nnView.getFloat32(offset + 4, true);
-                offset += 8;
-              }
-            }
-            neighborsRef.current = { k: nnK, indices, distances };
+            // Records are little-endian (uint32 index, float32 distance) pairs. Read
+            // them in place through two views over the same bytes rather than copying
+            // them into two small arrays per image.
+            const len = nnCount * nnK * 2;
+            neighborsRef.current = {
+              k: nnK, count: nnCount,
+              ids: new Uint32Array(nnBuf, 8, len),
+              dists: new Float32Array(nnBuf, 8, len),
+            };
+            setStats(s => ({ ...s })); // re-render so an already-open detail panel shows its neighbors
           }
         } catch (_) { /* neighbors.bin is optional */ }
+        })();
 
         /* Ticker — animation + FPS */
         const movingSet = new Set(); // Track only sprites currently animating
@@ -1245,25 +1429,21 @@ export default function App() {
             // The cache is invalidated (disabled) in relayout() before the next animation starts.
             if (isMobile && containerRef.current && !containerRef.current._cacheAsTextureEnabled) {
               setTimeout(() => {
-                const c = containerRef.current;
-                if (c && movingSet.size === 0) {
-                  try {
-                    c.cacheAsTexture(true);
-                    c._cacheAsTextureEnabled = true;
-                  } catch (_) { /* cacheAsTexture may not be available in all builds */ }
+                for (const c of [containerRef.current, noiseLayer]) {
+                  if (c && !c._cacheAsTextureEnabled && movingSet.size === 0) {
+                    try {
+                      c.cacheAsTexture(true);
+                      c._cacheAsTextureEnabled = true;
+                    } catch (_) { /* cacheAsTexture may not be available in all builds */ }
+                  }
                 }
               }, 100);
             }
           }
 
-          // Throttle UI state updates — longer interval on mobile to reduce React re-render overhead
+          // Zoom and FPS readouts poll for themselves (see LiveValue), so the ticker
+          // no longer re-renders the whole App several times a second.
           const now = Date.now();
-          const UI_THROTTLE = isMobile ? 1000 : 200;
-          if (!app._lastUiUpdate || now - app._lastUiUpdate > UI_THROTTLE) {
-            app._lastUiUpdate = now;
-            setZoomLevel(viewport.scale.x);
-            setStats(s => ({ ...s, fps: Math.round(app.ticker.FPS) }));
-          }
 
           // Update timeline current time based on viewport center (throttled)
           if (timelineMapRef.current && (!app._lastTimeUpdate || now - app._lastTimeUpdate > 200)) {
@@ -1272,7 +1452,7 @@ export default function App() {
             const centerWorld = viewport.toWorld(window.innerWidth / 2, window.innerHeight / 2);
             const t = (centerWorld.x - tm.xMin) / (tm.xMax - tm.xMin || 1);
             const currentTs = Math.round(tm.minTs + t * (tm.maxTs - tm.minTs));
-            setTimeRange(prev => prev ? { ...prev, current: currentTs } : prev);
+            setTimeRange(prev => (prev && prev.current !== currentTs) ? { ...prev, current: currentTs } : prev);
 
             // Apply time filter dimming (only when slider values change, not every frame)
             const tf = timeFilterRef.current;
@@ -1287,11 +1467,10 @@ export default function App() {
                   if (vs && !vs.has(p.id)) continue;
                   const ts = p.timestamp ?? 0;
                   if (ts >= loTs && ts <= hiTs) {
-                    applyNoiseFilter(p.sprite, isNoisePoint(p), noiseDisplayRef.current);
-                    p.sprite.alpha = noiseDisplayRef.current === 'hide' && isNoisePoint(p) ? 0 : 1;
+                    setAlpha(p.sprite, noiseDisplayRef.current === 'hide' && isNoisePoint(p) ? 0 : 1);
                     p.sprite.tint = pointTint(p, noiseDisplayRef.current);
                   } else {
-                    p.sprite.alpha = 0.1;
+                    setAlpha(p.sprite, noiseDisplayRef.current === 'hide' && isNoisePoint(p) ? 0 : 0.1);
                     p.sprite.tint = 0xcccccc;
                   }
                 }
@@ -1300,8 +1479,7 @@ export default function App() {
                 const vs = visibleSetRef.current;
                 for (const p of pointsRef.current) {
                   if (vs && !vs.has(p.id)) continue;
-                  applyNoiseFilter(p.sprite, isNoisePoint(p), noiseDisplayRef.current);
-                  p.sprite.alpha = noiseDisplayRef.current === 'hide' && isNoisePoint(p) ? 0 : 1;
+                  setAlpha(p.sprite, noiseDisplayRef.current === 'hide' && isNoisePoint(p) ? 0 : 1);
                   p.sprite.tint = pointTint(p, noiseDisplayRef.current);
                 }
               }
@@ -1337,8 +1515,8 @@ export default function App() {
             }
           }
           if (closest !== lastHovered) {
-            if (lastHovered) { lastHovered.sprite.scale.set(1); lastHovered.sprite.tint = pointTint(lastHovered, noiseDisplayRef.current); }
-            if (closest) { closest.sprite.scale.set(1.5); closest.sprite.tint = 0xea9d34; }
+            if (lastHovered) { lastHovered.sprite.scale.set(lastHovered.baseScale ?? 1); lastHovered.sprite.tint = pointTint(lastHovered, noiseDisplayRef.current); }
+            if (closest) { closest.sprite.scale.set((closest.baseScale ?? 1) * 1.5); closest.sprite.tint = 0xea9d34; }
             lastHovered = closest;
             if (closest) {
               // Throttle tooltip React re-renders to 60ms — avoids excessive setState during fast mouse movement
@@ -1424,6 +1602,7 @@ export default function App() {
         canvas.removeEventListener('wheel', handleWheel);
       }
       window.removeEventListener('resize', handleResize);
+      if (hdTimer) clearInterval(hdTimer);
       if (app) {
         try {
           // Unload Assets-managed atlas textures via Assets.unload() first.
@@ -1435,9 +1614,14 @@ export default function App() {
           }
           app.destroy(false, { children: true, texture: false });
         } catch (_) {}
+        for (const tex of ownedTextures) {
+          try { const resource = tex.source?.resource; tex.destroy(true); resource?.close?.(); } catch (_) {}
+        }
+        ownedTextures.clear();
       }
       pointsRef.current = [];
       spatialHashRef.current = {};
+      noiseLayer = null;
     };
   }, []);
   /* Hotspots are numbered by size (largest = 1); noise always sorts last. */
@@ -1458,7 +1642,7 @@ export default function App() {
     const vp = viewportRef.current;
     if (!vp) return;
     const factor = dir === 'in' ? 1.5 : 0.67;
-    vp.animate({ scale: vp.scale.x * factor, time: 300 });
+    vp.animate({ scale: Math.min(vp.scale.x * factor, MAX_ZOOM), time: 300 });
   };
 
   const handleFitAll = () => {
@@ -1479,7 +1663,7 @@ export default function App() {
       const h = maxY - minY + pad;
       const scaleX = vp.screenWidth / w;
       const scaleY = vp.screenHeight / h;
-      const scale = Math.min(scaleX, scaleY);
+      const scale = Math.min(scaleX, scaleY, MAX_ZOOM);
       vp.animate({ scale, position: { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }, time: 300 });
     } else {
       vp.fit();
@@ -1500,11 +1684,12 @@ export default function App() {
 
   /* ── k-NN helpers ── */
   const getNeighbors = (imageId) => {
-    if (!neighborsRef.current || imageId < 0 || imageId >= neighborsRef.current.indices.length) return [];
-    const { indices, distances } = neighborsRef.current;
+    if (!neighborsRef.current || imageId < 0 || imageId >= neighborsRef.current.count) return [];
+    const { k, ids, dists } = neighborsRef.current;
     const result = [];
-    for (let j = 0; j < indices[imageId].length; j++) {
-      result.push({ id: indices[imageId][j], distance: distances[imageId][j] });
+    const base = imageId * k * 2; // records are (index, distance) pairs
+    for (let j = 0; j < k; j++) {
+      result.push({ id: ids[base + j * 2], distance: dists[base + j * 2 + 1] });
     }
     return result;
   };
@@ -1514,27 +1699,23 @@ export default function App() {
     const p = pointsRef.current[imageId];
     if (!vp || !p) return;
     setSelectedItem({ id: p.id, x: p.x, y: p.y });
-    vp.animate({ position: { x: p.x, y: p.y }, scale: Math.max(vp.scale.x, 2), time: 400 });
+    vp.animate({ position: { x: p.x, y: p.y }, scale: MAX_ZOOM, time: 400 });
   };
 
   const NeighborThumb = ({ imageId, size = 64, onClick }) => {
     const p = pointsRef.current[imageId];
     if (!p) return null;
-    const _scale = size / thumbSizeRef.current;
-    const _as = atlasSizeRef.current;
+    // Drawn from the atlas already loaded for the map. (A CSS background image made
+    // the browser download and decode a second full-size copy of every atlas shown.)
     return (
       <button
         onClick={onClick}
-        className="rounded-lg overflow-hidden border-2 border-rp-hlMed hover:border-rp-pine transition-all hover:scale-105 shrink-0"
-        style={{
-          width: size,
-          height: size,
-          backgroundImage: `url(${BASE}data/atlas_${p.ai}.${atlasFormatRef.current})`,
-          backgroundPosition: `-${p.u * _scale}px -${p.v * _scale}px`,
-          backgroundSize: `${_as * _scale}px ${_as * _scale}px`,
-        }}
+        className="rounded-lg overflow-hidden border-2 border-rp-hlMed hover:border-rp-pine transition-all hover:scale-105 shrink-0 box-content"
+        style={{ width: size, height: size }}
         title={`Image #${imageId}`}
-      />
+      >
+        <DetailThumb point={p} atlasTextures={atlasTexturesRef.current} displaySize={size} res={p.drawSize} className="block" />
+      </button>
     );
   };
 
@@ -1704,13 +1885,13 @@ export default function App() {
                     const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
                     const label = h.isNoise ? 'Noise' : `Hotspot ${i + 1}`;
                     const breakdown = h.isNoise ? null : clipLabelsRef.current?.[h.id];
-                    const showBreakdown = breakdown && (hoveredHotspot === h.id || activeHotspot === h.id);
+                    const showBreakdown = breakdown && activeHotspot === h.id;
                     return (
-                      <div key={h.id} onMouseEnter={() => setHoveredHotspot(h.id)} onMouseLeave={() => setHoveredHotspot(cur => (cur === h.id ? null : cur))}>
+                      <div key={h.id}>
                       <button
                         onClick={() => flyToHotspot(h)}
                         aria-expanded={showBreakdown ? 'true' : 'false'}
-                        className={`w-full bg-rp-surface/90 backdrop-blur-md rounded-xl border border-rp-hlMed shadow-rp transition-all duration-200 ${viewMode !== 'data' ? 'cursor-pointer' : 'cursor-default'} ${
+                        className={`w-full bg-rp-surface/90 rounded-xl border border-rp-hlMed shadow-rp transition-all duration-200 ${viewMode !== 'data' ? 'cursor-pointer' : 'cursor-default'} ${
                           activeHotspot === h.id
                             ? 'ring-2 ring-rp-pine shadow-rp-lg'
                             : 'hover:shadow-rp-lg hover:border-rp-pine/40'
@@ -1729,6 +1910,13 @@ export default function App() {
                               <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: h.color }} />
                             </div>
                           </div>
+                          {breakdown && (
+                            <ChevronDown
+                              size={16}
+                              aria-hidden="true"
+                              className={`shrink-0 text-rp-muted transition-transform duration-200 ${showBreakdown ? 'rotate-180 text-rp-pine' : ''}`}
+                            />
+                          )}
                         </div>
                         {showBreakdown && (
                           <div className="px-3 pb-3 text-left">
@@ -1882,7 +2070,7 @@ export default function App() {
                 {activeFilterCount > 0 && (
                   <>
                     <span className="text-[10px] text-rp-muted">
-                      {visibleSetRef.current ? visibleSetRef.current.size.toLocaleString() : stats.count.toLocaleString()}
+                      {(visibleCount ?? stats.count).toLocaleString()}
                     </span>
                     <button onClick={clearAllFilters} className="text-[10px] font-semibold text-rp-love hover:underline ml-1">
                       Clear
@@ -2099,7 +2287,7 @@ export default function App() {
               <ZoomOut size={15} />
             </button>
             <div className="w-14 text-center text-[11px] font-semibold text-rp-text tabular-nums">
-              {(zoomLevel * 100).toFixed(0)}%
+              <LiveValue read={() => `${((viewportRef.current?.scale.x ?? 0) / MAX_ZOOM * 100).toFixed(0)}%`} interval={isMobile ? 1000 : 200} />
             </div>
             <button onClick={() => handleZoom('in')} className="p-1.5 rounded hover:bg-rp-hlLow transition-colors text-rp-subtle">
               <ZoomIn size={15} />
@@ -2174,6 +2362,7 @@ export default function App() {
                 <DetailThumb
                   point={pointsRef.current[selectedItem.id]}
                   atlasTextures={atlasTexturesRef.current}
+                  res={pointsRef.current[selectedItem.id].drawSize}
                 />
               )}
               {/* ── Similar Images ── */}
@@ -2366,7 +2555,7 @@ export default function App() {
                 ['Atlas Textures', String(stats.atlasCount || '?')],
                 ['Thumbnail Size', `${thumbSizeRef.current}px`],
                 ['Current View', VIEW_MODES[viewMode]?.label || viewMode],
-                ['Render FPS', stats.fps.toString()],
+                ['Render FPS', <LiveValue key="fps" read={() => String(Math.round(appRef.current?.ticker?.FPS ?? 0))} interval={500} />],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between items-baseline border-b border-rp-hlMed/50 pb-2">
                   <span className="text-sm text-rp-muted">{k}</span>

@@ -71,7 +71,7 @@ python3 -m http.server 5174 -d ./output
 
 Then open http://localhost:5174. `test-data/` contains 500 WikiArt images (sampled with seed 42, covering 25 art-historical styles) plus a `metadata.csv` with `filename,artist,style,title,width,height` columns.
 
-Dual-resolution progressive loading is ON by default — 64px preview atlases are generated alongside 128px HD atlases, so the viewer shows low-res images first and upgrades to HD on capable devices. The output directory is a complete, uploadable static site:
+Dual-resolution progressive loading is ON by default — 64px preview atlases are generated alongside 128px HD atlases, so the viewer shows low-res images first and loads HD on demand, when zoomed in, on capable devices. The output directory is a complete, uploadable static site:
 
 ```
 output/
@@ -240,9 +240,9 @@ Hotspot selection, filters, and the Noise toggle apply in all five views. UMAP a
 
 ImageSpace supports progressive atlas loading for fast initial display:
 
-**Desktop / tablet:** 64px preview atlases load first (fast), then 128px HD atlases swap in progressively. A loading bar shows "Loading low-res photos" → "Loading high-res photos."
+**Desktop / tablet:** 64px preview atlases load first (fast). A 128px HD atlas is loaded only when the view is zoomed in far enough for the preview to look soft and some of its images are on screen (or one is open in the detail panel). HD atlases that have left the view are swapped back to previews once more than a few are held, which keeps GPU memory low.
 
-**Phone:** Only 64px preview atlases are loaded (at 0.25 scale = ~196MB GPU). No HD upgrade — keeps mobile memory low.
+**Phone:** Only 64px preview atlases are loaded (at 0.25 scale). No HD upgrade — keeps mobile memory low.
 
 The distinction is device-based, not viewport-based: iPads and Android tablets get HD, regardless of window size. iPhones and Android phones stay on preview.
 
