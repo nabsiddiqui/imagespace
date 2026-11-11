@@ -7,7 +7,7 @@ Two complementary layers verify the pipeline. The unit suite runs in CI
 
 Fast unit tests for the dependency-sensitive core of the pipeline: UMAP
 (layout + clustering space), HDBSCAN, cosine k-nearest-neighbors, outlier scoring, image-feature
-extraction, label-vocabulary loading, and the binary/CSV/manifest writers.
+extraction, metadata-based cluster names, and the binary/CSV/manifest writers.
 No models are downloaded and no frontend build is required, so the suite runs
 in a second or two and can be exercised across many environments.
 
@@ -33,9 +33,9 @@ A single command that runs the whole pipeline on the first 48 images of the
 bundled WikiArt sample (`--fixture-size`) and asserts stronger, integration-level
 invariants: a seeded run and a seeded `--relayout` from the cached embeddings
 produce **byte-identical** layouts, provenance/manifest records agree, HDBSCAN noise is
-preserved and encoded consistently across CSV and binary, cluster labels carry
-top-3 evidence, the frontend bundle builds and wires up the Methods panel, and
-the wheel ships the bundled label vocabulary.
+preserved and encoded consistently across CSV and binary, cluster names come from
+the chosen metadata column with their top-3 value shares, the frontend bundle
+builds and wires up the Methods panel, and the wheel ships the viewer shell.
 
 ```bash
 pip install ".[full]"     # onnxruntime + torch + transformers

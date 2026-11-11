@@ -34,7 +34,7 @@ dependencies = [
 onnx = ["onnxruntime>=1.15"]
 # Fallback: torch + transformers CLIP backend (slower, no ONNX runtime needed).
 torch = ["torch>=2.0", "transformers>=4.30", "huggingface_hub>=0.16"]
-# Everything needed for embeddings plus aligned text-based cluster labels.
+# Both CLIP embedding backends.
 full = ["onnxruntime>=1.15", "huggingface_hub>=0.16", "torch>=2.0", "transformers>=4.30"]
 # Test suite (network-free numeric checks). The full end-to-end contract in
 # tests/run_checks.py additionally needs the `full` extra plus Node.js.
@@ -45,22 +45,20 @@ imagespace = "imagespace:main"
 
 [tool.setuptools]
 # `imagespace` is a single-file module at scripts/imagespace.py. The companion
-# packages hold the bundled viewer shell and versioned analysis resources.
+# package holds the bundled viewer shell.
 py-modules = ["imagespace"]
-packages = ["imagespace_viewer_shell", "imagespace_resources"]
+packages = ["imagespace_viewer_shell"]
 
 [tool.setuptools.package-dir]
 # Top-level modules (imagespace) are looked up under scripts/.
 "" = "scripts"
 # The viewer-shell data package lives at the repo root.
 imagespace_viewer_shell = "imagespace_viewer_shell"
-imagespace_resources = "imagespace_resources"
 
 [tool.setuptools.package-data]
 # Bundle the data-free viewer app shell with the installed package so the
 # pipeline can emit a self-contained static site without a separate Vite build.
 imagespace_viewer_shell = ["viewer_shell/**/*"]
-imagespace_resources = ["label_presets/*.json"]
 [tool.pytest.ini_options]
 # Network-free numeric suite. The heavy end-to-end contract lives in
 # tests/run_checks.py and is run separately (it needs models + Node.js).

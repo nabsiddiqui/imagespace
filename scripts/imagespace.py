@@ -20,6 +20,7 @@ and upgrades to HD on capable devices. Pass --no-hd for single-resolution output
 Usage:
     imagespace -i /path/to/images -o ./output
     imagespace -i /path/to/images -o ./output --metadata existing.csv
+    imagespace -i /path/to/images -o ./output --metadata existing.csv --label-column style
     imagespace -i /path/to/images -o ./output --seed 42   # reproducible layout
     imagespace /path/to/images -o ./output            # positional input also works
     imagespace -i /path/to/images -o ./output --no-hd # single-resolution only
@@ -53,7 +54,6 @@ import shutil
 import struct
 import sys
 import time
-from importlib import resources
 from pathlib import Path
 from multiprocessing import cpu_count
 
@@ -80,8 +80,8 @@ UMAP_CLUSTER_DIMS = 10
 UMAP_METRIC = "cosine"  # CLIP embeddings are compared by cosine similarity
 SOFTWARE_VERSION = "1.4.0"
 DEFAULT_CLIP_MODEL = "openai/clip-vit-base-patch32"
-DEFAULT_LABEL_PRESET = "art-v1"
-DEFAULT_LABEL_UNCERTAINTY_THRESHOLD = 0.01
+DEFAULT_LABEL_MIXED_THRESHOLD = 0.5
+LABEL_TOP_VALUES = 5
 ONNX_CLIP_REPO = "Xenova/clip-vit-base-patch32"
 
 
@@ -682,139 +682,96 @@ def write_neighbors_bin(output_dir, knn_indices, knn_distances):
     print(f"  neighbors.bin: {n} × {k} ({os.path.getsize(path) / 1024 / 1024:.1f} MB)")
 
 
-# ── Stage 4c: CLIP Cluster Labels ────────────────────────────
-def load_label_vocabulary(path=None):
-    """Load and validate a versioned label vocabulary."""
-    if path:
-        source = Path(path)
-        if not source.is_file():
-            raise FileNotFoundError(f"Label candidates file not found: {source}")
-        payload = json.loads(source.read_text(encoding="utf-8"))
-    else:
-        try:
-            source = resources.files("imagespace_resources").joinpath(
-                "label_presets", f"{DEFAULT_LABEL_PRESET}.json"
-            )
-            payload = json.loads(source.read_text(encoding="utf-8"))
-        except ModuleNotFoundError:
-            # Direct source invocation puts scripts/ rather than the repo root on
-            # sys.path; resolve the adjacent development resource explicitly.
-            source = Path(__file__).resolve().parents[1] / "imagespace_resources" / "label_presets" / f"{DEFAULT_LABEL_PRESET}.json"
-            payload = json.loads(source.read_text(encoding="utf-8"))
-
-    entries = payload.get("candidates") if isinstance(payload, dict) else payload
-    if not isinstance(entries, list) or len(entries) < 3:
-        raise ValueError("Label vocabulary must contain at least three candidates")
-
-    normalized = []
-    for entry in entries:
-        if isinstance(entry, str):
-            text, short_name = entry.strip(), entry.strip()
-        elif isinstance(entry, dict):
-            text = str(entry.get("text", "")).strip()
-            short_name = str(entry.get("short_name", text)).strip()
-        else:
-            raise ValueError("Each label candidate must be a string or object")
-        if not text:
-            raise ValueError("Label candidates cannot be empty")
-        normalized.append({"text": text, "short_name": short_name or text})
-
-    vocab_id = payload.get("id", Path(str(source)).stem) if isinstance(payload, dict) else Path(str(source)).stem
-    version = payload.get("version", 1) if isinstance(payload, dict) else 1
-    return {"id": str(vocab_id), "version": version, "candidates": normalized}
-
-
+# ── Stage 4c: Metadata Cluster Labels ────────────────────────
 def generate_cluster_labels(
-    embeddings,
     cluster_ids,
-    model_id=DEFAULT_CLIP_MODEL,
-    vocabulary=None,
-    uncertainty_threshold=DEFAULT_LABEL_UNCERTAINTY_THRESHOLD,
+    values,
+    column,
+    mixed_threshold=DEFAULT_LABEL_MIXED_THRESHOLD,
+    top_n=LABEL_TOP_VALUES,
 ):
-    """Match non-noise cluster centroids against a versioned text vocabulary."""
-    try:
-        import torch
-        from transformers import AutoTokenizer, CLIPModel
-    except ImportError as exc:
-        raise RuntimeError(
-            "Cluster labels require torch and transformers. Install imagespace[full]."
-        ) from exc
+    """Describe each cluster by its most common values in one metadata column.
 
-    vocabulary = vocabulary or load_label_vocabulary()
-    entries = vocabulary["candidates"]
-    candidates = [entry["text"] for entry in entries]
-    short_names = {entry["text"]: entry["short_name"] for entry in entries}
-
-    print(f"\n  Generating cluster labels with {model_id} and {vocabulary['id']}...")
-    start = time.time()
-    model = CLIPModel.from_pretrained(model_id)
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model.eval()
-
-    with torch.no_grad():
-        text_inputs = tokenizer(candidates, return_tensors="pt", padding=True, truncation=True)
-        text_features = model.get_text_features(**text_inputs)
-        if hasattr(text_features, "pooler_output"):
-            text_features = text_features.pooler_output
-        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-        text_np = text_features.detach().cpu().numpy()
-
-    if text_np.shape[1] != embeddings.shape[1]:
-        raise ValueError(
-            f"Image/text embedding dimensions differ for {model_id}: "
-            f"{embeddings.shape[1]} vs {text_np.shape[1]}"
-        )
-
-    raw_labels = {}
-    for cid in sorted(set(cluster_ids)):
-        if cid < 0:
-            continue
-        centroid = embeddings[cluster_ids == cid].mean(axis=0)
-        norm = np.linalg.norm(centroid)
-        if norm == 0:
-            continue
-        sims = text_np @ (centroid / norm)
-        top_idx = np.argsort(-sims)[:5]
-        raw_labels[int(cid)] = [
-            {"text": candidates[i], "score": float(sims[i])} for i in top_idx
-        ]
-
+    `values` holds one metadata value per image (aligned with `cluster_ids`;
+    empty strings or None mean missing). For every non-noise cluster the
+    `top_n` most common values are stored with two shares: the share of the
+    cluster that has the value, and the share of all images with that value
+    (across the whole collection, including unassigned images) that fall in
+    the cluster. Everything else is grouped as "Other". The summary string
+    lists the values with their share of the cluster (e.g. "Baroque 52%,
+    Realism 19%, Rococo 17%, Other 12%"). The cluster is flagged as mixed when
+    its top value covers less than `mixed_threshold` of it. No model is
+    involved: the description comes only from the collection's own metadata.
+    """
     from collections import Counter
 
-    primary_labels = {cid: values[0]["text"] for cid, values in raw_labels.items()}
-    duplicates = {
-        label for label, count in Counter(primary_labels.values()).items() if count > 1
-    }
+    cluster_ids = np.asarray(cluster_ids)
+    values = ["" if v is None else str(v).strip() for v in values]
+    if len(values) != len(cluster_ids):
+        raise ValueError("Metadata values must align with cluster ids")
+    totals = Counter(v for v in values if v)
+    if not totals:
+        print(f"  WARNING: column '{column}' has no values; clusters stay numbered")
+        return {}
+
     labels = {}
-    used_labels = set()
-    for cid, ranked in raw_labels.items():
-        primary = ranked[0]["text"]
-        label = short_names.get(primary, primary)
-        if primary in duplicates:
-            for candidate in ranked[1:]:
-                qualifier = short_names.get(candidate["text"], candidate["text"])
-                combined = f"{label} — {qualifier}"
-                if combined not in used_labels:
-                    label = combined
-                    break
-        if label in used_labels:
-            label = f"{label} #{cid}"
-        used_labels.add(label)
-
-        margin = float(ranked[0]["score"] - ranked[1]["score"])
+    for cid in sorted(set(int(c) for c in cluster_ids)):
+        if cid < 0:
+            continue
+        members = np.flatnonzero(cluster_ids == cid)
+        size = int(len(members))
+        counts = Counter(values[i] for i in members if values[i])
+        if not counts:
+            continue
+        top = [
+            {
+                "value": value,
+                "count": int(count),
+                "clusterShare": count / size,
+                "categoryShare": count / totals[value],
+            }
+            for value, count in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:top_n]
+        ]
+        top_share = top[0]["clusterShare"]
+        other_share = max(0.0, 1.0 - sum(item["clusterShare"] for item in top))
+        parts = [f"{item['value']} {_format_share(item['clusterShare'])}" for item in top]
+        if other_share > 0:
+            parts.append(f"Other {_format_share(other_share)}")
         labels[cid] = {
-            "label": label,
-            "top3": ranked[:3],
-            "scoreMargin": margin,
-            "uncertain": margin < uncertainty_threshold,
-            "uncertaintyThreshold": uncertainty_threshold,
-            "vocabularyId": vocabulary["id"],
+            "label": ", ".join(parts),
+            "column": column,
+            "size": size,
+            "top": top,
+            "otherShare": other_share,
+            "mixed": top_share < mixed_threshold,
+            "mixedThreshold": mixed_threshold,
         }
-        marker = " uncertain" if labels[cid]["uncertain"] else ""
-        print(f"    Cluster {cid}: {label} ({ranked[0]['score']:.3f},{marker})")
+        marker = " (mixed)" if labels[cid]["mixed"] else ""
+        print(f"    Cluster {cid}: {labels[cid]['label']}{marker}")
 
-    print(f"  Cluster labels: {len(labels)} clusters labeled ({time.time() - start:.1f}s)")
+    print(f"  Cluster labels: {len(labels)} clusters labeled from '{column}'")
     return labels
+
+
+def _format_share(share):
+    """Format a 0-1 share as a whole percentage, showing '<1%' for small shares."""
+    return "<1%" if 0 < share < 0.005 else f"{share:.0%}"
+
+
+def label_values_for_images(images, column, external_metadata=None, metadata_csv=None):
+    """Return one value of `column` per image from external or existing metadata."""
+    if external_metadata:
+        if not any(column in row for row in external_metadata.values()):
+            raise ValueError(f"--label-column '{column}' is not a column in --metadata")
+        return [external_metadata.get(p.name, {}).get(column, "") for p in images]
+    if metadata_csv and os.path.exists(metadata_csv):
+        with open(metadata_csv, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        if rows and column not in rows[0]:
+            raise ValueError(f"--label-column '{column}' is not a column in {metadata_csv}")
+        by_name = {row.get("filename", ""): row.get(column, "") for row in rows}
+        return [by_name.get(p.name, "") for p in images]
+    raise ValueError("--label-column needs --metadata (or existing metadata in --relayout)")
 
 def write_cluster_labels(output_dir, labels):
     """Write cluster_labels.json."""
@@ -1235,13 +1192,15 @@ def main():
         help=f"Hugging Face CLIP model id (default: {DEFAULT_CLIP_MODEL})",
     )
     parser.add_argument(
-        "--label-candidates",
-        help="Versioned JSON label vocabulary; defaults to bundled art-v1 preset",
+        "--label-column",
+        help="Metadata column used to name clusters (e.g. style). Each cluster is "
+             "named after its most common value; without it, clusters stay numbered",
     )
     parser.add_argument(
-        "--label-uncertainty-threshold", type=float,
-        default=DEFAULT_LABEL_UNCERTAINTY_THRESHOLD,
-        help="Minimum top-1/top-2 score margin for a confident cluster label (default: 0.01)",
+        "--label-mixed-threshold", type=float,
+        default=DEFAULT_LABEL_MIXED_THRESHOLD,
+        help="Flag a cluster as mixed when its most common value covers less than "
+             "this share of the cluster (default: 0.5)",
     )
     parser.add_argument(
         "--thumb-size", type=int, default=128, help="Thumbnail size in pixels (128)"
@@ -1304,8 +1263,10 @@ def main():
         parser.error("--hdbscan-min-samples must be at least 1")
     if args.min_cluster_size is not None and args.min_cluster_size < 2:
         parser.error("--min-cluster-size must be at least 2")
-    if args.label_uncertainty_threshold < 0:
-        parser.error("--label-uncertainty-threshold cannot be negative")
+    if not 0 <= args.label_mixed_threshold <= 1:
+        parser.error("--label-mixed-threshold must be between 0 and 1")
+    if args.label_column and not args.metadata and not args.relayout:
+        parser.error("--label-column needs a metadata CSV (--metadata your.csv)")
     # Allow `imagespace -i imgs -o out` or `imagespace imgs -o out` (positional).
     input_path = args.input if args.input else args.input_pos
     if not input_path:
@@ -1505,41 +1466,25 @@ def main():
     write_neighbors_bin(str(data_dir), knn_indices, knn_distances)
     outlier_scores = compute_outlier_scores(knn_distances)
 
-    # Stage 4c: CLIP cluster labels
-    print(f"\n[6/9] CLIP cluster labels...")
-    label_vocabulary = load_label_vocabulary(args.label_candidates)
-    cluster_labels = generate_cluster_labels(
-        embeddings,
-        cluster_ids,
-        model_id=args.clip_model,
-        vocabulary=label_vocabulary,
-        uncertainty_threshold=args.label_uncertainty_threshold,
-    )
-    cluster_labels_path = data_dir / "cluster_labels.json"
-    if cluster_labels:
-        write_cluster_labels(str(data_dir), cluster_labels)
-    elif cluster_labels_path.exists():
-        cluster_labels_path.unlink()
-
     # Stage 5
     meta_csv_path = os.path.join(str(data_dir), "metadata.csv")
     skip_metadata = (
         args.relayout and os.path.exists(meta_csv_path) and not args.metadata
     )
     if skip_metadata:
-        print(f"\n[7/9] Skipping metadata (relayout mode, no external metadata)")
+        print(f"\n[6/9] Skipping metadata (relayout mode, no external metadata)")
         timestamps = None
         colors = None
         external_metadata = None
         image_features = None
     else:
-        print(f"\n[7/9] Extracting metadata...")
+        print(f"\n[6/9] Extracting metadata...")
         timestamps = extract_timestamps(images)
         colors = extract_dominant_colors(images)
         print(f"  Timestamps: {sum(1 for t in timestamps if t > 0)}/{len(images)}")
 
         print(
-            f"\n[8/9] Computing image features (brightness, complexity, edge density)..."
+            f"\n[7/9] Computing image features (brightness, complexity, edge density)..."
         )
         image_features = compute_image_features(images)
 
@@ -1550,6 +1495,27 @@ def main():
                 external_metadata = read_external_metadata(str(meta_src))
             else:
                 print(f"  WARNING: External metadata not found: {meta_src}")
+
+    # Stage 5b: cluster names from a metadata column (no model involved)
+    cluster_labels = {}
+    if args.label_column:
+        print(f"\n[8/9] Cluster labels from metadata column '{args.label_column}'...")
+        label_values = label_values_for_images(
+            images, args.label_column,
+            external_metadata=external_metadata,
+            metadata_csv=meta_csv_path if skip_metadata else None,
+        )
+        cluster_labels = generate_cluster_labels(
+            cluster_ids, label_values, args.label_column,
+            mixed_threshold=args.label_mixed_threshold,
+        )
+    else:
+        print(f"\n[8/9] No --label-column given; clusters stay numbered")
+    cluster_labels_path = data_dir / "cluster_labels.json"
+    if cluster_labels:
+        write_cluster_labels(str(data_dir), cluster_labels)
+    elif cluster_labels_path.exists():
+        cluster_labels_path.unlink()
 
     # Stage 6
     print(f"\n[9/9] Writing output files...")
@@ -1575,12 +1541,10 @@ def main():
         },
         **analysis,
         "labels": {
-            "modelId": args.clip_model,
-            "vocabularyId": label_vocabulary["id"],
-            "vocabularyVersion": label_vocabulary["version"],
-            "candidateCount": len(label_vocabulary["candidates"]),
-            "uncertaintyThreshold": args.label_uncertainty_threshold,
-            "topCandidatesStored": 3,
+            "source": "metadata" if cluster_labels else "none",
+            "column": args.label_column if cluster_labels else None,
+            "mixedThreshold": args.label_mixed_threshold,
+            "topValuesStored": LABEL_TOP_VALUES,
         },
     }
     write_analysis_config(str(data_dir), analysis_config)

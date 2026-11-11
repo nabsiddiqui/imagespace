@@ -31,12 +31,10 @@
     "selectionMethod": "leaf"
   },
   "labels": {
-    "candidateCount": 40,
-    "modelId": "openai/clip-vit-base-patch32",
-    "topCandidatesStored": 3,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1",
-    "vocabularyVersion": 1
+    "column": "style",
+    "mixedThreshold": 0.5,
+    "source": "metadata",
+    "topValuesStored": 5
   },
   "layout": {
     "dimensions": 2,

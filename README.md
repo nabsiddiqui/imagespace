@@ -8,7 +8,7 @@
 
 An interactive browser-based tool for exploring large image collections. Point it at a folder of images; it produces a navigable 2D scatter plot where similar images cluster together.
 
-**The viewer is a static site — no backend, no server, no database.** Run one command and the output directory is ready to upload to GitHub Pages, any CDN, or a USB drive: it contains `index.html` + `assets/` + `data/`. No Node/Vite build required to view results.
+**The viewer is a static site — no backend, no application server, no database.** Viewing it only needs a simple static web server (see below). Run one command and the output directory is ready to upload to GitHub Pages, any CDN, or a USB drive: it contains `index.html` + `assets/` + `data/`. No Node/Vite build required to view results.
 
 **GPU recommended.** Hardware acceleration significantly speeds up the CLIP embedding stage. NVIDIA CUDA and Apple Silicon CoreML (Neural Engine) are both supported. A standard CPU works too if you don't have a compatible GPU.
 
@@ -29,7 +29,7 @@ To regenerate the sample yourself, see [Process your own images](#process-your-o
 ## What It Does
 
 - Lays out images by visual similarity (CLIP embeddings → 2-D UMAP, cosine distance)
-- Clusters them automatically (HDBSCAN on a separate low-dimensional UMAP space) and labels clusters with natural language (CLIP)
+- Clusters them automatically (HDBSCAN on a separate low-dimensional UMAP space) and lists clusters as numbered hotspots; given a metadata column, each hotspot shows its five most common values as percentages
 - Lets you switch between five views: UMAP scatter (default), Snap (overlap-free), Grid, Color, and Timeline
 - Filters by categorical metadata columns (dropdowns) and by computed scores (range sliders for brightness, complexity, edge density, Uniqueness, and Cluster Fit)
 - Shows similar images and full metadata in a slide-in detail panel
@@ -48,7 +48,7 @@ source .venv/bin/activate                 # Windows: .venv\\Scripts\\activate
 pip install '.[full]'
 ```
 
-This installs the `imagespace` command, both CLIP backends, cluster-label dependencies, and the bundled viewer shell. NVIDIA users may install the appropriate CUDA builds of PyTorch and `onnxruntime-gpu` instead. A minimal ONNX-only install (`pip install '.[onnx]'`) can extract embeddings, but text-based cluster labels require `torch` and `transformers`; use the full extra for the complete pipeline.
+This installs the `imagespace` command, both CLIP backends, and the bundled viewer shell. NVIDIA users may install the appropriate CUDA builds of PyTorch and `onnxruntime-gpu` instead. A minimal ONNX-only install (`pip install '.[onnx]'`) is enough to run the full pipeline.
 
 > The viewer app shell is bundled with the package (`imagespace_viewer_shell/`), so the install above is all you need to produce a viewable site. To modify the viewer itself (React/PixiJS in `image_space/`), rebuild the shell with `bash scripts/build_viewer_shell.sh` (requires Node), then `pip install .` again.
 
@@ -60,10 +60,12 @@ This installs the `imagespace` command, both CLIP backends, cluster-label depend
 imagespace -i /path/to/your/images/ -o ./output
 ```
 
+A metadata CSV is optional. Without one, the pipeline still builds the full viewer; hotspots are simply numbered and only computed properties are filterable. Add `--metadata your.csv` for metadata filters, and `--label-column <column>` for the hotspot breakdowns described in [Hotspot breakdowns](#hotspot-breakdowns).
+
 #### Try it with the bundled sample
 
 ```bash
-imagespace -i test-data -o ./output --metadata test-data/metadata.csv --seed 42
+imagespace -i test-data -o ./output --metadata test-data/metadata.csv --label-column style --seed 42
 python3 -m http.server 5174 -d ./output
 ```
 
@@ -76,7 +78,7 @@ output/
   index.html        ← viewer entry point
   assets/           ← viewer JS/CSS
   favicon.svg       ← ImageSpace icon
-  data/             ← atlases, binary layout, metadata, labels, provenance
+  data/             ← atlases, binary layout, metadata, hotspot breakdowns, provenance
     analysis_config.json  ← complete model and analysis parameters
     manifest.json         ← viewer format plus embedded provenance
 ```
@@ -148,7 +150,7 @@ imagespace -i /path/to/images/ \
 | `--quality` | 60 | WebP compression quality (1–100) |
 | `--hd` / `--no-hd` | `--hd` | Generate dual-resolution atlases (64px preview + 128px full). ON by default |
 | `--preview-quality` | 40 | WebP quality for preview atlases (only used with --hd) |
-| `--clip-model` | `openai/clip-vit-base-patch32` | Hugging Face CLIP checkpoint used by both image and label-text encoders |
+| `--clip-model` | `openai/clip-vit-base-patch32` | Hugging Face CLIP checkpoint used for image embeddings |
 | `--umap-neighbors` | 15 | UMAP `n_neighbors` for the 2-D layout |
 | `--umap-min-dist` | 0.1 | UMAP `min_dist` for the 2-D layout |
 | `--cluster-neighbors` | 30 | UMAP `n_neighbors` for the clustering space |
@@ -156,8 +158,8 @@ imagespace -i /path/to/images/ \
 | `--min-cluster-size` | auto | HDBSCAN minimum cluster size. Auto = about 1% of the collection, rounded to the nearest 10, minimum 10 (49,585 images → 500). Pass a number to override |
 | `--hdbscan-min-samples` | 5 | HDBSCAN neighborhood conservativeness |
 | `--hdbscan-selection-method` | `leaf` | HDBSCAN selection method: `leaf` or `eom` |
-| `--label-candidates` | bundled `art-v1` | Versioned JSON label vocabulary override |
-| `--label-uncertainty-threshold` | 0.01 | Minimum top-1/top-2 score margin for a confident label |
+| `--label-column` | none | Metadata column used for hotspot breakdowns (e.g. `style`); needs `--metadata`. Without it, hotspots are numbered only |
+| `--label-mixed-threshold` | 0.5 | Flag a hotspot as mixed when its most common value covers less than this share of it |
 | `--seed` | none | Random seed for UMAP. Default: fully random each run. Pass a fixed seed (e.g. `--seed 42`) for a reproducible layout; a fixed seed makes UMAP run single-threaded, so it is slower |
 | `--cache-dir` | none | Directory to cache CLIP embeddings (`.npy`). Opt-in; default runs never write it |
 | `--relayout` | false | Skip atlas + CLIP, re-run UMAP/HDBSCAN only |
@@ -165,21 +167,27 @@ imagespace -i /path/to/images/ \
 
 ## Methods and provenance
 
-Every run writes `data/analysis_config.json` and repeats that provenance inside `manifest.json`. The record includes the exact CLIP checkpoint and backend, the UMAP settings for the layout and for the clustering space, the nearest-neighbor metric (cosine on the full CLIP embeddings), seed, HDBSCAN parameters and preserved-noise policy, and label-vocabulary version. The viewer's book icon opens the same record. Cluster label evidence in `cluster_labels.json` and the panel includes the top three candidate scores, score margin, and uncertainty decision.
+Every run writes `data/analysis_config.json` and repeats that provenance inside `manifest.json`. The record includes the exact CLIP checkpoint and backend, the UMAP settings for the layout and for the clustering space, the nearest-neighbor metric (cosine on the full CLIP embeddings), seed, HDBSCAN parameters and preserved-noise policy, and the metadata column used for hotspot breakdowns. The viewer's book icon opens the same record.
+
+### Hotspot breakdowns
+
+Clusters appear in the sidebar as numbered hotspots, largest first (Hotspot 1, Hotspot 2, …). ImageSpace does not name them with a model. Instead, with `--metadata your.csv --label-column style`, hovering over or clicking a hotspot opens a breakdown of its five most common values in that column, each as a share of the hotspot, with everything else grouped as "Other":
+
+```
+Hotspot 2 · 2,610 images · style · mixed
+Color Field Painting     29%
+Abstract Expressionism   29%
+Minimalism               27%
+Pop Art                   8%
+Expressionism             3%
+Other                     5%
+```
+
+A hotspot is flagged as mixed when its top value covers less than half of it (`--label-mixed-threshold`). The Methods panel repeats each breakdown with a second share: how much of all images with that value fall in the hotspot (e.g. *Ukiyo-e: 96% of the hotspot, 93% of all Ukiyo-e*). The figures are stored in `data/cluster_labels.json`. Unassigned (noise) images are never broken down. Without `--label-column`, no breakdown is written and hotspots stay numbered.
 
 ### Noise handling in the viewer
 
 ImageSpace never reassigns HDBSCAN noise to a nearby cluster; points HDBSCAN leaves unassigned (`cluster = -1`) stay unassigned in the data. In the viewer that noise is **hidden by default** so the clustered structure reads clearly, and it is omitted from the Hotspots sidebar until revealed. The `Noise` control (beside `Properties`) toggles it on. When shown, noise images render in a distinct indigo duotone rather than their natural colors, so they stay visually separable from the full-color clustered images even when a source image is itself black and white. Toggling `Show` returns the `Noise` group to the sidebar for filtering and inspection.
-
-A custom vocabulary is a JSON object with an `id`, `version`, and at least three candidates:
-
-```json
-{"id":"my-labels","version":1,"candidates":[
-  {"text":"portrait photograph","short_name":"Portraits"},
-  {"text":"architectural exterior","short_name":"Architecture"},
-  {"text":"landscape view","short_name":"Landscapes"}
-]}
-```
 
 ## Platform notes
 
@@ -191,7 +199,7 @@ A custom vocabulary is a JSON object with an `id`, `version`, and at least three
 ## Troubleshooting
 
 - **`CLIP embedding extraction failed`:** install `.[full]`, or install a platform-compatible ONNX/PyTorch runtime.
-- **Cluster-label dependency error:** `pip install torch transformers`; labels intentionally fail loudly instead of being silently omitted.
+- **`--label-column` error:** the column must exist in the `--metadata` CSV, whose `filename` column must match the image file names.
 - **Stale embedding cache:** use a separate `--cache-dir` after changing `--clip-model` or the input corpus. ImageSpace rejects incompatible cache metadata or row counts.
 - **Blank page when opening `index.html`:** browsers block some local file requests; serve the folder with `python3 -m http.server`.
 - **No clusters found:** HDBSCAN may classify a small or heterogeneous corpus as noise. Lower `--min-cluster-size` cautiously; ImageSpace preserves noise rather than assigning it to a nearby cluster.
@@ -250,7 +258,7 @@ imagespace -i /path/to/images/ -o ./output --no-hd
 
 ## Metadata Format
 
-Your metadata CSV must have a `filename` column matching image filenames. Non-numeric columns with at most 200 distinct values become dropdown filters in the viewer automatically (`id`, `filename`, `timestamp`, `width`, and `height` are skipped). High-cardinality columns such as `artist` or `title` still appear in the detail panel. Numeric metadata columns are not filterable; range sliders are provided only for the computed scores below.
+Metadata is optional. If you supply a CSV, it must have a `filename` column matching image filenames. Non-numeric columns with at most 200 distinct values become dropdown filters in the viewer automatically (`id`, `filename`, `timestamp`, `width`, and `height` are skipped). High-cardinality columns such as `artist` or `title` still appear in the detail panel. Numeric metadata columns are not filterable; range sliders are provided only for the computed scores below.
 
 ```csv
 filename,artist,style,title

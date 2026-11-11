@@ -276,6 +276,11 @@ const applyNoiseFilter = (sprite, isNoise, noiseDisplay) => {
 };
 
 /* ── Clusters ──────────────────────── */
+/* Whole-percent share, with '<1%' for small non-zero shares. */
+function formatShare(share) {
+  return share > 0 && share < 0.005 ? '<1%' : `${Math.round(share * 100)}%`;
+}
+
 function computeClusters(points, noiseDisplay = 'show') {
   const clusterMap = {};
   for (let i = 0; i < points.length; i++) {
@@ -391,12 +396,13 @@ export default function App() {
   const [hotspots, setHotspots] = useState([]);
   const [showHotspots, setShowHotspots] = useState(true);
   const [activeHotspot, setActiveHotspot] = useState(null);
+  const [hoveredHotspot, setHoveredHotspot] = useState(null);
   const [showStats, setShowStats] = useState(false);
   const [showMethods, setShowMethods] = useState(false);
   const [analysisConfig, setAnalysisConfig] = useState(null);
   const [tooltip, setTooltip] = useState(null);
   const [showDetailPanel, setShowDetailPanel] = useState(false);
-  const clipLabelsRef = useRef(null); // CLIP-generated cluster labels from cluster_labels.json
+  const clipLabelsRef = useRef(null); // metadata-based cluster labels from cluster_labels.json
   const thumbSizeRef = useRef(THUMB_SIZE); // actual thumb size from manifest
   const [hasTimestamps, setHasTimestamps] = useState(false); // whether dataset has time data
   const [timeRange, setTimeRange] = useState(null); // { min, max, current }
@@ -841,7 +847,7 @@ export default function App() {
         const rawNoiseCount = allPointData.reduce((count, point) => count + (isNoisePoint(point) ? 1 : 0), 0);
         setNoiseSupport({ hasNoise: rawNoiseCount > 0, rawCount: rawNoiseCount });
 
-        /* Load CLIP cluster labels early so hotspot names show immediately */
+        /* Load metadata cluster labels early so hotspot names show immediately */
         try {
           const clRes = await fetch(`${BASE}data/cluster_labels.json`);
           if (clRes.ok) {
@@ -1434,6 +1440,12 @@ export default function App() {
       spatialHashRef.current = {};
     };
   }, []);
+  /* Hotspots are numbered by size (largest = 1); noise always sorts last. */
+  const hotspotNumber = (cid) => {
+    const i = hotspots.findIndex(h => h.id === Number(cid) && !h.isNoise);
+    return i >= 0 ? i + 1 : Number(cid) + 1;
+  };
+
   const flyToHotspot = (h) => {
     const newActive = activeHotspot === h.id ? null : h.id;
     setActiveHotspot(newActive);
@@ -1679,7 +1691,7 @@ export default function App() {
             {/* Hotspots (larger cards) */}
             {!loading && hotspots.length > 0 && (
               <div className={`h-[calc(100vh-100px)] border-r border-rp-hlHigh pr-3 transition-all duration-300 overflow-hidden ${showHotspots ? 'w-[180px] md:w-[240px] opacity-100' : 'w-0 opacity-0'}`}>
-                <div className="pointer-events-auto flex flex-col gap-1.5 md:gap-2 max-w-[180px] md:max-w-[240px] h-full overflow-y-auto scrollbar-thin">
+                <div className="pointer-events-auto flex flex-col gap-1.5 md:gap-2 w-full max-w-[180px] md:max-w-[240px] h-full overflow-y-auto scrollbar-thin">
                   {allNoise ? (
                     <div className="bg-rp-surface/90 rounded-xl border border-rp-hlMed shadow-rp p-4" role="status">
                       <div className="w-10 h-2 rounded-full mb-3" style={{ backgroundColor: NOISE_COLOR }} />
@@ -1690,14 +1702,15 @@ export default function App() {
                     </div>
                   ) : hotspots.map((h, i) => {
                     const pct = stats.count > 0 ? ((h.count / stats.count) * 100) : 0;
-                    const label = h.isNoise
-                      ? 'Noise'
-                      : `Hotspot ${i + 1}: ${clipLabelsRef.current?.[h.id]?.label || `Cluster ${h.id + 1}`}`;
+                    const label = h.isNoise ? 'Noise' : `Hotspot ${i + 1}`;
+                    const breakdown = h.isNoise ? null : clipLabelsRef.current?.[h.id];
+                    const showBreakdown = breakdown && (hoveredHotspot === h.id || activeHotspot === h.id);
                     return (
+                      <div key={h.id} onMouseEnter={() => setHoveredHotspot(h.id)} onMouseLeave={() => setHoveredHotspot(cur => (cur === h.id ? null : cur))}>
                       <button
-                        key={h.id}
                         onClick={() => flyToHotspot(h)}
-                        className={`bg-rp-surface/90 backdrop-blur-md rounded-xl border border-rp-hlMed shadow-rp transition-all duration-200 ${viewMode !== 'data' ? 'cursor-pointer' : 'cursor-default'} ${
+                        aria-expanded={showBreakdown ? 'true' : 'false'}
+                        className={`w-full bg-rp-surface/90 backdrop-blur-md rounded-xl border border-rp-hlMed shadow-rp transition-all duration-200 ${viewMode !== 'data' ? 'cursor-pointer' : 'cursor-default'} ${
                           activeHotspot === h.id
                             ? 'ring-2 ring-rp-pine shadow-rp-lg'
                             : 'hover:shadow-rp-lg hover:border-rp-pine/40'
@@ -1717,7 +1730,27 @@ export default function App() {
                             </div>
                           </div>
                         </div>
+                        {showBreakdown && (
+                          <div className="px-3 pb-3 text-left">
+                            <p className="text-[10px] font-semibold text-rp-muted uppercase mb-1">{breakdown.column}{breakdown.mixed ? <span className="ml-1 normal-case text-rp-gold">· mixed</span> : null}</p>
+                            <ul className="space-y-0.5 text-[11px] text-rp-text">
+                              {(breakdown.top || []).map(item => (
+                                <li key={item.value} className="flex justify-between gap-2">
+                                  <span className="truncate">{item.value}</span>
+                                  <span className="font-mono tabular-nums text-rp-subtle">{formatShare(item.clusterShare)}</span>
+                                </li>
+                              ))}
+                              {breakdown.otherShare > 0 && (
+                                <li className="flex justify-between gap-2 text-rp-muted">
+                                  <span>Other</span>
+                                  <span className="font-mono tabular-nums">{formatShare(breakdown.otherShare)}</span>
+                                </li>
+                              )}
+                            </ul>
+                          </div>
+                        )}
                       </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -2176,8 +2209,8 @@ export default function App() {
                           if (k === 'cluster' && String(v) === '-1') {
                             return [k, 'Noise'];
                           }
-                          if (k === 'cluster' && clipLabelsRef.current?.[v]) {
-                            return [k, clipLabelsRef.current[v].label];
+                          if (k === 'cluster' && v !== '' && v !== undefined && v !== null) {
+                            return [k, `Hotspot ${hotspotNumber(v)}`];
                           }
                           return [k, v];
                         })
@@ -2214,7 +2247,7 @@ export default function App() {
             const clusterLabel = String(cluster) === '-1'
               ? 'Noise'
               : (cluster !== undefined && cluster !== null && cluster !== '')
-                ? clipLabelsRef.current?.[cluster]?.label || `Cluster ${Number(cluster) + 1}`
+                ? `Hotspot ${hotspotNumber(cluster)}`
                 : null;
             return (
               <>
@@ -2261,8 +2294,8 @@ export default function App() {
                   ['HDBSCAN min. samples', analysisConfig.hdbscan?.minSamples],
                   ['HDBSCAN selection', analysisConfig.hdbscan?.selectionMethod],
                   ['Noise policy', analysisConfig.hdbscan?.noisePolicy === 'preserve-unassigned' ? 'Preserved as unassigned' : analysisConfig.hdbscan?.noisePolicy],
-                  ['Label vocabulary', analysisConfig.labels?.vocabularyId],
-                  ['Label uncertainty margin', analysisConfig.labels?.uncertaintyThreshold],
+                  ['Hotspot breakdown', analysisConfig.labels?.column ? `Top values of metadata column "${analysisConfig.labels.column}"` : 'None (no --label-column given)'],
+                  ['Mixed below', analysisConfig.labels?.column ? `${Math.round((analysisConfig.labels.mixedThreshold ?? 0.5) * 100)}% of cluster` : null],
                 ].filter(([, value]) => value !== undefined && value !== null).map(([key, value]) => (
                   <div key={key} className="flex justify-between gap-6 border-b border-rp-hlMed/50 pb-2">
                     <span className="text-rp-muted">{key}</span>
@@ -2271,21 +2304,31 @@ export default function App() {
                 ))}
                 {clipLabelsRef.current && Object.keys(clipLabelsRef.current).length > 0 && (
                   <div>
-                    <h3 className="font-bold text-rp-text mb-2">Cluster label evidence</h3>
+                    <h3 className="font-bold text-rp-text mb-1">Cluster label evidence</h3>
+                    <p className="text-[11px] text-rp-muted mb-2">Up to five values per hotspot: share of the hotspot · share of all images with that value</p>
                     <div className="space-y-2">
-                      {Object.entries(clipLabelsRef.current).map(([clusterId, data]) => (
+                      {Object.entries(clipLabelsRef.current)
+                        .sort(([a], [b]) => hotspotNumber(a) - hotspotNumber(b))
+                        .map(([clusterId, data]) => (
                         <details key={clusterId} className="rounded-lg border border-rp-hlMed px-3 py-2">
                           <summary className="cursor-pointer text-xs font-semibold text-rp-text">
-                            Cluster {Number(clusterId) + 1}: {data.label}
-                            {data.uncertain && <span className="ml-2 text-rp-gold">Uncertain</span>}
+                            Hotspot {hotspotNumber(clusterId)}
+                            {data.size ? <span className="ml-1 font-normal text-rp-muted">({data.size.toLocaleString()} images)</span> : null}
+                            {data.mixed && <span className="ml-2 text-rp-gold">Mixed</span>}
                           </summary>
                           <ol className="mt-2 space-y-1 text-[11px] text-rp-muted">
-                            {(data.top3 || []).map((candidate, index) => (
-                              <li key={`${candidate.text}-${index}`} className="flex justify-between gap-3">
-                                <span>{index + 1}. {candidate.text}</span>
-                                <span className="font-mono tabular-nums">{Number(candidate.score).toFixed(3)}</span>
+                            {(data.top || []).map((item, index) => (
+                              <li key={`${item.value}-${index}`} className="flex justify-between gap-3">
+                                <span>{index + 1}. {item.value}</span>
+                                <span className="font-mono tabular-nums">{formatShare(item.clusterShare)} · {formatShare(item.categoryShare)}</span>
                               </li>
                             ))}
+                            {data.otherShare > 0 && (
+                              <li className="flex justify-between gap-3">
+                                <span>Other</span>
+                                <span className="font-mono tabular-nums">{formatShare(data.otherShare)}</span>
+                              </li>
+                            )}
                           </ol>
                         </details>
                       ))}

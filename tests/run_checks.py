@@ -25,6 +25,7 @@ CACHE = WORK / "cache"
 OUT_A = WORK / "run-a"
 OUT_B = WORK / "run-b"
 OUT_VARIANT = WORK / "variant"
+METADATA = WORK / "fixture-metadata.csv"
 
 
 def check(condition, message):
@@ -59,6 +60,15 @@ def make_fixture(count):
     check(len(images) == count, f"fixture contains exactly {count} images")
     for image in images:
         shutil.copy2(image, FIXTURE / image.name)
+    names = {image.name for image in images}
+    with (ROOT / "test-data" / "metadata.csv").open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        rows = [row for row in reader if row["filename"] in names]
+        fields = reader.fieldnames
+    with METADATA.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def pipeline_command(output, seed, extra=()):
@@ -83,7 +93,7 @@ def validate_output(
     output,
     expected_count,
     expected_cluster_dims=5,
-    vocabulary="imagespace-art-v1",
+    label_column=None,
     min_samples=2,
     selection_method="leaf",
 ):
@@ -110,7 +120,7 @@ def validate_output(
     check(config["hdbscan"]["minSamples"] == min_samples, "HDBSCAN min_samples flag is wired")
     check(config["hdbscan"]["selectionMethod"] == selection_method, "HDBSCAN selection method is wired")
     check(config["hdbscan"]["noisePolicy"] == "preserve-unassigned", "noise policy remains preserve-unassigned")
-    check(config["labels"]["vocabularyId"] == vocabulary, "label vocabulary id is recorded")
+    check(config["labels"]["column"] == label_column, "label metadata column is recorded")
     check(manifest["provenance"] == config, "manifest embeds the complete provenance record")
 
     with (data / "metadata.csv").open(newline="", encoding="utf-8") as handle:
@@ -130,11 +140,17 @@ def validate_output(
     check(b"display_cluster" not in raw, "binary contains no legacy display_cluster marker")
 
     labels_path = data / "cluster_labels.json"
+    check(labels_path.exists() == bool(label_column), "cluster_labels.json exists only when a label column is given")
     if labels_path.exists():
         labels = load_json(labels_path)
+        check("-1" not in labels, "unassigned images are never labeled")
         for label in labels.values():
-            check(len(label["top3"]) == 3, "each generated label stores top-3 evidence")
-            check("uncertain" in label and "scoreMargin" in label, "each label stores uncertainty evidence")
+            check(1 <= len(label["top"]) <= 5, "each label stores up to five metadata values")
+            check(label["label"].startswith(label["top"][0]["value"] + " "), "each summary starts with its most common value")
+            check(all(item["value"] in label["label"] for item in label["top"]), "each summary lists its top values")
+            check(all({"count", "clusterShare", "categoryShare"} <= item.keys() for item in label["top"]), "each value stores its count and both shares")
+            check("otherShare" in label, "each label stores the share of other values")
+            check("mixed" in label, "each label stores the mixed flag")
     return config
 
 
@@ -149,17 +165,12 @@ def validate_forced_labels():
     check(routed.shape == (1, 7) and backend == "transformers", "custom CLIP model routes through its matching transformers backend")
 
     forced_clusters = np.arange(len(embeddings), dtype=np.int32) % 2
-    vocab = module.load_label_vocabulary(ROOT / "tests" / "fixtures" / "test-labels.json")
-    labels = module.generate_cluster_labels(
-        embeddings, forced_clusters, vocabulary=vocab, uncertainty_threshold=0.02
-    )
-    allowed = {entry["text"] for entry in vocab["candidates"]}
+    values = ["Baroque" if i % 4 == 0 else "Rococo" for i in range(len(embeddings))]
+    labels = module.generate_cluster_labels(forced_clusters, values, "style", mixed_threshold=0.6)
     check(len(labels) == 2, "forced label test emits two cluster labels")
-    for label in labels.values():
-        check(len(label["top3"]) == 3, "custom vocabulary emits top-3 candidates")
-        check(all(item["text"] in allowed for item in label["top3"]), "label candidates come only from override vocabulary")
-        check(label["uncertaintyThreshold"] == 0.02, "label uncertainty threshold is applied")
-        check(label["vocabularyId"] == "imagespace-test-labels-v1", "custom vocabulary id reaches label output")
+    check(labels[0]["top"][0]["value"] == "Baroque" and labels[1]["top"][0]["value"] == "Rococo", "forced clusters are led by their most common value")
+    check(labels[0]["label"] == "Rococo 50%, Baroque 50%" or labels[0]["label"] == "Baroque 50%, Rococo 50%", "forced cluster name lists value shares")
+    check(labels[0]["mixed"] is True and labels[1]["mixed"] is False, "mixed threshold is applied")
 
 
 def main():
@@ -186,14 +197,13 @@ def main():
     run(pipeline_command(OUT_VARIANT, args.seed, (
         "--relayout", "--cluster-dims", "3",
         "--hdbscan-min-samples", "3", "--hdbscan-selection-method", "eom",
-        "--label-candidates", str(ROOT / "tests" / "fixtures" / "test-labels.json"),
-        "--label-uncertainty-threshold", "0.02",
+        "--metadata", str(METADATA), "--label-column", "style",
     )))
     validate_output(
         OUT_VARIANT,
         args.fixture_size,
         expected_cluster_dims=3,
-        vocabulary="imagespace-test-labels-v1",
+        label_column="style",
         min_samples=3,
         selection_method="eom",
     )
@@ -213,7 +223,7 @@ def main():
     wheel = next(wheel_dir.glob("*.whl"))
     with zipfile.ZipFile(wheel) as archive:
         members = archive.namelist()
-    check(any(name.endswith("imagespace_resources/label_presets/art-v1.json") for name in members), "wheel contains bundled label vocabulary")
+    check(any(name.startswith("imagespace_viewer_shell/viewer_shell/") for name in members), "wheel contains the bundled viewer shell")
 
     print("\nSUCCESS: acceptance contract is green and seeded output is stable.")
 

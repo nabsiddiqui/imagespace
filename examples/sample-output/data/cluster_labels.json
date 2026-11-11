@@ -1,254 +1,476 @@
 {
   "0": {
-    "label": "Vast Landscapes \u2014 Pastel",
-    "top3": [
+    "label": "Expressionism 20%, Post Impressionism 20%, Realism 20%, Symbolism 20%, Contemporary Realism 10%, Other 10%",
+    "column": "style",
+    "size": 10,
+    "top": [
       {
-        "text": "small figures in vast landscape",
-        "score": 0.30442410707473755
+        "value": "Expressionism",
+        "count": 2,
+        "clusterShare": 0.2,
+        "categoryShare": 0.041666666666666664
       },
       {
-        "text": "pastel soft colored painting",
-        "score": 0.28948768973350525
+        "value": "Post Impressionism",
+        "count": 2,
+        "clusterShare": 0.2,
+        "categoryShare": 0.05
       },
       {
-        "text": "rich earth-toned painting",
-        "score": 0.2885599732398987
+        "value": "Realism",
+        "count": 2,
+        "clusterShare": 0.2,
+        "categoryShare": 0.03773584905660377
+      },
+      {
+        "value": "Symbolism",
+        "count": 2,
+        "clusterShare": 0.2,
+        "categoryShare": 0.06666666666666667
+      },
+      {
+        "value": "Contemporary Realism",
+        "count": 1,
+        "clusterShare": 0.1,
+        "categoryShare": 0.5
       }
     ],
-    "scoreMargin": 0.0149364173412323,
-    "uncertain": false,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1"
+    "otherShare": 0.09999999999999998,
+    "mixed": true,
+    "mixedThreshold": 0.5
   },
   "1": {
-    "label": "Romantic Landscapes",
-    "top3": [
+    "label": "Impressionism 34%, Romanticism 20%, Realism 17%, Pointillism 9%, Rococo 9%, Other 11%",
+    "column": "style",
+    "size": 35,
+    "top": [
       {
-        "text": "romantic era landscape",
-        "score": 0.32713764905929565
+        "value": "Impressionism",
+        "count": 12,
+        "clusterShare": 0.34285714285714286,
+        "categoryShare": 0.15
       },
       {
-        "text": "small figures in vast landscape",
-        "score": 0.3213905394077301
+        "value": "Romanticism",
+        "count": 7,
+        "clusterShare": 0.2,
+        "categoryShare": 0.1794871794871795
       },
       {
-        "text": "seascape with ocean and boats",
-        "score": 0.300304114818573
+        "value": "Realism",
+        "count": 6,
+        "clusterShare": 0.17142857142857143,
+        "categoryShare": 0.11320754716981132
+      },
+      {
+        "value": "Pointillism",
+        "count": 3,
+        "clusterShare": 0.08571428571428572,
+        "categoryShare": 0.42857142857142855
+      },
+      {
+        "value": "Rococo",
+        "count": 3,
+        "clusterShare": 0.08571428571428572,
+        "categoryShare": 0.21428571428571427
       }
     ],
-    "scoreMargin": 0.005747109651565552,
-    "uncertain": true,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1"
+    "otherShare": 0.11428571428571432,
+    "mixed": true,
+    "mixedThreshold": 0.5
   },
   "2": {
-    "label": "Portraits \u2014 Baroque",
-    "top3": [
+    "label": "Realism 24%, Rococo 24%, Romanticism 17%, Baroque 10%, Impressionism 10%, Other 14%",
+    "column": "style",
+    "size": 29,
+    "top": [
       {
-        "text": "portrait painting of a person",
-        "score": 0.34836557507514954
+        "value": "Realism",
+        "count": 7,
+        "clusterShare": 0.2413793103448276,
+        "categoryShare": 0.1320754716981132
       },
       {
-        "text": "baroque dramatic painting",
-        "score": 0.2748787999153137
+        "value": "Rococo",
+        "count": 7,
+        "clusterShare": 0.2413793103448276,
+        "categoryShare": 0.5
       },
       {
-        "text": "close-up face portrait",
-        "score": 0.2743370532989502
+        "value": "Romanticism",
+        "count": 5,
+        "clusterShare": 0.1724137931034483,
+        "categoryShare": 0.1282051282051282
+      },
+      {
+        "value": "Baroque",
+        "count": 3,
+        "clusterShare": 0.10344827586206896,
+        "categoryShare": 0.13043478260869565
+      },
+      {
+        "value": "Impressionism",
+        "count": 3,
+        "clusterShare": 0.10344827586206896,
+        "categoryShare": 0.0375
       }
     ],
-    "scoreMargin": 0.07348677515983582,
-    "uncertain": false,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1"
+    "otherShare": 0.13793103448275856,
+    "mixed": true,
+    "mixedThreshold": 0.5
   },
   "3": {
-    "label": "Vast Landscapes \u2014 Romantic Landscapes",
-    "top3": [
+    "label": "Impressionism 33%, Realism 33%, Post Impressionism 21%, Pointillism 12%",
+    "column": "style",
+    "size": 24,
+    "top": [
       {
-        "text": "small figures in vast landscape",
-        "score": 0.3207589387893677
+        "value": "Impressionism",
+        "count": 8,
+        "clusterShare": 0.3333333333333333,
+        "categoryShare": 0.1
       },
       {
-        "text": "romantic era landscape",
-        "score": 0.31284183263778687
+        "value": "Realism",
+        "count": 8,
+        "clusterShare": 0.3333333333333333,
+        "categoryShare": 0.1509433962264151
       },
       {
-        "text": "impressionist brushstrokes painting",
-        "score": 0.29222342371940613
+        "value": "Post Impressionism",
+        "count": 5,
+        "clusterShare": 0.20833333333333334,
+        "categoryShare": 0.125
+      },
+      {
+        "value": "Pointillism",
+        "count": 3,
+        "clusterShare": 0.125,
+        "categoryShare": 0.42857142857142855
       }
     ],
-    "scoreMargin": 0.00791710615158081,
-    "uncertain": true,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1"
+    "otherShare": 0.0,
+    "mixed": true,
+    "mixedThreshold": 0.5
   },
   "4": {
-    "label": "Vast Landscapes \u2014 Cityscapes",
-    "top3": [
+    "label": "Impressionism 28%, Post Impressionism 28%, Expressionism 22%, Art Nouveau Modern 11%, New Realism 6%, Other 6%",
+    "column": "style",
+    "size": 18,
+    "top": [
       {
-        "text": "small figures in vast landscape",
-        "score": 0.30593106150627136
+        "value": "Impressionism",
+        "count": 5,
+        "clusterShare": 0.2777777777777778,
+        "categoryShare": 0.0625
       },
       {
-        "text": "cityscape with buildings and streets",
-        "score": 0.3023097515106201
+        "value": "Post Impressionism",
+        "count": 5,
+        "clusterShare": 0.2777777777777778,
+        "categoryShare": 0.125
       },
       {
-        "text": "romantic era landscape",
-        "score": 0.2957364022731781
+        "value": "Expressionism",
+        "count": 4,
+        "clusterShare": 0.2222222222222222,
+        "categoryShare": 0.08333333333333333
+      },
+      {
+        "value": "Art Nouveau Modern",
+        "count": 2,
+        "clusterShare": 0.1111111111111111,
+        "categoryShare": 0.06896551724137931
+      },
+      {
+        "value": "New Realism",
+        "count": 1,
+        "clusterShare": 0.05555555555555555,
+        "categoryShare": 1.0
       }
     ],
-    "scoreMargin": 0.003621309995651245,
-    "uncertain": true,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1"
+    "otherShare": 0.05555555555555558,
+    "mixed": true,
+    "mixedThreshold": 0.5
   },
   "5": {
-    "label": "Complex Scenes",
-    "top3": [
+    "label": "Romanticism 40%, Baroque 10%, Early Renaissance 10%, Expressionism 10%, Impressionism 10%, Other 20%",
+    "column": "style",
+    "size": 10,
+    "top": [
       {
-        "text": "complex busy scene with many figures",
-        "score": 0.3314725458621979
+        "value": "Romanticism",
+        "count": 4,
+        "clusterShare": 0.4,
+        "categoryShare": 0.10256410256410256
       },
       {
-        "text": "battle scene with soldiers",
-        "score": 0.32818603515625
+        "value": "Baroque",
+        "count": 1,
+        "clusterShare": 0.1,
+        "categoryShare": 0.043478260869565216
       },
       {
-        "text": "group of people gathering",
-        "score": 0.3052719831466675
+        "value": "Early Renaissance",
+        "count": 1,
+        "clusterShare": 0.1,
+        "categoryShare": 0.1
+      },
+      {
+        "value": "Expressionism",
+        "count": 1,
+        "clusterShare": 0.1,
+        "categoryShare": 0.020833333333333332
+      },
+      {
+        "value": "Impressionism",
+        "count": 1,
+        "clusterShare": 0.1,
+        "categoryShare": 0.0125
       }
     ],
-    "scoreMargin": 0.003286510705947876,
-    "uncertain": true,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1"
+    "otherShare": 0.19999999999999996,
+    "mixed": true,
+    "mixedThreshold": 0.5
   },
   "6": {
-    "label": "Baroque",
-    "top3": [
+    "label": "Northern Renaissance 23%, Baroque 20%, Early Renaissance 16%, High Renaissance 9%, Mannerism Late Renaissance 9%, Other 23%",
+    "column": "style",
+    "size": 44,
+    "top": [
       {
-        "text": "baroque dramatic painting",
-        "score": 0.3128646910190582
+        "value": "Northern Renaissance",
+        "count": 10,
+        "clusterShare": 0.22727272727272727,
+        "categoryShare": 0.5882352941176471
       },
       {
-        "text": "religious painting with saints",
-        "score": 0.3105638921260834
+        "value": "Baroque",
+        "count": 9,
+        "clusterShare": 0.20454545454545456,
+        "categoryShare": 0.391304347826087
       },
       {
-        "text": "renaissance classical painting",
-        "score": 0.306879460811615
+        "value": "Early Renaissance",
+        "count": 7,
+        "clusterShare": 0.1590909090909091,
+        "categoryShare": 0.7
+      },
+      {
+        "value": "High Renaissance",
+        "count": 4,
+        "clusterShare": 0.09090909090909091,
+        "categoryShare": 1.0
+      },
+      {
+        "value": "Mannerism Late Renaissance",
+        "count": 4,
+        "clusterShare": 0.09090909090909091,
+        "categoryShare": 0.8
       }
     ],
-    "scoreMargin": 0.0023007988929748535,
-    "uncertain": true,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1"
+    "otherShare": 0.2272727272727273,
+    "mixed": true,
+    "mixedThreshold": 0.5
   },
   "7": {
-    "label": "Portraits \u2014 Nudes",
-    "top3": [
+    "label": "Expressionism 18%, Symbolism 14%, Art Nouveau Modern 11%, Baroque 11%, Post Impressionism 11%, Other 34%",
+    "column": "style",
+    "size": 44,
+    "top": [
       {
-        "text": "portrait painting of a person",
-        "score": 0.2976348102092743
+        "value": "Expressionism",
+        "count": 8,
+        "clusterShare": 0.18181818181818182,
+        "categoryShare": 0.16666666666666666
       },
       {
-        "text": "nude figure painting",
-        "score": 0.29197436571121216
+        "value": "Symbolism",
+        "count": 6,
+        "clusterShare": 0.13636363636363635,
+        "categoryShare": 0.2
       },
       {
-        "text": "sketch or drawing on paper",
-        "score": 0.2806876301765442
+        "value": "Art Nouveau Modern",
+        "count": 5,
+        "clusterShare": 0.11363636363636363,
+        "categoryShare": 0.1724137931034483
+      },
+      {
+        "value": "Baroque",
+        "count": 5,
+        "clusterShare": 0.11363636363636363,
+        "categoryShare": 0.21739130434782608
+      },
+      {
+        "value": "Post Impressionism",
+        "count": 5,
+        "clusterShare": 0.11363636363636363,
+        "categoryShare": 0.125
       }
     ],
-    "scoreMargin": 0.005660444498062134,
-    "uncertain": true,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1"
+    "otherShare": 0.34090909090909094,
+    "mixed": true,
+    "mixedThreshold": 0.5
   },
   "8": {
-    "label": "Portraits \u2014 Warm-Toned",
-    "top3": [
+    "label": "Impressionism 46%, Expressionism 17%, Realism 12%, Romanticism 8%, Post Impressionism 6%, Other 10%",
+    "column": "style",
+    "size": 48,
+    "top": [
       {
-        "text": "portrait painting of a person",
-        "score": 0.32079222798347473
+        "value": "Impressionism",
+        "count": 22,
+        "clusterShare": 0.4583333333333333,
+        "categoryShare": 0.275
       },
       {
-        "text": "golden warm-toned painting",
-        "score": 0.287485271692276
+        "value": "Expressionism",
+        "count": 8,
+        "clusterShare": 0.16666666666666666,
+        "categoryShare": 0.16666666666666666
       },
       {
-        "text": "impressionist brushstrokes painting",
-        "score": 0.28531530499458313
+        "value": "Realism",
+        "count": 6,
+        "clusterShare": 0.125,
+        "categoryShare": 0.11320754716981132
+      },
+      {
+        "value": "Romanticism",
+        "count": 4,
+        "clusterShare": 0.08333333333333333,
+        "categoryShare": 0.10256410256410256
+      },
+      {
+        "value": "Post Impressionism",
+        "count": 3,
+        "clusterShare": 0.0625,
+        "categoryShare": 0.075
       }
     ],
-    "scoreMargin": 0.03330695629119873,
-    "uncertain": false,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1"
+    "otherShare": 0.10416666666666674,
+    "mixed": true,
+    "mixedThreshold": 0.5
   },
   "9": {
-    "label": "Minimalist",
-    "top3": [
+    "label": "Color Field Painting 31%, Pop Art 24%, Abstract Expressionism 18%, Minimalism 14%, Art Nouveau Modern 4%, Other 10%",
+    "column": "style",
+    "size": 51,
+    "top": [
       {
-        "text": "modern minimalist artwork",
-        "score": 0.28261494636535645
+        "value": "Color Field Painting",
+        "count": 16,
+        "clusterShare": 0.3137254901960784,
+        "categoryShare": 0.9411764705882353
       },
       {
-        "text": "abstract expressionist painting",
-        "score": 0.2773692309856415
+        "value": "Pop Art",
+        "count": 12,
+        "clusterShare": 0.23529411764705882,
+        "categoryShare": 0.75
       },
       {
-        "text": "rich earth-toned painting",
-        "score": 0.2745334506034851
+        "value": "Abstract Expressionism",
+        "count": 9,
+        "clusterShare": 0.17647058823529413,
+        "categoryShare": 0.6428571428571429
+      },
+      {
+        "value": "Minimalism",
+        "count": 7,
+        "clusterShare": 0.13725490196078433,
+        "categoryShare": 1.0
+      },
+      {
+        "value": "Art Nouveau Modern",
+        "count": 2,
+        "clusterShare": 0.0392156862745098,
+        "categoryShare": 0.06896551724137931
       }
     ],
-    "scoreMargin": 0.005245715379714966,
-    "uncertain": true,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1"
+    "otherShare": 0.0980392156862745,
+    "mixed": true,
+    "mixedThreshold": 0.5
   },
   "10": {
-    "label": "Still Life",
-    "top3": [
+    "label": "Impressionism 25%, Post Impressionism 25%, Realism 25%, Cubism 8%, Expressionism 8%, Other 8%",
+    "column": "style",
+    "size": 12,
+    "top": [
       {
-        "text": "still life with flowers and fruit",
-        "score": 0.33455371856689453
+        "value": "Impressionism",
+        "count": 3,
+        "clusterShare": 0.25,
+        "categoryShare": 0.0375
       },
       {
-        "text": "impressionist brushstrokes painting",
-        "score": 0.28598469495773315
+        "value": "Post Impressionism",
+        "count": 3,
+        "clusterShare": 0.25,
+        "categoryShare": 0.075
       },
       {
-        "text": "red and orange warm painting",
-        "score": 0.28455984592437744
+        "value": "Realism",
+        "count": 3,
+        "clusterShare": 0.25,
+        "categoryShare": 0.05660377358490566
+      },
+      {
+        "value": "Cubism",
+        "count": 1,
+        "clusterShare": 0.08333333333333333,
+        "categoryShare": 0.09090909090909091
+      },
+      {
+        "value": "Expressionism",
+        "count": 1,
+        "clusterShare": 0.08333333333333333,
+        "categoryShare": 0.020833333333333332
       }
     ],
-    "scoreMargin": 0.04856902360916138,
-    "uncertain": false,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1"
+    "otherShare": 0.08333333333333337,
+    "mixed": true,
+    "mixedThreshold": 0.5
   },
   "11": {
-    "label": "Abstract Expressionist",
-    "top3": [
+    "label": "Abstract Expressionism 18%, Cubism 18%, Expressionism 18%, Naive Art Primitivism 14%, Fauvism 9%, Other 23%",
+    "column": "style",
+    "size": 22,
+    "top": [
       {
-        "text": "abstract expressionist painting",
-        "score": 0.2824559807777405
+        "value": "Abstract Expressionism",
+        "count": 4,
+        "clusterShare": 0.18181818181818182,
+        "categoryShare": 0.2857142857142857
       },
       {
-        "text": "expressionist distorted painting",
-        "score": 0.28087592124938965
+        "value": "Cubism",
+        "count": 4,
+        "clusterShare": 0.18181818181818182,
+        "categoryShare": 0.36363636363636365
       },
       {
-        "text": "small figures in vast landscape",
-        "score": 0.2667951285839081
+        "value": "Expressionism",
+        "count": 4,
+        "clusterShare": 0.18181818181818182,
+        "categoryShare": 0.08333333333333333
+      },
+      {
+        "value": "Naive Art Primitivism",
+        "count": 3,
+        "clusterShare": 0.13636363636363635,
+        "categoryShare": 0.17647058823529413
+      },
+      {
+        "value": "Fauvism",
+        "count": 2,
+        "clusterShare": 0.09090909090909091,
+        "categoryShare": 0.2
       }
     ],
-    "scoreMargin": 0.00158005952835083,
-    "uncertain": true,
-    "uncertaintyThreshold": 0.01,
-    "vocabularyId": "imagespace-art-v1"
+    "otherShare": 0.2272727272727273,
+    "mixed": true,
+    "mixedThreshold": 0.5
   }
 }

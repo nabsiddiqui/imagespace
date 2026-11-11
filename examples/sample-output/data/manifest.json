@@ -62,12 +62,10 @@
       "metric": "cosine"
     },
     "labels": {
-      "modelId": "openai/clip-vit-base-patch32",
-      "vocabularyId": "imagespace-art-v1",
-      "vocabularyVersion": 1,
-      "candidateCount": 40,
-      "uncertaintyThreshold": 0.01,
-      "topCandidatesStored": 3
+      "source": "metadata",
+      "column": "style",
+      "mixedThreshold": 0.5,
+      "topValuesStored": 5
     }
   },
   "hasPreviewAtlases": true,

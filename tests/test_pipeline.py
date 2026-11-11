@@ -103,30 +103,40 @@ def test_outlier_scores_normalized_0_100(ispace, embeddings):
     assert scores.min() >= 0.0 and scores.max() <= 100.0
 
 
-# ── Label vocabulary loading + validation ────────────────────
-def test_default_label_vocabulary_loads(ispace):
-    vocab = ispace.load_label_vocabulary()
-    assert vocab["id"] == "imagespace-art-v1"
-    assert len(vocab["candidates"]) >= 3
-    assert all({"text", "short_name"} <= entry.keys() for entry in vocab["candidates"])
+# ── Metadata cluster labels ──────────────────────────────────
+def test_metadata_labels_name_top_value_with_shares(ispace):
+    clusters = np.array([0, 0, 0, 0, 1, 1, -1, -1])
+    values = ["Ukiyo-e", "Ukiyo-e", "Ukiyo-e", "Baroque", "Baroque", "Rococo", "Ukiyo-e", ""]
+    labels = ispace.generate_cluster_labels(clusters, values, "style")
+    assert set(labels) == {0, 1}  # noise (-1) is never labeled
+    top = labels[0]["top"][0]
+    assert labels[0]["label"] == "Ukiyo-e 75%, Baroque 25%" and labels[0]["column"] == "style"
+    assert labels[1]["label"] == "Baroque 50%, Rococo 50%"
+    assert top["count"] == 3 and top["clusterShare"] == 0.75
+    assert top["categoryShare"] == 0.75  # 3 of the 4 Ukiyo-e images, noise included
+    assert labels[0]["mixed"] is False
 
 
-def test_custom_label_vocabulary_from_file(ispace, tmp_path):
-    payload = {"id": "custom-v1", "version": 2,
-               "candidates": [{"text": "a"}, {"text": "b"}, {"text": "c"}]}
-    path = tmp_path / "labels.json"
-    path.write_text(json.dumps(payload))
-    vocab = ispace.load_label_vocabulary(path)
-    assert vocab["id"] == "custom-v1" and vocab["version"] == 2
-    assert [c["short_name"] for c in vocab["candidates"]] == ["a", "b", "c"]
+def test_metadata_labels_flag_mixed_clusters(ispace):
+    clusters = np.array([0, 0, 0, 0])
+    values = ["A", "B", "C", "D"]
+    labels = ispace.generate_cluster_labels(clusters, values, "style", mixed_threshold=0.5, top_n=3)
+    assert labels[0]["mixed"] is True and len(labels[0]["top"]) == 3
+    assert labels[0]["label"] == "A 25%, B 25%, C 25%, Other 25%"
+    assert len(ispace.generate_cluster_labels(np.zeros(6, int), list("ABCDEF"), "style")[0]["top"]) == 5
+    strict = ispace.generate_cluster_labels(clusters, values, "style", mixed_threshold=0.2)
+    assert strict[0]["mixed"] is False
 
 
-def test_label_vocabulary_rejects_too_few_candidates(ispace, tmp_path):
-    path = tmp_path / "bad.json"
-    path.write_text(json.dumps(["only", "two"]))
+def test_metadata_labels_require_known_column(ispace, tmp_path):
+    from pathlib import Path
+    images = [Path("a.jpg"), Path("b.jpg")]
+    ext = {"a.jpg": {"style": "Baroque"}, "b.jpg": {"style": ""}}
+    assert ispace.label_values_for_images(images, "style", external_metadata=ext) == ["Baroque", ""]
     import pytest
     with pytest.raises(ValueError):
-        ispace.load_label_vocabulary(path)
+        ispace.label_values_for_images(images, "genre", external_metadata=ext)
+    assert ispace.generate_cluster_labels(np.array([0, 0]), ["", None], "style") == {}
 
 
 # ── Binary + manifest writers ────────────────────────────────
